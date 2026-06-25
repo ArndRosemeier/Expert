@@ -1268,6 +1268,21 @@ export class DocumentNode {
     }
 
     /**
+     * Replace ALL conditional context items on this node with deep copies of the
+     * provided snapshot. Used to revert live context edits — e.g. when the node
+     * chat editor is closed without saving — back to a captured baseline.
+     */
+    public setConditionalContextItems(items: ConditionalContextItem[]): void {
+        this.conditionalContextItems = items.map(item => ({
+            id: item.id,
+            text: item.text,
+            keywords: Array.isArray(item.keywords) ? item.keywords.slice() : [],
+            childScope: { mode: item.childScope?.mode ?? 'all', titles: (item.childScope?.titles ?? []).slice() },
+            leavesOnly: item.leavesOnly === true
+        }));
+    }
+
+    /**
      * Create a new conditional context item. New items default to the broadest
      * scope (all children, every layer, no keyword gate); callers narrow them
      * via updateConditionalContextItem. This is the single creation entry point.

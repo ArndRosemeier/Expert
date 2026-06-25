@@ -100,16 +100,16 @@ export class ConditionalContextEditor {
         const buttonsRow = createElement('div');
         buttonsRow.style.cssText = 'display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap;';
 
-        const addBtn = createElement('button', { content: 'Add Item' });
-        addBtn.style.cssText = this.buttonStyle('#f9fafb');
+        const addBtn = createElement('button', { content: '+ Add Item' });
+        addBtn.style.cssText = this.buttonStyle('#2563eb', '#ffffff', '#1d4ed8');
         addEventListenerWithCleanup(addBtn, 'click', () => { this.handleAddItem(); }, this.cleanupHandlers);
 
         const toggleAllBtn = createElement('button', { content: 'Toggle all' });
-        toggleAllBtn.style.cssText = this.buttonStyle('#eef2ff');
+        toggleAllBtn.style.cssText = this.buttonStyle('#e5e7eb', '#111827', '#9ca3af');
         addEventListenerWithCleanup(toggleAllBtn, 'click', () => { this.handleToggleAll(); }, this.cleanupHandlers);
 
-        const removeBtn = createElement('button', { content: 'Remove checked' });
-        removeBtn.style.cssText = this.buttonStyle('#fef2f2');
+        const removeBtn = createElement('button', { content: '🗑 Remove checked' });
+        removeBtn.style.cssText = this.buttonStyle('#dc2626', '#ffffff', '#b91c1c');
         addEventListenerWithCleanup(removeBtn, 'click', () => { this.handleRemoveChecked(); }, this.cleanupHandlers);
 
         buttonsRow.appendChild(addBtn);
@@ -265,9 +265,32 @@ export class ConditionalContextEditor {
             addEventListenerWithCleanup(textCol, 'click', () => { this.toggleSelectItem(item.id); }, this.cleanupHandlers);
             addEventListenerWithCleanup(dot, 'click', () => { this.toggleSelectItem(item.id); }, this.cleanupHandlers);
 
+            // Per-row delete: the obvious, immediate way to remove a single item.
+            const deleteBtn = createElement('button', { content: '✕' });
+            deleteBtn.title = 'Delete this context item';
+            deleteBtn.style.cssText = `
+                flex: 0 0 auto;
+                align-self: center;
+                width: 1.6rem;
+                height: 1.6rem;
+                line-height: 1;
+                padding: 0;
+                border-radius: 0.3rem;
+                border: 1px solid #fecaca;
+                background: #fee2e2;
+                color: #b91c1c;
+                font-weight: 700;
+                cursor: pointer;
+            `;
+            addEventListenerWithCleanup(deleteBtn, 'click', (e) => {
+                e.stopPropagation();
+                this.handleRemoveItem(item.id);
+            }, this.cleanupHandlers);
+
             headerLine.appendChild(checkbox);
             headerLine.appendChild(dot);
             headerLine.appendChild(textCol);
+            headerLine.appendChild(deleteBtn);
             wrapper.appendChild(headerLine);
 
             if (isSelected) {
@@ -578,6 +601,14 @@ export class ConditionalContextEditor {
         this.renderItemsList();
     }
 
+    private handleRemoveItem(id: string): void {
+        this.node.removeConditionalContextItem(id);
+        if (this.selectedItemId === id) this.selectedItemId = null;
+        this.selectedIds.delete(id);
+        this.schedulePersist();
+        this.refresh();
+    }
+
     private handleRemoveChecked(): void {
         if (this.selectedIds.size === 0) return;
         for (const id of Array.from(this.selectedIds)) {
@@ -685,8 +716,8 @@ export class ConditionalContextEditor {
         return parts.join(' • ');
     }
 
-    private buttonStyle(bg: string): string {
-        return `padding: 0.5rem 1rem; border-radius: 0.5rem; border: 1px solid #d1d5db; background: ${bg}; cursor: pointer;`;
+    private buttonStyle(bg: string, fg: string, border: string): string {
+        return `padding: 0.5rem 1rem; border-radius: 0.5rem; border: 1px solid ${border}; background: ${bg}; color: ${fg}; font-weight: 600; cursor: pointer;`;
     }
 
     // ---------------- Persistence ----------------

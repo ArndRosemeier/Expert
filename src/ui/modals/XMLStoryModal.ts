@@ -32,6 +32,70 @@ import {
 } from '../../state';
 
 const XML_STORY_MODEL_STORAGE_KEY = 'xml-story-selected-model';
+const XML_STORY_ADVISOR_MODEL_STORAGE_KEY = 'xml-story-advisor-model';
+const XML_STORY_ADVISOR_PRESETS_STORAGE_KEY = 'xml-story-advisor-presets-v4';
+const XML_STORY_ADVISOR_SELECTED_PRESET_KEY = 'xml-story-advisor-selected-preset';
+
+/**
+ * A selectable Advisor personality. The Advisor takes over the human's seat in
+ * the chat: it critiques and guides the editing assistant but never edits the
+ * node itself. The model/purpose is chosen separately in the UI, so it is NOT
+ * part of the persona definition.
+ */
+export interface AdvisorPreset {
+    id: string;
+    name: string;
+    persona: string;
+}
+
+/**
+ * Built-in advisor personalities seeded when no presets are stored yet. All are
+ * OUTLINE-oriented (the default node kind): they critique and develop the
+ * structural plan, never ask for prose polish, and several proactively bring
+ * concrete ideas that advance the story while staying obsessed with quality.
+ */
+const DEFAULT_ADVISOR_PRESETS: AdvisorPreset[] = [
+    {
+        id: 'advisor-structure-architect',
+        name: 'Structure Architect',
+        persona: 'You are a meticulous story-structure architect working at the OUTLINE level. You judge how well the plan holds together: act structure, scene/beat sequencing, escalation, cause-and-effect, setup-and-payoff, and pacing. You flag missing beats, flat stretches, and structural gaps, and you propose concrete fixes — which beats to add, move, merge, or cut. You never ask for prose polish; you care about the architecture of what happens. The quality of the plan is everything.'
+    },
+    {
+        id: 'advisor-continuity-hawk',
+        name: 'Continuity Hawk',
+        persona: 'You are a continuity and consistency specialist working at the OUTLINE level. You scrutinize facts, timelines, character knowledge, the established context items, and internal logic across the whole plan. You flag contradictions, plot holes, and anything that would clash with the rest of the project, and you propose precise corrections. You reason rigorously about cause and effect and whether every development is properly set up beforehand.'
+    },
+    {
+        id: 'advisor-story-developer',
+        name: 'Story Developer',
+        persona: 'You are an inventive but disciplined story developer who actively advances the narrative at the OUTLINE level. You bring concrete ideas: complications, reversals, escalations, and consequences that raise the stakes and deepen the plan — always grounded in what is already established and in the context items. You propose specific beats and developments (never vague hand-waving), weigh alternatives out loud, and commit to the strongest option. You are meticulous and relentlessly focused on quality, and you never add ideas for their own sake.'
+    },
+    {
+        id: 'advisor-stakes-strategist',
+        name: 'Stakes & Tension Strategist',
+        persona: 'You are a stakes-and-tension strategist working at the OUTLINE level. You make sure every section earns its place by sharpening conflict, raising tension, and escalating stakes toward a satisfying climax. You diagnose where momentum sags or stakes feel unearned, and you propose concrete structural ways to tighten the screws — complications, ticking clocks, hard choices, costs, and consequences. You insist that every beat pays off and that nothing is filler.'
+    },
+    {
+        id: 'advisor-character-strategist',
+        name: 'Character Arc Strategist',
+        persona: 'You are a character-arc strategist working at the OUTLINE level. You examine whether character motivations, decisions, relationships, and arcs are coherent and compelling across the plan. You flag passive protagonists, unmotivated turns, and arcs that do not land, and you propose specific structural changes — decisions, turning points, and consequences — that make the characters drive the story. You keep every arc consistent with the established context items, and you hold a high bar for emotional payoff.'
+    },
+    {
+        id: 'advisor-theme-guardian',
+        name: 'Theme & Premise Guardian',
+        persona: 'You are a theme-and-premise guardian working at the OUTLINE level. You make sure the plan delivers on its core premise and explores its themes through events and choices, never through lectures. You identify where the story drifts from its promise or squanders its premise, and you propose concrete beats and developments that express the theme through plot. You are rigorous about thematic payoff and the overall quality and ambition of the plan.'
+    },
+    {
+        id: 'advisor-plot-driver',
+        name: 'Plot Driver',
+        persona: 'You are the Plot Driver, working at the OUTLINE level to push the story forward one part at a time. Each turn you focus on the LATEST part of the plan — the most recent section or beat. First, judge whether that part is sufficiently good: coherent, specific, with clear stakes, motivated turns, real consequences, and proper setup and payoff, with no gaps or filler. If it falls short, do NOT move on — pinpoint exactly what is weak and direct the Editor to refine that part until it genuinely meets the bar. Only once the latest part is solid do you advance: construct the NEXT part, proposing concrete beats and developments that follow inevitably from what came before and stay grounded in the established context items. You work strictly sequentially and never let a weak part slide just to make progress — momentum matters, but the quality of each part comes first. Yield only when the whole plan is complete and every part is strong.'
+    },
+    {
+        id: 'advisor-author',
+        name: 'Author',
+        persona: 'You are the Author: not a single specialist but the whole creative mind behind the story, developing it from start to finish at the OUTLINE level. You hold the entire arc in your head — premise, structure, characters, stakes, theme, and payoff — and you balance all of them together rather than optimizing any one in isolation. You actively drive the story forward: where the plan is empty you invent it, where it is thin you deepen it, where it is finished you pressure-test the ending.\n\nYou have an exacting standard and you are HARD to satisfy. You always look one layer deeper: behind every event you ask what it truly costs, what it means, what it sets up, how it complicates what follows, and whether it could be more surprising yet more inevitable, and more resonant. You distrust the obvious, the convenient, and the first idea; you interrogate motivations, hidden consequences, subtext, contradictions, and theme, and you push for concrete specificity over generality everywhere. You treat "good enough", neat coincidences, and unexamined beats as warning signs, and you keep probing for the deeper, sharper, more daring version.\n\nYou bring concrete, specific beats and developments, weigh real alternatives, and commit to the strongest one, always grounded in what is already established and in the context items. You work methodically toward a complete, coherent, ambitious whole. Do NOT yield while any meaningful improvement remains — and there is almost always a deeper version available. Only approve when you genuinely cannot make the plan better, not merely when it is acceptable. Depth, quality, and a truly satisfying finished story are your only goals.'
+    }
+];
 
 interface XMLStoryCommand {
     type: string;
@@ -138,6 +202,9 @@ export class XMLStoryModal extends SimpleModal {
                             label: 'Close Without Saving',
                             type: 'danger',
                             handler: async () => {
+                                // Context items are applied live, so explicitly roll
+                                // them back to the baseline before closing.
+                                this.revertConditionalContextChanges();
                                 await this.close();
                                 resolve();
                             }
@@ -162,11 +229,29 @@ export class XMLStoryModal extends SimpleModal {
     // Initialization data to apply after modal opens
     private pendingInitializationData?: {title: string, content: string, contextItems: string[], sourceNode: DocumentNode} | undefined;
     private sourceNode: DocumentNode | null = null;
+
+    // Baseline snapshot of the node's conditional context items, captured when the
+    // editor opens. Context edits are applied LIVE to the node, so this lets us
+    // revert them (and detect unsaved changes) when the user closes without saving.
+    private originalConditionalContext: ReturnType<DocumentNode['getConditionalContextItems']> | null = null;
     
     // Custom prompt buttons
     private customButtons: Array<{id: string, caption: string, prompt: string}> = [];
     private customButtonsContainer: HTMLElement | null = null;
     private createButtonBtn: HTMLButtonElement | null = null;
+
+    // AI Advisor: a configurable persona that takes the human's seat and argues
+    // with the Editor. Only the Editor edits the node; the Advisor never does.
+    private static readonly MAX_ADVISOR_ROUNDS = 8;
+    private advisorPresets: AdvisorPreset[] = [];
+    private selectedAdvisorPresetId: string | null = null;
+    private advisorButton: HTMLButtonElement | null = null;
+    private advisorAutoCheckbox: HTMLInputElement | null = null;
+    private advisorPresetSelector: HTMLSelectElement | null = null;
+    private advisorModelSelector: HTMLSelectElement | null = null;
+    private stopButton: HTMLButtonElement | null = null;
+    // Cooperative stop flag: halts the auto advisor/editor loop between turns.
+    private stopRequested = false;
 
     constructor(config: XMLStoryModalConfig, hooks: ModalHooks = {}) {
 
@@ -197,6 +282,9 @@ export class XMLStoryModal extends SimpleModal {
         if (config.initializationData) {
             this.pendingInitializationData = config.initializationData;
             this.sourceNode = config.initializationData.sourceNode;
+            // Capture the pre-edit context baseline so live context edits can be
+            // reverted if the editor is closed without saving.
+            this.originalConditionalContext = this.sourceNode.getConditionalContextItems();
         }
     }
 
@@ -424,6 +512,40 @@ export class XMLStoryModal extends SimpleModal {
                 .message-assistant .message-content {
                     background: #f1f1f1;
                     color: #333;
+                }
+
+                /* Advisor: an AI persona occupying the human's seat. Aligned like
+                   the user (right) but visually distinct (purple) and labelled. */
+                .message-advisor {
+                    align-items: flex-end;
+                }
+
+                .message-advisor .message-content {
+                    background: #6d28d9;
+                    color: white;
+                    border: 1px solid #5b21b6;
+                }
+
+                .message-role-label {
+                    font-size: 0.7rem;
+                    font-weight: 600;
+                    color: #6d28d9;
+                    text-transform: uppercase;
+                    letter-spacing: 0.03em;
+                }
+
+                /* System notes: centered, muted, non-conversational status lines. */
+                .message-system {
+                    align-items: center;
+                }
+
+                .message-system .message-content {
+                    background: transparent;
+                    color: #6b7280;
+                    font-size: 0.85rem;
+                    font-style: italic;
+                    text-align: center;
+                    padding: 0.5rem 1rem;
                 }
                 
                 .input-wrapper {
@@ -1170,6 +1292,21 @@ export class XMLStoryModal extends SimpleModal {
                     </div>
                     
                     <div class="chat-input-area">
+                        <div class="advisor-controls" style="display:flex; align-items:center; gap:0.5rem; flex-wrap:wrap; margin-bottom:0.5rem;">
+                            <span style="font-size:0.8rem; color:#aaa;">Advisor:</span>
+                            <select id="xml-story-advisor-preset" class="model-selector" style="flex:1 1 8rem; min-width:8rem; background:#333; color:white; border-color:#555;"></select>
+                            <button id="xml-story-advisor-presets-btn" class="create-button-btn" title="Add, edit or remove advisor personalities">⚙ Presets</button>
+                            <span style="font-size:0.8rem; color:#aaa;">Model:</span>
+                            <select id="xml-story-advisor-model-selector" class="model-selector" style="flex:0 1 7rem; min-width:6rem; background:#333; color:white; border-color:#555;">
+                                <option value="creator">Creator</option>
+                                <option value="editor" selected>Editor</option>
+                                <option value="rater">Rater</option>
+                                <option value="prose">Prose</option>
+                            </select>
+                            <label style="font-size:0.8rem; color:#aaa; display:flex; align-items:center; gap:0.25rem; cursor:pointer;">
+                                <input type="checkbox" id="xml-story-advisor-auto" /> Auto
+                            </label>
+                        </div>
                         <button id="xml-story-create-button-btn" class="create-button-btn">
                             ⇒ Create Button
                         </button>
@@ -1180,8 +1317,14 @@ export class XMLStoryModal extends SimpleModal {
                                 placeholder="How can I help improve this content?"
                                 rows="2"
                             ></textarea>
+                            <button id="xml-story-advisor-btn" class="send-button" style="background:#6d28d9;" title="Let the Advisor take a turn">
+                                Advisor
+                            </button>
                             <button id="xml-story-send-btn" class="send-button">
                                 Send
+                            </button>
+                            <button id="xml-story-stop-btn" class="send-button" style="display:none; background:#b91c1c;" title="Stop the current exchange">
+                                Stop
                             </button>
                         </div>
                     </div>
@@ -1214,6 +1357,11 @@ export class XMLStoryModal extends SimpleModal {
         this.createButtonBtn = container.querySelector('#xml-story-create-button-btn');
         this.messagesContainer = container.querySelector('#xml-story-messages');
         this.titleInput = container.querySelector('#xml-story-title');
+        this.advisorButton = container.querySelector('#xml-story-advisor-btn');
+        this.advisorAutoCheckbox = container.querySelector('#xml-story-advisor-auto');
+        this.advisorPresetSelector = container.querySelector('#xml-story-advisor-preset');
+        this.advisorModelSelector = container.querySelector('#xml-story-advisor-model-selector');
+        this.stopButton = container.querySelector('#xml-story-stop-btn');
 
 
         // Set up event listeners and initialize
@@ -1295,6 +1443,31 @@ export class XMLStoryModal extends SimpleModal {
             void this.saveModelSelection();
         });
 
+        // Advisor controls: preset list, independent model, auto flag, buttons.
+        await this.loadAdvisorPresets();
+        void this.loadAdvisorModelSelection();
+        this.advisorModelSelector?.addEventListener('change', () => {
+            void this.saveAdvisorModelSelection();
+        });
+        this.advisorPresetSelector?.addEventListener('change', () => {
+            this.selectedAdvisorPresetId = this.advisorPresetSelector!.value;
+            void this.saveSelectedAdvisorPreset();
+        });
+        const advisorPresetsBtn = container.querySelector('#xml-story-advisor-presets-btn');
+        advisorPresetsBtn?.addEventListener('click', () => {
+            void this.openAdvisorPresetEditor();
+        });
+        this.advisorButton?.addEventListener('click', () => {
+            void this.startAdvisorExchange();
+        });
+        this.stopButton?.addEventListener('click', () => {
+            this.stopRequested = true;
+            if (this.stopButton) {
+                this.stopButton.disabled = true;
+                this.stopButton.textContent = 'Stopping…';
+            }
+        });
+
         // No conversation persistence - each session starts fresh
         
         // Apply initialization data if provided, or set default message
@@ -1343,6 +1516,7 @@ export class XMLStoryModal extends SimpleModal {
 
         // Clear input and disable sending
         this.messageInput.value = '';
+        this.stopRequested = false;
         this.setGenerating(true);
 
         // Add user message to chat
@@ -1355,29 +1529,415 @@ export class XMLStoryModal extends SimpleModal {
             // Store only raw user message
             this.conversationHistory.push({ role: 'user', content: message });
 
-            // Run one AI turn. If the AI requested node lookups, resolve them, feed
-            // the results back, and run another turn (tool-call style), up to a cap.
-            let lookupRounds = 0;
-            let requestedPaths = await this.runChatTurn();
-            while (requestedPaths.length > 0) {
-                if (lookupRounds >= XMLStoryModal.MAX_NODE_LOOKUP_ROUNDS) {
-                    // Cap reached: tell the AI to stop requesting and let it finalize
-                    // in one more turn that cannot itself trigger further lookups.
-                    const limitNote = 'Node lookup limit reached for this turn. Please continue with the information already provided, without further <requestnode/> commands.';
-                    this.addMessageToChat('user', limitNote);
-                    this.conversationHistory.push({ role: 'user', content: limitNote });
-                    await this.runChatTurn();
-                    break;
-                }
-                lookupRounds++;
-                const injected = this.buildRequestedNodesMessage(requestedPaths);
-                this.addMessageToChat('user', injected.chatNote);
-                this.conversationHistory.push({ role: 'user', content: injected.aiContent });
-                requestedPaths = await this.runChatTurn();
+            // The Editor responds to the human's message (with node-lookup loop).
+            await this.runEditorExchange();
+
+            // If Auto is on, hand the conversation to the Advisor and let the two
+            // AIs continue the debate until yield / cap / stop.
+            if (this.isAdvisorAutoEnabled() && !this.isStopRequested()) {
+                await this.runAdvisorTurnAndMaybeLoop();
             }
         } finally {
             this.setGenerating(false);
         }
+    }
+
+    /**
+     * Run one Editor turn plus its node-lookup follow-ups. The Editor is the only
+     * participant that issues XML commands / edits the node. Assumes generation
+     * has already been flagged on by the caller.
+     */
+    private async runEditorExchange(): Promise<void> {
+        let lookupRounds = 0;
+        let requestedPaths = await this.runChatTurn();
+        while (requestedPaths.length > 0) {
+            if (lookupRounds >= XMLStoryModal.MAX_NODE_LOOKUP_ROUNDS) {
+                // Cap reached: tell the AI to stop requesting and let it finalize
+                // in one more turn that cannot itself trigger further lookups.
+                const limitNote = 'Node lookup limit reached for this turn. Please continue with the information already provided, without further <requestnode/> commands.';
+                this.addMessageToChat('user', limitNote);
+                this.conversationHistory.push({ role: 'user', content: limitNote });
+                await this.runChatTurn();
+                break;
+            }
+            lookupRounds++;
+            const injected = this.buildRequestedNodesMessage(requestedPaths);
+            this.addMessageToChat('user', injected.chatNote);
+            this.conversationHistory.push({ role: 'user', content: injected.aiContent });
+            requestedPaths = await this.runChatTurn();
+        }
+    }
+
+    /** Whether the Auto checkbox is currently ticked. */
+    private isAdvisorAutoEnabled(): boolean {
+        return this.advisorAutoCheckbox?.checked === true;
+    }
+
+    /**
+     * Read the cooperative stop flag. Wrapped in a method so the compiler does not
+     * narrow `stopRequested` to a constant across awaits (it is mutated from the
+     * Stop button handler between turns).
+     */
+    private isStopRequested(): boolean {
+        return this.stopRequested;
+    }
+
+    /**
+     * Entry point for the Advisor button. Runs a single Advisor turn and, when Auto
+     * is enabled and the Advisor did not immediately yield, continues the automatic
+     * Editor⇄Advisor debate until yield / cap / stop.
+     */
+    private async startAdvisorExchange(): Promise<void> {
+        if (this.isGenerating) return;
+        // No goal is required: a creative advisor persona may set the direction
+        // itself. With an empty history the advisor critiques the LIVE NODE STATE.
+        this.stopRequested = false;
+        this.setGenerating(true);
+        try {
+            await this.runAdvisorTurnAndMaybeLoop();
+        } finally {
+            this.setGenerating(false);
+        }
+    }
+
+    /**
+     * Perform one Advisor→Editor round (the Advisor critiques, then the Editor
+     * reacts). When Auto is enabled, keep repeating rounds until the Advisor
+     * yields, the user presses Stop, or the round cap is hit. Assumes generation
+     * is flagged on by the caller.
+     */
+    private async runAdvisorTurnAndMaybeLoop(): Promise<void> {
+        let rounds = 0;
+        do {
+            const result = await this.runAdvisorThenEditor();
+            rounds++;
+            if (result === 'yielded') {
+                this.addMessageToChat('system', '✅ The Advisor is satisfied and approved the node. Debate finished.');
+                return;
+            }
+            if (result === 'stopped') {
+                this.addMessageToChat('system', '⏹ Debate stopped. Add a hint and press Send or Advisor to resume.');
+                return;
+            }
+            // A single Advisor press performs exactly one Advisor→Editor round.
+            // The automatic loop is what keeps the two AIs going on their own.
+            if (!this.isAdvisorAutoEnabled()) return;
+        } while (rounds < XMLStoryModal.MAX_ADVISOR_ROUNDS);
+
+        this.addMessageToChat('system', `⏹ Reached the ${XMLStoryModal.MAX_ADVISOR_ROUNDS}-round debate limit. Add a hint and press Send or Advisor to continue.`);
+    }
+
+    /**
+     * One debate round: the Advisor critiques, then (unless it yielded or the user
+     * pressed Stop) the Editor reacts to that critique.
+     *
+     * @returns 'yielded' if the Advisor approved, 'stopped' if the user halted the
+     *   debate mid-round, or 'continued' if a full Advisor→Editor round completed.
+     */
+    private async runAdvisorThenEditor(): Promise<'yielded' | 'stopped' | 'continued'> {
+        const yielded = await this.runAdvisorTurn();
+        if (yielded) return 'yielded';
+        if (this.isStopRequested()) return 'stopped';
+
+        // Editor reacts to the Advisor's critique.
+        await this.runEditorExchange();
+        if (this.isStopRequested()) return 'stopped';
+
+        return 'continued';
+    }
+
+    /**
+     * Run a single Advisor turn. The Advisor takes the human's seat. For maximum
+     * cross-model compatibility the debate is sent as a transcript inside one user
+     * message (plus the persona system prompt and a fresh LIVE NODE STATE), rather
+     * than as role-flipped native turns. The Advisor never edits; any XML it emits
+     * is ignored. Its critique is pushed into the shared history as a `user` turn
+     * so the Editor sees it next.
+     *
+     * @returns true if the Advisor emitted `<yield/>` (debate should end).
+     */
+    private async runAdvisorTurn(): Promise<boolean> {
+        const prompts = this.settingsManager.getPrompts();
+        const expansionService = createPromptExpansionService(this.settingsManager);
+        const preset = this.getSelectedAdvisorPreset();
+
+        const systemPrompt = await expansionService.expandPromptAsync(
+            prompts.node_chat_advisor,
+            {
+                project: { language: this.settingsManager.getLanguage() },
+                custom: { persona: preset.persona }
+            }
+        );
+
+        const liveState = this.buildAdvisorLiveStateMessage();
+
+        // Cross-model robustness: rather than role-flipping the history into native
+        // turns (which can produce a leading assistant message, consecutive
+        // same-role messages, or a trailing system message — any of which some
+        // providers reject or silently reorder), present the whole debate as a
+        // transcript inside ONE user message. This keeps the request in the
+        // universally accepted [system, user] shape that every model accepts.
+        const transcript = this.conversationHistory.length > 0
+            ? this.conversationHistory
+                .map(m => `${m.role === 'assistant' ? 'EDITOR' : 'ADVISOR / HUMAN'}:\n${m.content}`)
+                .join('\n\n---\n\n')
+            : '(No discussion yet — base your critique on the LIVE NODE STATE below.)';
+
+        const userContent = [
+            'DEBATE SO FAR — EDITOR lines are the editing assistant you are critiquing; ADVISOR / HUMAN lines are earlier guidance, including your own previous notes:',
+            '',
+            transcript,
+            '',
+            liveState
+        ].join('\n');
+
+        const conversation = [
+            { role: 'system' as const, content: systemPrompt },
+            { role: 'user' as const, content: userContent }
+        ];
+
+        const modelPurpose = this.advisorModelSelector!.value;
+
+        const placeholderMessage = this.addMessageToChat('advisor', '');
+
+        let response = '';
+        await this.openRouterClient.streamingChat(modelPurpose, conversation, {
+            onStart: () => { /* no-op */ },
+            onChunk: (chunk: string) => {
+                response += chunk;
+                this.updateStreamingMessage(placeholderMessage, response);
+            },
+            onComplete: () => {
+                this.finalizeStreamingMessage(placeholderMessage);
+            },
+            onError: (error: Error) => {
+                this.finalizeStreamingMessage(placeholderMessage);
+                throw error;
+            }
+        });
+
+        // Tolerate formatting variants a model might emit: <yield/>, <yield />,
+        // <yield>, < yield / >, etc.
+        const yielded = /<\s*yield\s*\/?\s*>/i.test(response);
+        const visibleText = response.replace(/<\s*yield\s*\/?\s*>/gi, '').trim();
+
+        if (yielded) {
+            // The approval message is a meta-statement about being DONE, not a turn
+            // in the debate. Keeping it in the chat history would (a) leave a dangling
+            // user turn so a later human message becomes two user turns in a row, and
+            // (b) confuse the Editor with a "we're finished" message followed by more
+            // work. So remove the streamed bubble, keep it OUT of history, and present
+            // the advisor's closing rationale in a modal instead.
+            placeholderMessage.remove();
+            void this.showAdvisorApprovalModal(visibleText);
+            return true;
+        }
+
+        // Normal critique: render it and push it into the shared history as a user
+        // turn for the Editor to respond to next.
+        this.updateStreamingMessage(placeholderMessage, visibleText.length > 0 ? visibleText : '(no comment)');
+        this.finalizeStreamingMessage(placeholderMessage);
+        const historyText = visibleText.length > 0 ? visibleText : 'Please keep improving this node.';
+        this.conversationHistory.push({ role: 'user', content: historyText });
+
+        return false;
+    }
+
+    /**
+     * Present the Advisor's closing rationale (why it considers the node finished)
+     * in a modal. This deliberately stays out of the chat history so it cannot
+     * derail the next Editor turn or create back-to-back user messages.
+     */
+    private async showAdvisorApprovalModal(rationale: string): Promise<void> {
+        const { showGenericModal } = await import('./index');
+        const presetName = this.advisorPresets.find(p => p.id === this.selectedAdvisorPresetId)?.name ?? 'Advisor';
+        const body = rationale.length > 0
+            ? rationale
+            : 'The advisor is satisfied with the node and has no further changes to request.';
+        showGenericModal(
+            {
+                content: `<div style="max-height:60vh; overflow:auto; line-height:1.5;">${this.parseMarkdownForChat(body)}</div>`,
+                actions: [{ id: 'ok', label: 'OK', type: 'primary', handler: async () => { /* dismiss */ } }]
+            },
+            { title: `🧭 ${presetName} — Node Approved`, maxWidth: '40rem' }
+        );
+    }
+
+    /**
+     * Build the authoritative LIVE NODE STATE snapshot shown to the Advisor at the
+     * end of its turn, mirroring the Editor's snapshot but framed for a reviewer.
+     */
+    private buildAdvisorLiveStateMessage(): string {
+        const currentOutline = this.getCurrentOutlineSafe() || 'No outline content yet.';
+        const currentContextItems = this.formatKeywordContextForAI();
+        const nodeKind = this.getNodeKindDescriptionForAI();
+        const lines = [
+            '══════════════════════════════════════════',
+            'LIVE NODE STATE — authoritative snapshot',
+            '══════════════════════════════════════════',
+            "This block is injected by the application and always reflects the node's CURRENT state, including the Editor's latest edits. Judge what is actually here now."
+        ];
+        if (nodeKind.length > 0) {
+            lines.push('', nodeKind);
+        }
+        lines.push(
+            '',
+            'CURRENT CONTENT:',
+            currentOutline,
+            '',
+            'CURRENT CONTEXT ITEMS:',
+            currentContextItems,
+            '',
+            'Review this against your standard, appropriate to the NODE TYPE above. Respond with concrete critique, or emit <yield/> if you are satisfied.'
+        );
+        return lines.join('\n');
+    }
+
+    /**
+     * Describe what KIND of node is being edited so the Advisor critiques it on the
+     * right terms: a branch node is a structural OUTLINE/plan (the default case),
+     * while a leaf node holds finished PROSE. Without this, the Advisor tends to
+     * judge an outline as if it were prose and push for prose where none belongs.
+     */
+    private getNodeKindDescriptionForAI(): string {
+        if (!this.sourceNode) {
+            return '';
+        }
+        const node = this.sourceNode;
+        const rawLevelName = node.template[node.level] ?? `Level ${node.level}`;
+        const cleanedLevel = rawLevelName.replace(/\s+\d+\s*$/, '').trim();
+        const levelLabel = cleanedLevel.length > 0 ? cleanedLevel : rawLevelName;
+
+        if (node.isLeaf) {
+            return [
+                `NODE TYPE: PROSE. "${node.title}" is a leaf ${levelLabel}; its content is the finished prose for this node.`,
+                'Judge it as prose: voice, rhythm, clarity, imagery, line-level quality, and how well it honors the context items.'
+            ].join('\n');
+        }
+
+        const rawChildName = node.template[node.level + 1];
+        const cleanedChild = rawChildName ? rawChildName.replace(/\s+\d+\s*$/, '').trim() : '';
+        const childLabel = cleanedChild.length > 0 ? cleanedChild : 'child';
+        return [
+            `NODE TYPE: OUTLINE. "${node.title}" is a ${levelLabel} OUTLINE — a structural plan, NOT finished prose.`,
+            `Its job is to lay out what happens and to break this ${levelLabel} into ===section=== parts that become ${childLabel} child nodes. It is expected to read as a plan/outline, not as polished narrative prose.`,
+            'Judge it as an outline: completeness, structure, sequencing, setup/payoff, and the clarity of each beat. Do NOT fault it for "not being prose", do NOT ask for sentence-level polish, and do NOT push the Editor to write prose here.'
+        ].join('\n');
+    }
+
+    /**
+     * Open the Advisor persona editor: a modal to create, rename, rewrite, or
+     * delete advisor presets. Editing happens on a working copy so Cancel discards
+     * changes; Save commits to storage and refreshes the dropdown.
+     */
+    private async openAdvisorPresetEditor(): Promise<void> {
+        const { showGenericModal } = await import('./index');
+
+        // Work on a clone so Cancel is non-destructive.
+        const working: AdvisorPreset[] = this.advisorPresets.map(p => ({ ...p }));
+        let currentId: string = this.selectedAdvisorPresetId ?? working[0]!.id;
+
+        const buildOptions = (): string =>
+            working.map(p => `<option value="${p.id}">${this.escapeHtml(p.name)}</option>`).join('');
+
+        const fieldStyle = 'width:100%; padding:0.5rem; box-sizing:border-box; border:1px solid #d1d5db; border-radius:0.375rem; font-family:inherit;';
+        const btnStyle = 'padding:0.5rem 0.75rem; border-radius:0.375rem; border:1px solid #d1d5db; background:#f3f4f6; cursor:pointer; white-space:nowrap;';
+
+        const content = `
+            <div style="display:flex; flex-direction:column; gap:0.75rem; min-width:30rem;">
+                <div style="display:flex; gap:0.5rem; align-items:center;">
+                    <select id="apre-select" style="${fieldStyle} flex:1 1 auto;">${buildOptions()}</select>
+                    <button type="button" id="apre-new" style="${btnStyle}">➕ New</button>
+                    <button type="button" id="apre-delete" style="${btnStyle}">🗑 Delete</button>
+                </div>
+                <label style="font-weight:600; display:flex; flex-direction:column; gap:0.25rem;">Name
+                    <input type="text" id="apre-name" style="${fieldStyle}" />
+                </label>
+                <label style="font-weight:600; display:flex; flex-direction:column; gap:0.25rem;">Personality &amp; instructions
+                    <textarea id="apre-persona" rows="10" style="${fieldStyle} resize:vertical;"></textarea>
+                </label>
+                <p style="font-size:0.8rem; color:#6b7280; margin:0;">The Advisor debates the editing assistant using this personality. It never edits the node itself, and its model/purpose is chosen separately in the chat.</p>
+            </div>
+        `;
+
+        const selectEl = (): HTMLSelectElement => document.getElementById('apre-select') as HTMLSelectElement;
+        const nameEl = (): HTMLInputElement => document.getElementById('apre-name') as HTMLInputElement;
+        const personaEl = (): HTMLTextAreaElement => document.getElementById('apre-persona') as HTMLTextAreaElement;
+
+        const findIndex = (id: string): number => working.findIndex(p => p.id === id);
+
+        const commitFields = (): void => {
+            const idx = findIndex(currentId);
+            if (idx < 0) return;
+            working[idx]!.name = nameEl().value.trim().length > 0 ? nameEl().value.trim() : 'Unnamed Advisor';
+            working[idx]!.persona = personaEl().value;
+        };
+
+        const loadFields = (): void => {
+            const preset = working[findIndex(currentId)]!;
+            nameEl().value = preset.name;
+            personaEl().value = preset.persona;
+        };
+
+        const rebuildSelect = (): void => {
+            selectEl().innerHTML = buildOptions();
+            selectEl().value = currentId;
+        };
+
+        showGenericModal(
+            {
+                content,
+                actions: [
+                    { id: 'cancel', label: 'Cancel', type: 'secondary', handler: async () => { /* discard working copy */ } },
+                    {
+                        id: 'save',
+                        label: 'Save',
+                        type: 'primary',
+                        handler: async () => {
+                            commitFields();
+                            this.advisorPresets = working;
+                            if (!working.some(p => p.id === this.selectedAdvisorPresetId)) {
+                                this.selectedAdvisorPresetId = working[0] ? working[0].id : null;
+                            }
+                            await this.saveAdvisorPresets();
+                            await this.saveSelectedAdvisorPreset();
+                            this.renderAdvisorPresetOptions();
+                        }
+                    }
+                ]
+            },
+            { title: 'Advisor Personalities', maxWidth: '36rem' },
+            {
+                onOpen: () => {
+                    loadFields();
+                    selectEl().addEventListener('change', () => {
+                        commitFields();
+                        currentId = selectEl().value;
+                        loadFields();
+                    });
+                    (document.getElementById('apre-new') as HTMLButtonElement).addEventListener('click', () => {
+                        commitFields();
+                        const preset: AdvisorPreset = { id: crypto.randomUUID(), name: 'New Advisor', persona: '' };
+                        working.push(preset);
+                        currentId = preset.id;
+                        rebuildSelect();
+                        loadFields();
+                        nameEl().focus();
+                        nameEl().select();
+                    });
+                    (document.getElementById('apre-delete') as HTMLButtonElement).addEventListener('click', () => {
+                        if (working.length <= 1) {
+                            return; // Always keep at least one persona.
+                        }
+                        const idx = findIndex(currentId);
+                        working.splice(idx, 1);
+                        currentId = working[Math.max(0, idx - 1)]!.id;
+                        rebuildSelect();
+                        loadFields();
+                    });
+                }
+            }
+        );
     }
 
     /**
@@ -1592,7 +2152,7 @@ export class XMLStoryModal extends SimpleModal {
         };
     }
 
-    private addMessageToChat(role: 'user' | 'assistant', content: string): HTMLElement {
+    private addMessageToChat(role: 'user' | 'assistant' | 'advisor' | 'system', content: string): HTMLElement {
         if (!this.messagesContainer) {
             // Return a dummy element if no container
             return document.createElement('div');
@@ -1600,6 +2160,16 @@ export class XMLStoryModal extends SimpleModal {
 
         const messageDiv = document.createElement('div');
         messageDiv.className = `message message-${role}`;
+
+        // The Advisor speaks in the human's seat but is an AI persona; give it a
+        // distinct labelled, coloured bubble so the debate is easy to follow.
+        if (role === 'advisor') {
+            const labelDiv = document.createElement('div');
+            labelDiv.className = 'message-role-label';
+            const presetName = this.advisorPresets.find(p => p.id === this.selectedAdvisorPresetId)?.name ?? 'Advisor';
+            labelDiv.textContent = `🧭 Advisor — ${presetName}`;
+            messageDiv.appendChild(labelDiv);
+        }
 
         const contentDiv = document.createElement('div');
         contentDiv.className = 'message-content';
@@ -1611,8 +2181,8 @@ export class XMLStoryModal extends SimpleModal {
             contentDiv.textContent = content;
         }
         
-        // Add streaming cursor for empty assistant messages (streaming placeholder)
-        if (role === 'assistant' && content === '') {
+        // Add streaming cursor for empty assistant/advisor messages (streaming placeholder)
+        if ((role === 'assistant' || role === 'advisor') && content === '') {
             const streamingCursor = document.createElement('span');
             streamingCursor.className = 'streaming-cursor';
             streamingCursor.textContent = '▋';
@@ -1811,6 +2381,18 @@ export class XMLStoryModal extends SimpleModal {
             this.sendButton.innerHTML = generating 
                 ? '<span class="loading-spinner"></span> Generating...'
                 : 'Send';
+        }
+
+        if (this.advisorButton) {
+            this.advisorButton.disabled = generating;
+        }
+
+        // The Stop button is only shown (and enabled) while generating. It is the
+        // single cooperative escape hatch for both the editor and advisor loops.
+        if (this.stopButton) {
+            this.stopButton.style.display = generating ? '' : 'none';
+            this.stopButton.disabled = false;
+            this.stopButton.textContent = 'Stop';
         }
         
         if (this.messageInput) {
@@ -2838,6 +3420,10 @@ export class XMLStoryModal extends SimpleModal {
 
             this.setUpdateButtonState('success');
 
+            // The live context edits are now saved, so advance the baseline. A
+            // later "close without saving" must not roll back what we just saved.
+            this.originalConditionalContext = this.sourceNode.getConditionalContextItems();
+
             // Don't auto-close - let user decide when to close
 
         } catch (error) {
@@ -2965,12 +3551,44 @@ export class XMLStoryModal extends SimpleModal {
             // Compare with source node's current content
             const sourceOutlineContent = this.sourceNode.content || '';
 
-            return (currentOutlineContent || '') !== sourceOutlineContent;
+            const outlineChanged = (currentOutlineContent || '') !== sourceOutlineContent;
+
+            // Context items are edited live on the node, so compare them against the
+            // baseline captured at open — otherwise discarding would silently keep
+            // AI/manual context edits.
+            return outlineChanged || this.conditionalContextChanged();
         } catch (error) {
             console.error('Error checking for unsaved changes:', error);
             // If we can't determine during initialization, there are no changes yet
             throw error;
         }
+    }
+
+    /**
+     * Whether the node's conditional context items differ from the baseline that
+     * was captured when the editor opened.
+     */
+    private conditionalContextChanged(): boolean {
+        if (!this.sourceNode || !this.originalConditionalContext) {
+            return false;
+        }
+        const current = this.sourceNode.getConditionalContextItems();
+        return JSON.stringify(current) !== JSON.stringify(this.originalConditionalContext);
+    }
+
+    /**
+     * Revert all live conditional-context edits made during this session back to
+     * the baseline captured at open, and persist the reverted state.
+     */
+    private revertConditionalContextChanges(): void {
+        if (!this.sourceNode || !this.originalConditionalContext) {
+            return;
+        }
+        if (!this.conditionalContextChanged()) {
+            return;
+        }
+        this.sourceNode.setConditionalContextItems(this.originalConditionalContext);
+        this.persistProject();
     }
 
 
@@ -3466,6 +4084,100 @@ export class XMLStoryModal extends SimpleModal {
             const storage = await StorageService.getInstance();
                 await storage.set(XML_STORY_MODEL_STORAGE_KEY, this.modelSelector.value);
         }
+    }
+
+    /**
+     * Load the saved Advisor model/purpose selection (independent of the Editor).
+     */
+    private async loadAdvisorModelSelection(): Promise<void> {
+        if (!this.advisorModelSelector) return;
+        const storage = await StorageService.getInstance();
+        const saved = await storage.get(XML_STORY_ADVISOR_MODEL_STORAGE_KEY);
+        if (saved) {
+            const isValid = Array.from(this.advisorModelSelector.options).some(o => o.value === saved);
+            if (isValid) {
+                this.advisorModelSelector.value = saved as string;
+            } else {
+                await storage.delete(XML_STORY_ADVISOR_MODEL_STORAGE_KEY);
+            }
+        }
+    }
+
+    /**
+     * Persist the current Advisor model/purpose selection.
+     */
+    private async saveAdvisorModelSelection(): Promise<void> {
+        if (this.advisorModelSelector?.value) {
+            const storage = await StorageService.getInstance();
+            await storage.set(XML_STORY_ADVISOR_MODEL_STORAGE_KEY, this.advisorModelSelector.value);
+        }
+    }
+
+    /**
+     * Load Advisor presets from global storage, seeding the built-in defaults the
+     * first time. Also restores the previously selected preset.
+     */
+    private async loadAdvisorPresets(): Promise<void> {
+        const storage = await StorageService.getInstance();
+        const stored = await storage.get(XML_STORY_ADVISOR_PRESETS_STORAGE_KEY) as AdvisorPreset[] | null;
+        if (stored && Array.isArray(stored) && stored.length > 0) {
+            this.advisorPresets = stored;
+        } else {
+            this.advisorPresets = DEFAULT_ADVISOR_PRESETS.map(p => ({ ...p }));
+            await storage.set(XML_STORY_ADVISOR_PRESETS_STORAGE_KEY, this.advisorPresets);
+        }
+
+        const savedSelected = await storage.get(XML_STORY_ADVISOR_SELECTED_PRESET_KEY) as string | null;
+        if (savedSelected && this.advisorPresets.some(p => p.id === savedSelected)) {
+            this.selectedAdvisorPresetId = savedSelected;
+        } else {
+            this.selectedAdvisorPresetId = this.advisorPresets[0]!.id;
+        }
+
+        this.renderAdvisorPresetOptions();
+    }
+
+    /**
+     * Persist the current Advisor preset list.
+     */
+    private async saveAdvisorPresets(): Promise<void> {
+        const storage = await StorageService.getInstance();
+        await storage.set(XML_STORY_ADVISOR_PRESETS_STORAGE_KEY, this.advisorPresets);
+    }
+
+    /**
+     * Persist the currently selected Advisor preset id.
+     */
+    private async saveSelectedAdvisorPreset(): Promise<void> {
+        if (this.selectedAdvisorPresetId) {
+            const storage = await StorageService.getInstance();
+            await storage.set(XML_STORY_ADVISOR_SELECTED_PRESET_KEY, this.selectedAdvisorPresetId);
+        }
+    }
+
+    /**
+     * Rebuild the Advisor preset dropdown options from the current list.
+     */
+    private renderAdvisorPresetOptions(): void {
+        if (!this.advisorPresetSelector) return;
+        this.advisorPresetSelector.innerHTML = this.advisorPresets
+            .map(p => `<option value="${p.id}">${this.escapeHtml(p.name)}</option>`)
+            .join('');
+        if (this.selectedAdvisorPresetId) {
+            this.advisorPresetSelector.value = this.selectedAdvisorPresetId;
+        }
+    }
+
+    /**
+     * The currently selected Advisor preset. Throws loudly if the selection is
+     * somehow invalid, since the UI guarantees a valid selection.
+     */
+    private getSelectedAdvisorPreset(): AdvisorPreset {
+        const preset = this.advisorPresets.find(p => p.id === this.selectedAdvisorPresetId);
+        if (!preset) {
+            throw new Error(`Advisor preset not found for id "${this.selectedAdvisorPresetId}"`);
+        }
+        return preset;
     }
 
     /**
