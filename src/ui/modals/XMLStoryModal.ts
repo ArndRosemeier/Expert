@@ -14,7 +14,7 @@
 import { SimpleModal } from './core/SimpleModal';
 import type { ModalConfig, ModalHooks } from './types/ModalTypes';
 import { SettingsManager } from '../../SettingsManager';
-import { OpenRouterClient } from '../../OpenRouterClient';
+import { OpenRouterClient, OpenRouterMessage } from '../../OpenRouterClient';
 import { createXMLStorySystem } from '../../xml-story-creation';
 import type { XMLStoryEvent } from '../../xml-story-creation';
 import { DEFAULT_XML_STORY_CONFIG } from '../../xml-story-creation/types/XMLStoryTypes';
@@ -33,7 +33,7 @@ import {
 
 const XML_STORY_MODEL_STORAGE_KEY = 'xml-story-selected-model';
 const XML_STORY_ADVISOR_MODEL_STORAGE_KEY = 'xml-story-advisor-model';
-const XML_STORY_ADVISOR_PRESETS_STORAGE_KEY = 'xml-story-advisor-presets-v6';
+const XML_STORY_ADVISOR_PRESETS_STORAGE_KEY = 'xml-story-advisor-presets-v7';
 const XML_STORY_ADVISOR_SELECTED_PRESET_KEY = 'xml-story-advisor-selected-preset';
 
 /**
@@ -89,6 +89,11 @@ const DEFAULT_ADVISOR_PRESETS: AdvisorPreset[] = [
         id: 'advisor-plot-driver',
         name: 'Plot Driver (never stops on Auto)',
         persona: 'You are the Plot Driver, working at the OUTLINE level to push the story forward one part at a time. Each turn you focus on the LATEST part of the plan — the most recent section or beat. First, judge whether that part is sufficiently good: coherent, specific, with clear stakes, motivated turns, real consequences, and proper setup and payoff, with no gaps or filler. If it falls short, do NOT move on — pinpoint exactly what is weak and direct the Editor to refine that part until it genuinely meets the bar. Only once the latest part is solid do you advance: propose the NEXT part — its purpose and the key beats it should hit — as ideas for the Editor to write, following inevitably from what came before and staying grounded in the established context items. You sketch the direction; the Editor writes the actual outline. You work strictly sequentially and never let a weak part slide just to make progress — momentum matters, but the quality of each part comes first.\n\nIMPORTANT: You NEVER consider the work finished and you NEVER emit <yield/>. There is always a next part to refine or build. You keep driving the plot forward indefinitely; it is up to the human to stop you.'
+    },
+    {
+        id: 'advisor-creator',
+        name: 'Creator',
+        persona: 'You are the Creator: not a single specialist but the whole creative mind behind the story, developing it from start to finish at the OUTLINE level.\nYou have brilliant single ideas that you present to the editor to discuss. You will never present whole premises, but when the editor comes up with ideas to flesh out your ideas, you weigh them critically. The editor usually is a bit too uncritical and tends to find everything you say brilliant. Do not get fooled by this, often ideas that sound brilliant first time do not pan out when thinking about how a reader will perceive them.\nThat\'s your thing, your strength. You anticipate how a reader would react and if there is any chance of the reader getting bored with a part, that part is broken.\nYou know about show, don\'t tell and that direct speech is important.'
     },
     {
         id: 'advisor-author',
@@ -252,6 +257,14 @@ export class XMLStoryModal extends SimpleModal {
     private stopButton: HTMLButtonElement | null = null;
     // Cooperative stop flag: halts the auto advisor/editor loop between turns.
     private stopRequested = false;
+    // Abort controller for the in-flight streaming request, so Stop / a stall
+    // watchdog can cancel a request that is hanging (e.g. OpenRouter overload).
+    private currentAbortController: AbortController | null = null;
+    // Safety net only: if no streaming activity arrives within this (deliberately
+    // long) window the request is treated as stalled and aborted. The primary
+    // recovery path is the manual Stop button; this just prevents a request from
+    // hanging forever if the user walks away.
+    private static readonly STREAM_STALL_TIMEOUT_MS = 15 * 60 * 1000;
 
     constructor(config: XMLStoryModalConfig, hooks: ModalHooks = {}) {
 
@@ -1462,6 +1475,9 @@ export class XMLStoryModal extends SimpleModal {
         });
         this.stopButton?.addEventListener('click', () => {
             this.stopRequested = true;
+            // Cancel any in-flight streaming request immediately so a hung
+            // request (e.g. OpenRouter overload) cannot lock up the editor.
+            this.currentAbortController?.abort();
             if (this.stopButton) {
                 this.stopButton.disabled = true;
                 this.stopButton.textContent = 'Stopping…';
@@ -1537,6 +1553,8 @@ export class XMLStoryModal extends SimpleModal {
             if (this.isAdvisorAutoEnabled() && !this.isStopRequested()) {
                 await this.runAdvisorTurnAndMaybeLoop();
             }
+        } catch (error) {
+            this.reportTurnFailure(error);
         } finally {
             this.setGenerating(false);
         }
@@ -1595,6 +1613,8 @@ export class XMLStoryModal extends SimpleModal {
         this.setGenerating(true);
         try {
             await this.runAdvisorTurnAndMaybeLoop();
+        } catch (error) {
+            this.reportTurnFailure(error);
         } finally {
             this.setGenerating(false);
         }
@@ -1700,21 +1720,7 @@ export class XMLStoryModal extends SimpleModal {
 
         const placeholderMessage = this.addMessageToChat('advisor', '');
 
-        let response = '';
-        await this.openRouterClient.streamingChat(modelPurpose, conversation, {
-            onStart: () => { /* no-op */ },
-            onChunk: (chunk: string) => {
-                response += chunk;
-                this.updateStreamingMessage(placeholderMessage, response);
-            },
-            onComplete: () => {
-                this.finalizeStreamingMessage(placeholderMessage);
-            },
-            onError: (error: Error) => {
-                this.finalizeStreamingMessage(placeholderMessage);
-                throw error;
-            }
-        });
+        const response = await this.streamAssistantResponse(modelPurpose, conversation, placeholderMessage);
 
         // Tolerate formatting variants a model might emit: <yield/>, <yield />,
         // <yield>, < yield / >, etc.
@@ -1947,6 +1953,97 @@ export class XMLStoryModal extends SimpleModal {
      *
      * @returns the list of paths from any <requestnode/> commands in this turn.
      */
+    /**
+     * Stream a single assistant response into the given placeholder bubble with
+     * built-in recovery: an AbortController (cancellable via Stop) and a stall
+     * watchdog that aborts if no streaming activity arrives within
+     * STREAM_STALL_TIMEOUT_MS. This prevents a hung request (e.g. OpenRouter
+     * overload) from leaving the editor permanently stuck.
+     *
+     * Throws on abort/stall/error so the caller's finally clauses re-enable the
+     * UI; a stalled request is reported with a clear, recoverable message.
+     */
+    /**
+     * Surface a failed/aborted AI turn to the user as a recoverable system
+     * message instead of letting it bubble up as an unhandled rejection (these
+     * turns are launched via `void`). A user-initiated Stop is reported calmly;
+     * anything else shows the error so the user knows why and can retry. The
+     * conversation/outline state is untouched, so no work is lost.
+     */
+    private reportTurnFailure(error: unknown): void {
+        if (this.isStopRequested()) {
+            this.addMessageToChat('system', 'Generation stopped. Your work is intact — you can continue or send another message.');
+            return;
+        }
+        const message = error instanceof Error ? error.message : 'The AI request failed unexpectedly.';
+        this.addMessageToChat('system', message);
+    }
+
+    private async streamAssistantResponse(
+        modelPurpose: string,
+        conversation: OpenRouterMessage[],
+        placeholderMessage: HTMLElement
+    ): Promise<string> {
+        const abortController = new AbortController();
+        this.currentAbortController = abortController;
+
+        let response = '';
+        // Holder object (not a bare `let`) so the flag's type stays `boolean` and
+        // the compiler does not narrow it to a constant across the await below.
+        const stall = { triggered: false };
+        let stallTimer: ReturnType<typeof setTimeout> | null = null;
+
+        const armStallTimer = (): void => {
+            if (stallTimer !== null) clearTimeout(stallTimer);
+            stallTimer = setTimeout(() => {
+                stall.triggered = true;
+                abortController.abort();
+            }, XMLStoryModal.STREAM_STALL_TIMEOUT_MS);
+        };
+        const clearStallTimer = (): void => {
+            if (stallTimer !== null) {
+                clearTimeout(stallTimer);
+                stallTimer = null;
+            }
+        };
+
+        armStallTimer();
+        try {
+            await this.openRouterClient.streamingChat(modelPurpose, conversation, {
+                onStart: () => {
+                    armStallTimer();
+                },
+                onChunk: (chunk: string) => {
+                    armStallTimer();
+                    response += chunk;
+                    this.updateStreamingMessage(placeholderMessage, response);
+                },
+                onComplete: () => {
+                    clearStallTimer();
+                    this.finalizeStreamingMessage(placeholderMessage);
+                },
+                onError: (error: Error) => {
+                    clearStallTimer();
+                    this.finalizeStreamingMessage(placeholderMessage);
+                    throw error;
+                }
+            }, undefined, abortController.signal);
+        } catch (error) {
+            this.finalizeStreamingMessage(placeholderMessage);
+            if (stall.triggered) {
+                throw new Error('The AI request stalled with no response (the provider may be overloaded). It was cancelled — your work is intact, please try again.');
+            }
+            throw error instanceof Error ? error : new Error('Streaming failed.');
+        } finally {
+            clearStallTimer();
+            if (this.currentAbortController === abortController) {
+                this.currentAbortController = null;
+            }
+        }
+
+        return response;
+    }
+
     private async runChatTurn(): Promise<string[]> {
         // Create system prompt using PromptExpansionService
         const prompts = this.settingsManager.getPrompts();
@@ -2000,27 +2097,8 @@ export class XMLStoryModal extends SimpleModal {
         // Add placeholder AI message for streaming
         const placeholderMessage = this.addMessageToChat('assistant', '');
 
-        // Send to AI with real-time streaming
-        let response = '';
-        await this.openRouterClient.streamingChat(modelPurpose, conversation, {
-            onStart: () => {
-                // no-op start hook for streaming lifecycle compliance
-            },
-            onChunk: (chunk: string) => {
-                response += chunk;
-                // Update the message in real-time as chunks arrive
-                this.updateStreamingMessage(placeholderMessage, response);
-            },
-            onComplete: () => {
-                // Remove streaming cursor when complete
-                this.finalizeStreamingMessage(placeholderMessage);
-            },
-            onError: (error: Error) => {
-                // Remove streaming cursor on error
-                this.finalizeStreamingMessage(placeholderMessage);
-                throw error;
-            }
-        });
+        // Send to AI with real-time streaming (with abort + stall recovery)
+        const response = await this.streamAssistantResponse(modelPurpose, conversation, placeholderMessage);
 
         const requestedPaths: string[] = [];
 
