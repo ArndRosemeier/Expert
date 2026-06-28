@@ -33,7 +33,7 @@ import {
 
 const XML_STORY_MODEL_STORAGE_KEY = 'xml-story-selected-model';
 const XML_STORY_ADVISOR_MODEL_STORAGE_KEY = 'xml-story-advisor-model';
-const XML_STORY_ADVISOR_PRESETS_STORAGE_KEY = 'xml-story-advisor-presets-v7';
+const XML_STORY_ADVISOR_PRESETS_STORAGE_KEY = 'xml-story-advisor-presets-v8';
 const XML_STORY_ADVISOR_SELECTED_PRESET_KEY = 'xml-story-advisor-selected-preset';
 
 /**
@@ -84,6 +84,11 @@ const DEFAULT_ADVISOR_PRESETS: AdvisorPreset[] = [
         id: 'advisor-theme-guardian',
         name: 'Theme & Premise Guardian',
         persona: 'You are a theme-and-premise guardian working at the OUTLINE level. You make sure the plan delivers on its core premise and explores its themes through events and choices, never through lectures. You identify where the story drifts from its promise or squanders its premise, and you propose concrete beats and developments that express the theme through plot. You are rigorous about thematic payoff and the overall quality and ambition of the plan.'
+    },
+    {
+        id: 'advisor-plot-critique',
+        name: 'Plot Critique',
+        persona: 'You are a ruthless plot critic working at the OUTLINE level. Your job is to stress-test the story itself, holding nothing back — nothing is taboo, including the core idea. You hunt for plot holes, logical gaps, contradictions, and turns that are unmotivated, convenient, or unearned. You ask, hard, whether the plan is genuinely ENGAGING: would a real reader be gripped, or would they get bored, see the twists coming, or stop caring? Above all you interrogate the PREMISE: is it strong and distinctive enough to carry the whole story, or is it thin, generic, derivative, or already exhausted halfway through? If the premise cannot carry the work, you say so plainly rather than polishing a doomed plan.\n\nYou name each weakness specifically, point to the exact beat or assumption that fails, and explain WHY it would fail for a reader. Then you point the Editor toward what would actually make the story work — a sharper premise, a missing motivation, a real cost, a more inevitable yet surprising turn — describing the direction in plain terms WITHOUT writing the outline yourself; the Editor does the writing. You are honest to a fault and you do not soften your verdict to be agreeable. You praise only what genuinely earns it.'
     },
     {
         id: 'advisor-plot-driver',
@@ -1639,6 +1644,10 @@ export class XMLStoryModal extends SimpleModal {
                 this.addMessageToChat('system', '⏹ Debate stopped. Add a hint and press Send or Advisor to resume.');
                 return;
             }
+            if (result === 'rejected') {
+                this.addMessageToChat('system', '🚫 Advisor message discarded. Press Advisor for another take, or send your own message.');
+                return;
+            }
             // A single Advisor press performs exactly one Advisor→Editor round.
             // The automatic loop is what keeps the two AIs going on their own.
             if (!this.isAdvisorAutoEnabled()) return;
@@ -1651,19 +1660,101 @@ export class XMLStoryModal extends SimpleModal {
      * One debate round: the Advisor critiques, then (unless it yielded or the user
      * pressed Stop) the Editor reacts to that critique.
      *
-     * @returns 'yielded' if the Advisor approved, 'stopped' if the user halted the
-     *   debate mid-round, or 'continued' if a full Advisor→Editor round completed.
+     * In manual mode (Auto off) the human must APPROVE the Advisor's critique
+     * before it is committed and sent on to the Editor. If they discard it, the
+     * message is removed from the chat, nothing enters the conversation history,
+     * and the round ends. Auto mode skips approval entirely.
+     *
+     * @returns 'yielded' if the Advisor approved the node, 'stopped' if the user
+     *   halted the debate mid-round, 'rejected' if the human discarded the
+     *   critique, or 'continued' if a full Advisor→Editor round completed.
      */
-    private async runAdvisorThenEditor(): Promise<'yielded' | 'stopped' | 'continued'> {
-        const yielded = await this.runAdvisorTurn();
-        if (yielded) return 'yielded';
+    private async runAdvisorThenEditor(): Promise<'yielded' | 'stopped' | 'continued' | 'rejected'> {
+        const turn = await this.runAdvisorTurn();
+        if (turn.yielded) return 'yielded';
         if (this.isStopRequested()) return 'stopped';
+
+        // Manual mode: the human approves or discards the critique before it is sent
+        // to the Editor. Auto mode commits it without asking.
+        if (!this.isAdvisorAutoEnabled()) {
+            const approved = await this.requestAdvisorApproval();
+            if (!approved) {
+                turn.messageEl?.remove();
+                return 'rejected';
+            }
+            // Restore the streaming UI state for the upcoming Editor turn.
+            this.setGenerating(true);
+        }
+
+        // Commit the (approved or auto) critique so the Editor sees it next.
+        if (turn.historyText !== null) {
+            this.conversationHistory.push({ role: 'user', content: turn.historyText });
+        }
 
         // Editor reacts to the Advisor's critique.
         await this.runEditorExchange();
         if (this.isStopRequested()) return 'stopped';
 
         return 'continued';
+    }
+
+    /**
+     * Manual-mode approval gate. After the Advisor posts its critique, the human
+     * must decide whether it is sent on to the Editor. Rather than a separate
+     * dialog, the existing Send and Advisor buttons are repurposed into
+     * "✓ Approve" and "✗ Discard" (the Stop button is hidden — nothing is
+     * streaming, and a decision must be made before anything proceeds). The
+     * original button labels/styles are fully restored before resolving.
+     *
+     * The buttons' own click handlers (sendMessage / startAdvisorExchange) no-op
+     * while a turn is in flight (isGenerating stays true), so they do not interfere.
+     *
+     * @returns true to approve (send to Editor), false to discard.
+     */
+    private requestAdvisorApproval(): Promise<boolean> {
+        return new Promise<boolean>((resolve) => {
+            const sendBtn = this.sendButton;
+            const advisorBtn = this.advisorButton;
+
+            if (this.stopButton) this.stopButton.style.display = 'none';
+            if (this.messageInput) this.messageInput.disabled = true;
+            if (sendBtn) {
+                sendBtn.disabled = false;
+                sendBtn.innerHTML = '✓ Approve';
+                sendBtn.style.background = '#16a34a';
+            }
+            if (advisorBtn) {
+                advisorBtn.disabled = false;
+                advisorBtn.textContent = '✗ Discard';
+                advisorBtn.style.background = '#b91c1c';
+            }
+
+            const cleanup = (): void => {
+                if (sendBtn) sendBtn.removeEventListener('click', onApprove);
+                if (advisorBtn) advisorBtn.removeEventListener('click', onDiscard);
+                // Restore original labels/styles. The disabled state is re-derived
+                // by the caller via setGenerating().
+                if (sendBtn) {
+                    sendBtn.innerHTML = 'Send';
+                    sendBtn.style.background = '';
+                }
+                if (advisorBtn) {
+                    advisorBtn.textContent = 'Advisor';
+                    advisorBtn.style.background = '#6d28d9';
+                }
+            };
+            const onApprove = (): void => {
+                cleanup();
+                resolve(true);
+            };
+            const onDiscard = (): void => {
+                cleanup();
+                resolve(false);
+            };
+
+            if (sendBtn) sendBtn.addEventListener('click', onApprove);
+            if (advisorBtn) advisorBtn.addEventListener('click', onDiscard);
+        });
     }
 
     /**
@@ -1674,9 +1765,14 @@ export class XMLStoryModal extends SimpleModal {
      * is ignored. Its critique is pushed into the shared history as a `user` turn
      * so the Editor sees it next.
      *
-     * @returns true if the Advisor emitted `<yield/>` (debate should end).
+     * The critique is NOT pushed into the shared history here; the caller commits
+     * it (after optional human approval in non-auto mode) so a rejected critique
+     * leaves no trace in the conversation.
+     *
+     * @returns `yielded` when the Advisor emitted `<yield/>` (debate should end);
+     *   otherwise the rendered message element and the text to commit to history.
      */
-    private async runAdvisorTurn(): Promise<boolean> {
+    private async runAdvisorTurn(): Promise<{ yielded: boolean; messageEl: HTMLElement | null; historyText: string | null }> {
         const prompts = this.settingsManager.getPrompts();
         const expansionService = createPromptExpansionService(this.settingsManager);
         const preset = this.getSelectedAdvisorPreset();
@@ -1736,17 +1832,17 @@ export class XMLStoryModal extends SimpleModal {
             // the advisor's closing rationale in a modal instead.
             placeholderMessage.remove();
             void this.showAdvisorApprovalModal(visibleText);
-            return true;
+            return { yielded: true, messageEl: null, historyText: null };
         }
 
-        // Normal critique: render it and push it into the shared history as a user
-        // turn for the Editor to respond to next.
+        // Normal critique: render it and hand it back to the caller, which decides
+        // whether to commit it to history (immediately in Auto mode, or after the
+        // human approves it in manual mode).
         this.updateStreamingMessage(placeholderMessage, visibleText.length > 0 ? visibleText : '(no comment)');
         this.finalizeStreamingMessage(placeholderMessage);
         const historyText = visibleText.length > 0 ? visibleText : 'Please keep improving this node.';
-        this.conversationHistory.push({ role: 'user', content: historyText });
 
-        return false;
+        return { yielded: false, messageEl: placeholderMessage, historyText };
     }
 
     /**
@@ -1786,6 +1882,7 @@ export class XMLStoryModal extends SimpleModal {
         if (nodeKind.length > 0) {
             lines.push('', nodeKind);
         }
+        lines.push('', this.getDocumentStructureForAI());
         lines.push(
             '',
             'CURRENT CONTENT:',
@@ -1829,6 +1926,61 @@ export class XMLStoryModal extends SimpleModal {
             `Its job is to lay out what happens and to break this ${levelLabel} into ===section=== parts that become ${childLabel} child nodes. It is expected to read as a plan/outline, not as polished narrative prose.`,
             'Judge it as an outline: completeness, structure, sequencing, setup/payoff, and the clarity of each beat. Do NOT fault it for "not being prose", do NOT ask for sentence-level polish, and do NOT push the Editor to write prose here.'
         ].join('\n');
+    }
+
+    /**
+     * Describe the document's layer hierarchy (e.g. Book → Chapter → Scene) and
+     * where the edited node sits in it, so the LLM grasps how deep the structure
+     * goes below this node. Crucially it spells out the RECURSIVE consequence for
+     * context: every layer's body is later split into the layer beneath it, so
+     * anything global to a whole node's subtree must be a context item (inherited
+     * by all descendants), not body text — and this holds at every layer down to
+     * the prose leaves, not just at the top.
+     */
+    private getDocumentStructureForAI(): string {
+        if (!this.sourceNode) throw new Error('XMLStoryModal: sourceNode is required to describe the document structure');
+        const node = this.sourceNode;
+        const template = node.template;
+        const clean = (raw: string | undefined, fallback: string): string => {
+            if (raw === undefined) return fallback;
+            const stripped = raw.replace(/\s+\d+\s*$/, '').trim();
+            return stripped.length > 0 ? stripped : raw;
+        };
+        const currentLevel = node.level;
+        const currentName = clean(template[currentLevel], `Level ${currentLevel}`);
+        const leafName = clean(template[template.length - 1], 'leaf');
+
+        const chain = template
+            .map((raw, idx) => {
+                const name = clean(raw, `Level ${idx}`);
+                return idx === currentLevel ? `${name} (◀ you are editing this layer)` : name;
+            })
+            .join(' → ');
+
+        const lines: string[] = [
+            'DOCUMENT STRUCTURE',
+            '',
+            `Layer hierarchy, top to bottom: ${chain}.`,
+            `Only the bottom layer (${leafName}) holds finished prose; every layer above it is an outline/plan that gets expanded into the layer below it.`,
+            ''
+        ];
+
+        if (node.isLeaf) {
+            lines.push(`This node is a ${currentName} at the bottom layer: its content is finished prose and will NOT be split further.`);
+            return lines.join('\n');
+        }
+
+        const childName = clean(template[currentLevel + 1], 'child');
+        const layersBelow = template.length - 1 - currentLevel;
+        lines.push(
+            `This node is a ${currentName} OUTLINE. On expansion its ===sections=== become ${childName} nodes; there ${layersBelow === 1 ? 'is' : 'are'} ${layersBelow} layer(s) below it before prose is reached, and the SAME split repeats at every layer (each ${childName}'s own body is later split into the layer beneath it, down to the ${leafName} prose leaves).`,
+            '',
+            'RECURSIVE CONTEXT RULE — applies at THIS layer and every layer below:',
+            "- A node's body text gets split and scattered down ONE path on expansion. A context item is inherited by the WHOLE subtree below the node it is attached to.",
+            '- Therefore anything that is true for a whole node and all of its descendants (shared background, setting, a throughline, tone/style, a constraint) belongs in a CONTEXT ITEM, never in the body that will be split.',
+            `- This is not only about the top of the outline: when you write a ===section===, keep only what is specific to that section in its body, and lift anything global to that ENTIRE section into a context item scoped to it (scope="include" children="That Section Title"). The future ${childName} created from that section — and everything beneath it — then inherits it automatically.`
+        );
+        return lines.join('\n');
     }
 
     /**
@@ -2085,6 +2237,7 @@ export class XMLStoryModal extends SimpleModal {
         // node is present.
         const conversation = [
             { role: 'system' as const, content: systemPrompt },
+            ...(this.sourceNode ? [{ role: 'system' as const, content: this.getDocumentStructureForAI() }] : []),
             { role: 'system' as const, content: contextRules },
             ...(this.sourceNode ? [{ role: 'system' as const, content: this.getNodeLookupRulesForAI() }] : []),
             ...this.conversationHistory,
@@ -2166,18 +2319,28 @@ export class XMLStoryModal extends SimpleModal {
             }
             this.renderInlineConditionalContext();
 
-            // Check for failed commands and offer AI correction
-            if (this.failedCommands.length > 0) {
-                await this.offerAICorrection();
-            }
+            // Snapshot any command failures, then clear the queue so the next
+            // turn starts clean. Failures are surfaced two ways below: inline on
+            // the failed command's box (with the reason) and as a recoverable
+            // notice. They are NEVER silently dropped.
+            const failures = this.failedCommands.slice();
+            this.failedCommands = [];
 
             // Display the original text (with commands left in) and apply generic XML formatting
-            const formatted = this.formatXMLBlocksGenerically(response, parseResult.systemCommands as unknown as XMLStoryCommand[]);
+            const formatted = this.formatXMLBlocksGenerically(response, parseResult.systemCommands as unknown as XMLStoryCommand[], failures);
             this.updateStreamingMessageWithHTML(placeholderMessage, formatted);
             this.finalizeStreamingMessage(placeholderMessage);
 
             // Add AI response to conversation history
             this.conversationHistory.push({ role: 'assistant', content: response });
+
+            // Surface any failed commands as a clearly-marked, recoverable notice.
+            // Unlike the old confirm() dialog this never silently fails when the
+            // editor is not the active browser tab, and it always states WHY each
+            // command failed so nobody is left guessing.
+            if (failures.length > 0) {
+                this.showCommandFailureNotice(failures);
+            }
 
             // Update whiteboard
             this.updateWhiteboard();
@@ -2350,7 +2513,7 @@ export class XMLStoryModal extends SimpleModal {
     }
 
     // Generic XML formatter: wrap any <.../> or <tag>...</tag> blocks in a styled box, command-agnostic.
-    private formatXMLBlocksGenerically(text: string, commands: XMLStoryCommand[] = []): string {
+    private formatXMLBlocksGenerically(text: string, commands: XMLStoryCommand[] = [], failed: Array<{ rawXml: string; error: string }> = []): string {
         const executedRawSet = new Set(
             (commands || [])
                 .map(c => (c as any).executedRaw as string | undefined)
@@ -2359,6 +2522,13 @@ export class XMLStoryModal extends SimpleModal {
         // Fuzzy set to tolerate insignificant whitespace differences
         const normalizeXml = (s: string) => s.replace(/\s+/g, ' ').trim();
         const executedRawNormalizedSet = new Set(Array.from(executedRawSet).map(normalizeXml));
+        // Map a failed command's XML (raw and whitespace-normalized) to its reason
+        // so the exact block that did not run can be flagged in place.
+        const failedReasonMap = new Map<string, string>();
+        for (const f of failed) {
+            failedReasonMap.set(f.rawXml, f.error);
+            failedReasonMap.set(normalizeXml(f.rawXml), f.error);
+        }
         // Use backreference to ensure the closing tag matches the opening tag name (prevents partial matches like </search> closing a <replace_command>)
         const xmlRegex = /<([a-zA-Z][\w-]*)(?:\s[^>]*)?>[\s\S]*?<\/\1>|<([a-zA-Z][\w-]*)(?:\s[^>]*)?\/>/g;
 
@@ -2377,11 +2547,27 @@ export class XMLStoryModal extends SimpleModal {
 
             const block = match[0];
             const isExecuted = executedRawSet.has(block) || executedRawNormalizedSet.has(normalizeXml(block));
-            const badge = isExecuted
-                ? '<span style="margin-left:8px;display:inline-flex;align-items:center;gap:6px;padding:2px 8px;border-radius:999px;background:#dcfce7;color:#166534;font-weight:700;font-size:12px;">✓ Executed</span>'
-                : '';
-            resultHtml += `<div style="border:2px solid ${isExecuted ? '#16a34a' : '#e5e7eb'};background:${isExecuted ? '#ecfdf5' : '#f9fafb'};border-radius:8px;padding:8px;margin:8px 0;white-space:pre-wrap;display:flex;align-items:flex-start;justify-content:space-between;gap:8px;">`+
+            const failureReason = isExecuted ? undefined : (failedReasonMap.get(block) ?? failedReasonMap.get(normalizeXml(block)));
+
+            // Three visual states: executed (green), failed (red + reason), neutral.
+            let borderColor = '#e5e7eb';
+            let bgColor = '#f9fafb';
+            let badge = '';
+            if (isExecuted) {
+                borderColor = '#16a34a';
+                bgColor = '#ecfdf5';
+                badge = '<span style="margin-left:8px;display:inline-flex;align-items:center;gap:6px;padding:2px 8px;border-radius:999px;background:#dcfce7;color:#166534;font-weight:700;font-size:12px;">✓ Executed</span>';
+            } else if (failureReason !== undefined) {
+                borderColor = '#dc2626';
+                bgColor = '#fef2f2';
+                badge = '<span style="margin-left:8px;display:inline-flex;align-items:center;gap:6px;padding:2px 8px;border-radius:999px;background:#fee2e2;color:#991b1b;font-weight:700;font-size:12px;">✗ Not executed</span>';
+            }
+            const bottomMargin = failureReason !== undefined ? '0' : '8px';
+            resultHtml += `<div style="border:2px solid ${borderColor};background:${bgColor};border-radius:8px;padding:8px;margin:8px 0 ${bottomMargin} 0;white-space:pre-wrap;display:flex;align-items:flex-start;justify-content:space-between;gap:8px;">`+
                            `<code style=\"flex:1 1 auto;font-family:ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', 'Courier New', monospace;\">${this.escapeHtml(block)}</code>${badge}</div>`;
+            if (failureReason !== undefined) {
+                resultHtml += `<div style="margin:0 0 8px 0;padding:6px 10px;border:2px solid #dc2626;border-top:none;border-radius:0 0 8px 8px;background:#fef2f2;color:#991b1b;font-size:12px;">⚠️ ${this.escapeHtml(failureReason)}</div>`;
+            }
             lastIndex = index + block.length;
         }
 
@@ -2692,6 +2878,14 @@ export class XMLStoryModal extends SimpleModal {
             'CONTEXT RULES',
             '',
             'Context items attached to this node are injected when its descendants are generated.',
+            '',
+            'WHEN TO USE A CONTEXT ITEM (instead of putting it in the body):',
+            'See the DOCUMENT STRUCTURE note: each layer is split into the one below it, so body text is',
+            'scattered down one path while a context item is inherited by the whole subtree. Put anything',
+            'global to a whole node and its descendants (shared background, setting, a throughline, tone/',
+            'style, a constraint) into a context item, not the body. For something global to one whole',
+            'section, attach it here scoped to that section (scope="include" children="That Section").',
+            '',
             'You control WHERE and WHEN each item applies with these optional attributes:',
             '',
             '1. trigger="word1, word2" (optional content gate)',
@@ -3024,49 +3218,56 @@ export class XMLStoryModal extends SimpleModal {
     }
 
     /**
-     * Offer AI correction for failed commands
+     * Surface failed commands as a persistent, clearly-marked chat notice with a
+     * recovery action. This replaces the old confirm() dialog, which the browser
+     * suppressed when the editor was not the active tab — silently dropping the
+     * failures and leaving the user with no explanation and no way to recover.
+     *
+     * The notice states WHY each command failed and offers a user-clicked button
+     * to ask the AI to fix them. Because the button is a genuine user gesture, it
+     * is not subject to the inactive-tab suppression that broke the old dialog.
      */
-    private async offerAICorrection(): Promise<void> {
-        if (this.failedCommands.length === 0) return;
-
-        // Create user-friendly description of failures
-        const failureDescription = this.failedCommands.map(failure => 
-            `${failure.rawXml} (${failure.error})`
-        ).join('\n');
-
-        // Show user alert with option to let AI correct
-        const userWantsCorrection = confirm(
-            `${this.failedCommands.length} command(s) failed to execute.\n\n` +
-            `Would you like the AI to correct these mistakes automatically?\n\n` +
-            `Failed commands:\n${failureDescription}`
+    private showCommandFailureNotice(failures: Array<{ command: XMLStoryCommand; error: string; rawXml: string }>): void {
+        const count = failures.length;
+        const reasonList = failures
+            .map(f => `• ${f.command.type}: ${f.error}`)
+            .join('\n');
+        const header = count === 1
+            ? '⚠️ 1 command could not be applied and was skipped — nothing in your outline or context was changed by it.'
+            : `⚠️ ${count} commands could not be applied and were skipped — nothing in your outline or context was changed by them.`;
+        const messageEl = this.addMessageToChat(
+            'system',
+            `${header}\n\nWhy:\n${reasonList}\n\nThe failed command${count === 1 ? '' : 's'} above ${count === 1 ? 'is' : 'are'} marked in red. You can edit the outline yourself, rephrase your request, or let the AI try again.`
         );
 
-        if (userWantsCorrection) {
-            // Generate correction message
-            const correctionMessage = this.generateCorrectionMessage();
-            
-            // Clear failed commands since we're handling them
-            this.failedCommands = [];
-            
-            // Simulate user sending the correction message
-            await this.sendCorrectionMessage(correctionMessage);
-        } else {
-            // User declined, just clear the failed commands
-            this.failedCommands = [];
-        }
+        const contentDiv = messageEl.querySelector('.message-content');
+        if (!contentDiv) return;
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.textContent = '🔧 Ask the AI to fix this';
+        button.style.cssText = 'margin-top:10px;padding:6px 12px;border-radius:6px;border:1px solid #2563eb;background:#2563eb;color:#ffffff;font-weight:600;cursor:pointer;';
+        button.addEventListener('click', () => {
+            if (this.isGenerating) return;
+            button.disabled = true;
+            button.style.opacity = '0.6';
+            button.style.cursor = 'default';
+            button.textContent = '⏳ Asking the AI…';
+            void this.sendCorrectionMessage(this.generateCorrectionMessage(failures));
+        });
+        contentDiv.appendChild(button);
+    }
+
+    /**
+     * Generate correction message for the given failed commands.
+     */
+    private generateCorrectionMessage(failures: Array<{ error: string; rawXml: string }>): string {
+        const failureList = failures
+            .map(failure => `${failure.rawXml} (${failure.error})`)
+            .join('\n');
+
+        return `These commands did not work:\n${failureList}\n\nPlease fix the problem (for replace commands, the search text must match the current outline exactly, ignoring punctuation/whitespace) and try again.`;
     }
     
-    /**
-     * Generate correction message for failed commands
-     */
-    private generateCorrectionMessage(): string {
-        const failureList = this.failedCommands.map(failure => 
-            `${failure.rawXml} (${failure.error})`
-        ).join('\n');
-
-        return `These commands did not work:\n${failureList}\n\nPlease try again.`;
-    }
-
     /**
      * Send correction message as if user typed it
      */

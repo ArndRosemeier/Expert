@@ -16,7 +16,7 @@ import { SimpleModal } from './core/SimpleModal';
 import type { ModalConfig } from './types/ModalTypes';
 import { createElement, addEventListenerWithCleanup } from './core/modal-utils';
 import { SettingsManager } from '../../SettingsManager';
-import { OpenRouterClient } from '../../OpenRouterClient';
+import { OpenRouterClient, OpenRouterMessage } from '../../OpenRouterClient';
 import { ProjectManager } from '../../ProjectManager';
 import { DocumentNode } from '../../DocumentNode';
 import { createPromptExpansionService } from '../../services/PromptExpansionService';
@@ -60,11 +60,20 @@ export class GuidedReviewModal extends SimpleModal {
     private stagedEdits: StagedNodeEdit[] = [];
     private scope: ReviewScope;
     private isGenerating = false;
+    // Cooperative stop flag, set by the Stop button to halt the current turn.
+    private stopRequested = false;
+    // Abort controller for the in-flight streaming request, so Stop / a stall
+    // watchdog can cancel a request that hangs (e.g. OpenRouter overload).
+    private currentAbortController: AbortController | null = null;
+    // Safety net only: abort a request that goes this long with no streaming
+    // activity. The primary recovery path is the manual Stop button.
+    private static readonly STREAM_STALL_TIMEOUT_MS = 15 * 60 * 1000;
 
     // UI references
     private messagesContainer: HTMLElement | null = null;
     private messageInput: HTMLTextAreaElement | null = null;
     private sendButton: HTMLButtonElement | null = null;
+    private stopButton: HTMLButtonElement | null = null;
     private layersContainer: HTMLElement | null = null;
     private stagedContainer: HTMLElement | null = null;
     private sizeLabel: HTMLElement | null = null;
@@ -242,8 +251,22 @@ export class GuidedReviewModal extends SimpleModal {
         this.sendButton = this.makeButton('Send', '#2563eb', '#ffffff');
         addEventListenerWithCleanup(this.sendButton, 'click', () => void this.sendMessage(), this.cleanupHandlers);
 
+        // Stop button: shown only while generating. It cancels the in-flight
+        // request so a hung stream cannot lock the modal with no recovery.
+        this.stopButton = this.makeButton('Stop', '#dc2626', '#ffffff');
+        this.stopButton.style.display = 'none';
+        addEventListenerWithCleanup(this.stopButton, 'click', () => {
+            this.stopRequested = true;
+            this.currentAbortController?.abort();
+            if (this.stopButton) {
+                this.stopButton.disabled = true;
+                this.stopButton.textContent = 'Stopping…';
+            }
+        }, this.cleanupHandlers);
+
         inputRow.appendChild(this.messageInput);
         inputRow.appendChild(this.sendButton);
+        inputRow.appendChild(this.stopButton);
         column.appendChild(inputRow);
         return column;
     }
@@ -316,48 +339,121 @@ export class GuidedReviewModal extends SimpleModal {
             return;
         }
         this.messageInput.value = '';
+        this.stopRequested = false;
         this.setGenerating(true);
 
         this.conversation.push({ role: 'user', content: message });
         this.appendUserBubble(message);
 
-        const prompts = this.settingsManager.getPrompts();
-        const expansion = createPromptExpansionService(this.settingsManager);
-        const language = this.settingsManager.getLanguage();
-
-        const systemPrompt = await expansion.expandPromptAsync(prompts.guided_reviewer, { project: { language } });
-        const serialized = ReviewContextBuilder.build(this.scope, this.stagedMap());
-        const scopePrompt = await expansion.expandPromptAsync(prompts.guided_reviewer_user, {
-            project: { language },
-            custom: { serialized_scope: serialized.text }
-        });
-
-        const conversation = [
-            { role: 'system' as const, content: systemPrompt },
-            { role: 'system' as const, content: scopePrompt },
-            ...this.conversation.map(m => ({ role: m.role, content: m.content }))
-        ];
-
         const streamingBubble = this.appendAssistantBubble();
-        let response = '';
 
-        await this.openRouterClient.streamingChat(this.purpose, conversation, {
-            onStart: () => { /* streaming started */ },
-            onChunk: (chunk: string) => {
-                response += chunk;
-                streamingBubble.textContent = response;
-                this.scrollMessagesToBottom();
-            },
-            onComplete: (fullContent: string) => {
-                response = fullContent;
-                this.finishAssistantTurn(response, streamingBubble);
-                this.setGenerating(false);
-            },
-            onError: (error: Error) => {
-                streamingBubble.textContent = `⚠️ ${error.message}`;
-                this.setGenerating(false);
+        try {
+            const prompts = this.settingsManager.getPrompts();
+            const expansion = createPromptExpansionService(this.settingsManager);
+            const language = this.settingsManager.getLanguage();
+
+            const systemPrompt = await expansion.expandPromptAsync(prompts.guided_reviewer, { project: { language } });
+            const serialized = ReviewContextBuilder.build(this.scope, this.stagedMap());
+            const scopePrompt = await expansion.expandPromptAsync(prompts.guided_reviewer_user, {
+                project: { language },
+                custom: { serialized_scope: serialized.text }
+            });
+
+            const conversation: OpenRouterMessage[] = [
+                { role: 'system' as const, content: systemPrompt },
+                { role: 'system' as const, content: scopePrompt },
+                ...this.conversation.map(m => ({ role: m.role, content: m.content }))
+            ];
+
+            const response = await this.streamAssistantResponse(conversation, streamingBubble);
+            this.finishAssistantTurn(response, streamingBubble);
+        } catch (error) {
+            // Surface a recoverable message instead of leaving the modal stuck.
+            // A user-initiated Stop is reported calmly; staged edits are intact.
+            let reason: string;
+            if (this.isStopRequested()) {
+                reason = 'Generation stopped. Your staged changes are intact — you can continue or send another message.';
+            } else {
+                reason = error instanceof Error ? error.message : 'The AI request failed.';
             }
-        });
+            streamingBubble.textContent = `⚠️ ${reason}`;
+        } finally {
+            this.setGenerating(false);
+        }
+    }
+
+    /**
+     * Read the cooperative stop flag through a method so the compiler does not
+     * narrow it to a constant across awaits (it is mutated from the Stop button).
+     */
+    private isStopRequested(): boolean {
+        return this.stopRequested;
+    }
+
+    /**
+     * Stream one assistant response into the given bubble with recovery built in:
+     * an AbortController (cancellable via Stop) and a stall watchdog that aborts
+     * if no streaming activity arrives within STREAM_STALL_TIMEOUT_MS. Throws on
+     * abort/stall/error so the caller's finally re-enables the UI; a stall is
+     * reported as a clear, recoverable message.
+     */
+    private async streamAssistantResponse(conversation: OpenRouterMessage[], bubble: HTMLElement): Promise<string> {
+        const abortController = new AbortController();
+        this.currentAbortController = abortController;
+
+        let response = '';
+        // Holder object (not a bare `let`) so the flag's type stays `boolean` and
+        // the compiler does not narrow it to a constant across the await below.
+        const stall = { triggered: false };
+        let stallTimer: ReturnType<typeof setTimeout> | null = null;
+        const armStallTimer = (): void => {
+            if (stallTimer !== null) clearTimeout(stallTimer);
+            stallTimer = setTimeout(() => {
+                stall.triggered = true;
+                abortController.abort();
+            }, GuidedReviewModal.STREAM_STALL_TIMEOUT_MS);
+        };
+        const clearStallTimer = (): void => {
+            if (stallTimer !== null) {
+                clearTimeout(stallTimer);
+                stallTimer = null;
+            }
+        };
+
+        armStallTimer();
+        try {
+            await this.openRouterClient.streamingChat(this.purpose, conversation, {
+                onStart: () => {
+                    armStallTimer();
+                },
+                onChunk: (chunk: string) => {
+                    armStallTimer();
+                    response += chunk;
+                    bubble.textContent = response;
+                    this.scrollMessagesToBottom();
+                },
+                onComplete: (fullContent: string) => {
+                    clearStallTimer();
+                    response = fullContent;
+                },
+                onError: (error: Error) => {
+                    clearStallTimer();
+                    throw error;
+                }
+            }, undefined, abortController.signal);
+        } catch (error) {
+            if (stall.triggered) {
+                throw new Error('The AI request stalled with no response (the provider may be overloaded). It was cancelled — your staged changes are intact, please try again.');
+            }
+            throw error instanceof Error ? error : new Error('Streaming failed.');
+        } finally {
+            clearStallTimer();
+            if (this.currentAbortController === abortController) {
+                this.currentAbortController = null;
+            }
+        }
+
+        return response;
     }
 
     private finishAssistantTurn(response: string, bubble: HTMLElement): void {
@@ -661,6 +757,15 @@ export class GuidedReviewModal extends SimpleModal {
             this.sendButton.disabled = generating;
             this.sendButton.textContent = generating ? 'Working…' : 'Send';
             this.sendButton.style.opacity = generating ? '0.6' : '1';
+        }
+        // The Stop button is the escape hatch while a request is in flight.
+        if (this.stopButton) {
+            this.stopButton.style.display = generating ? '' : 'none';
+            this.stopButton.disabled = false;
+            this.stopButton.textContent = 'Stop';
+        }
+        if (this.messageInput) {
+            this.messageInput.disabled = generating;
         }
     }
 
