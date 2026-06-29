@@ -13,6 +13,26 @@ import {
     splitCriteria
 } from './quality/MetricEvaluator';
 import * as state from './state';
+import { XMLStoryParser } from './xml-story-creation/parser/XMLStoryParser';
+import type { SystemCommand } from './xml-story-creation/types/XMLStoryTypes';
+import { TargetedTextEditor } from './text-edit/TargetedTextEditor';
+
+/** A targeted edit the editor could not apply (surfaced to the caller). */
+export interface LoopFailedEdit {
+    /** The search text or section the failed command targeted. */
+    search: string;
+    /** Why it could not be applied. */
+    reason: string;
+}
+
+/** Body-edit command types the generation editor is allowed to emit. */
+const SUPPORTED_EDIT_COMMANDS: ReadonlySet<SystemCommand['type']> = new Set([
+    'replace_command',
+    'append',
+    'replace_section',
+    'remove_section',
+    'outline_replace'
+]);
 
 export interface LoopInput {
     prompt: string;
@@ -50,6 +70,8 @@ interface LoopResult {
     aborted: boolean;
     /** Friendly display name of the model used to generate this content. */
     generationModelName: string;
+    /** Targeted edits the editor could not apply across the whole loop. */
+    failedEdits: LoopFailedEdit[];
 }
 
 // New interface to track each iteration's performance
@@ -71,6 +93,9 @@ type OrchestratorEvents = {
 };
 
 export class LoopOrchestrator extends EventEmitter<OrchestratorEvents> {
+    /** Max editor calls per failing rating iteration (initial try + retries). */
+    private static readonly EDITOR_MAX_ATTEMPTS = 3;
+
     private client: OpenRouterClient;
     private prompts: OrchestratorPrompts;
     private stopRequested = false;
@@ -256,6 +281,9 @@ export class LoopOrchestrator extends EventEmitter<OrchestratorEvents> {
 
         // Track iteration results for best attempt selection
         const iterationResults: IterationResult[] = [];
+
+        // Targeted edits the editor could not apply, accumulated across iterations.
+        const failedEdits: LoopFailedEdit[] = [];
 
         // Determine which model to use based on node type
         const generationModel = input.isLeafNode ? 'prose' : 'creator';
@@ -475,60 +503,52 @@ export class LoopOrchestrator extends EventEmitter<OrchestratorEvents> {
                 if (!allGoalsMet && i < maxIterations) {
                     // Emit systematic phase start event for editing
                     this.emit('phase-started', 'edit', i);
-                    
-                    // The editor now performs the edit directly. It sees every
-                    // rating (failed ones emphasized), preserves the core, and
-                    // returns the full revised text. There is no separate creator
-                    // regeneration step anymore.
-                    const editorPrompt = this.createEditorPrompt(prompt, currentResponse, combinedRatings, criteria, generationModel === 'prose');
-                    let revisedText: string;
-                    
-                    // Emit progress BEFORE starting the editor API call to show model working state
-                    this.emit('progress', { 
-                        iteration: i, 
-                        maxIterations: maxIterations, 
-                        phase: 'edit', 
-                        payload: { prompt: editorPrompt, revisedText: `${editorModelName} is editing...` }, 
-                        progress: 0,
-                        failureScore: 0
-                    });
-                    
-                    try {
-                        revisedText = await this.client.chat('editor', editorPrompt, undefined, this.abortController.signal);
-                    } catch(e: unknown) {
-                        const errorMessage = e instanceof Error ? e.message : 'Unknown error during editing';
-                        console.error('Editing failed:', errorMessage);
-                        throw new Error(`Content editing failed: ${errorMessage}`);
-                    }
-                    
-                    const editorPayload: EditorPayload = { prompt: editorPrompt, revisedText: revisedText };
-                    history.push({ iteration: i, type: 'editor', payload: editorPayload });
 
-                    // Emit progress AFTER getting the response to show final result
-                    this.emit('progress', { 
-                        iteration: i, 
-                        maxIterations: maxIterations, 
-                        phase: 'edit', 
-                        payload: editorPayload, 
-                        progress: 0,
-                        failureScore: 0
-                    });
+                    // The editor revises via TARGETED commands applied to the current
+                    // text (no unconditional full rewrite). Misses are fed back for a
+                    // bounded number of retries; edits that still cannot be applied are
+                    // recorded so the caller can surface them on the node.
+                    const editOutcome = await this.runEditorEdits(
+                        prompt,
+                        currentResponse,
+                        combinedRatings,
+                        criteria,
+                        generationModel === 'prose',
+                        i,
+                        maxIterations,
+                        editorModelName
+                    );
 
                     if (this.stopRequested) {
                         aborted = true;
                         break;
                     }
 
-                    // The editor's revised text becomes the candidate for the next
-                    // rating pass. We surface it as a new "create" iteration so the
-                    // existing persistence path (which captures content from the
-                    // 'create' phase) snapshots it for best-iteration selection.
-                    currentResponse = revisedText;
+                    for (const dropped of editOutcome.dropped) {
+                        failedEdits.push(dropped);
+                    }
+
+                    const editorPayload: EditorPayload = { prompt: '(targeted edits)', revisedText: editOutcome.text };
+                    history.push({ iteration: i, type: 'editor', payload: editorPayload });
+                    this.emit('progress', {
+                        iteration: i,
+                        maxIterations: maxIterations,
+                        phase: 'edit',
+                        payload: editorPayload,
+                        progress: 0,
+                        failureScore: 0
+                    });
+
+                    // The edited text becomes the candidate for the next rating pass.
+                    // We surface it as a new "create" iteration so the existing
+                    // persistence path (which captures content from the 'create' phase)
+                    // snapshots it for best-iteration selection.
+                    currentResponse = editOutcome.text;
                     creatorIteration++;
                     this.emit('iteration-started', creatorIteration, maxIterations);
                     this.emit('phase-started', 'create', creatorIteration);
 
-                    const revisedPayload: CreatorPayload = { prompt: editorPrompt, response: currentResponse };
+                    const revisedPayload: CreatorPayload = { prompt: '(targeted edits)', response: currentResponse };
                     history.push({ iteration: creatorIteration, type: 'creator', payload: revisedPayload });
 
                     this.emit('progress', { 
@@ -559,7 +579,8 @@ export class LoopOrchestrator extends EventEmitter<OrchestratorEvents> {
                 iterations: 0,
                 success: false,
                 aborted: false,
-                generationModelName: generationModelName
+                generationModelName: generationModelName,
+                failedEdits: failedEdits
             };
         } finally {
             this.isRunning = false;
@@ -599,7 +620,8 @@ export class LoopOrchestrator extends EventEmitter<OrchestratorEvents> {
             iterations: history.filter(h => h.type === 'creator').length,
             success: finalSuccess,
             aborted,
-            generationModelName: generationModelName
+            generationModelName: generationModelName,
+            failedEdits: failedEdits
         };
     }
 
@@ -687,7 +709,7 @@ export class LoopOrchestrator extends EventEmitter<OrchestratorEvents> {
         }
     }
 
-    private createEditorPrompt(originalPrompt: string, response: string, ratings: Rating[], criteria: QualityCriterion[], isLeafNode: boolean): string {
+    private createEditorPrompt(originalPrompt: string, response: string, ratings: Rating[], criteria: QualityCriterion[], isLeafNode: boolean, priorFailures: string = ''): string {
         // The editor sees every criterion so it does not break passing ones while
         // fixing the failures. Failed criteria are clearly marked for emphasis.
         const ratingsBlock = ratings.map(r => {
@@ -717,10 +739,112 @@ export class LoopOrchestrator extends EventEmitter<OrchestratorEvents> {
                 ratings: ratingsBlock,
                 constraints: constraintsBlock,
                 nodeKind: nodeKind,
+                priorFailures: priorFailures,
                 language: this.language
             }
         );
         return this.expansionService.expandPrompt(this.prompts.editor, context, this.language);
+    }
+
+    /**
+     * Run the editor over the current text using targeted edit commands. Applies
+     * the commands the editor returns, feeds any unmatched ones back for a bounded
+     * number of retries, and returns the resulting text plus the edits that could
+     * not be applied within the retry budget. The editor may also choose a
+     * full-body replace (outline_replace), which always applies.
+     */
+    private async runEditorEdits(
+        originalPrompt: string,
+        currentText: string,
+        ratings: Rating[],
+        criteria: QualityCriterion[],
+        isLeafNode: boolean,
+        iteration: number,
+        maxIterations: number,
+        editorModelName: string
+    ): Promise<{ text: string; dropped: LoopFailedEdit[] }> {
+        const parser = new XMLStoryParser();
+        let text = currentText;
+        let priorFailures = '';
+        let dropped: LoopFailedEdit[] = [];
+
+        for (let attempt = 1; attempt <= LoopOrchestrator.EDITOR_MAX_ATTEMPTS; attempt++) {
+            const editorPrompt = this.createEditorPrompt(originalPrompt, text, ratings, criteria, isLeafNode, priorFailures);
+
+            this.emit('progress', {
+                iteration: iteration,
+                maxIterations: maxIterations,
+                phase: 'edit',
+                payload: { prompt: editorPrompt, revisedText: `${editorModelName} is editing...` },
+                progress: 0,
+                failureScore: 0
+            });
+
+            let editorOutput: string;
+            try {
+                editorOutput = await this.client.chat('editor', editorPrompt, undefined, this.abortController!.signal);
+            } catch (e: unknown) {
+                const errorMessage = e instanceof Error ? e.message : 'Unknown error during editing';
+                console.error('Editing failed:', errorMessage);
+                throw new Error(`Content editing failed: ${errorMessage}`);
+            }
+
+            if (this.stopRequested) {
+                break;
+            }
+
+            // Context commands are out of scope for the generation editor.
+            const parsed = parser.parseResponse(editorOutput, undefined, { includeContextCommands: false });
+            const commands = parsed.systemCommands.filter(c => SUPPORTED_EDIT_COMMANDS.has(c.type));
+
+            if (commands.length === 0) {
+                // Editor produced no actionable commands: nothing to apply. Either it
+                // judged the text fine or it replied off-spec. Stop; rating re-runs.
+                dropped = [];
+                break;
+            }
+
+            const { newText, results } = TargetedTextEditor.apply(text, commands);
+            text = newText;
+
+            const failures = results.filter(r => !r.ok);
+            if (failures.length === 0) {
+                dropped = [];
+                break;
+            }
+
+            // Carry the still-failing edits forward: feed them back on the next
+            // attempt, and record them as dropped if the budget runs out.
+            dropped = failures.map(f => ({
+                search: this.describeCommandTarget(f.command),
+                reason: f.message
+            }));
+            priorFailures = this.formatPriorFailures(failures);
+        }
+
+        return { text, dropped };
+    }
+
+    /** Short identifier for a command's target, for failure reporting. */
+    private describeCommandTarget(command: SystemCommand): string {
+        if (command.type === 'replace_command') {
+            return command.searchText ?? '(missing search text)';
+        }
+        if (command.type === 'replace_section' || command.type === 'remove_section') {
+            return `section "${command.sectionTitle ?? '(missing title)'}"`;
+        }
+        return command.type;
+    }
+
+    /**
+     * Build the feedback block injected into the next editor attempt, listing the
+     * commands that could not be applied and why.
+     */
+    private formatPriorFailures(failures: Array<{ command: SystemCommand; message: string }>): string {
+        const lines = failures
+            .map(f => `- ${this.describeCommandTarget(f.command)}: ${f.message}`)
+            .join('\n');
+        return `Your previous edit commands below could NOT be applied and were skipped. Re-express ONLY these against the CURRENT text shown above (copy the search text verbatim and make it unique), or use <outline_replace> if a fix genuinely cannot be localized:\n${lines}`;
     }
 
     /**

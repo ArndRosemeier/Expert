@@ -58,6 +58,13 @@ export class PromptService {
         // write: prose for leaves, a level-specific outline for branches.
         const artifact = node.isLeaf ? 'prose' : `${this.getLevelLabel(node)} outline`;
 
+        // The automated content loop only runs for Empty or Draft nodes (a node
+        // with finished, non-draft content is "Final" and is skipped by the work
+        // detector). Iterative refinement of existing content is NOT done here —
+        // it is handled by the editor via targeted edits in the loop. The
+        // non-draft branch below is therefore only a safety fallback for an
+        // explicit regeneration of a node that already has finished content; it is
+        // never reached through the normal generation path.
         let draftOrFresh: string;
         if (node.content && node.content.trim() !== '') {
             const masterVersion = node.getMasterVersion();
@@ -69,12 +76,12 @@ ${node.content}
 
 Please expand this draft into the full ${artifact}. Use the draft as a bible for what should be covered. Do not advance the plot past the draft.`;
             } else {
-                draftOrFresh = `You have this existing ${artifact} to revise or expand:
+                draftOrFresh = `You have this existing ${artifact} as a starting point:
 ---
 ${node.content}
 ---
 
-Please improve and expand this ${artifact}.`;
+Please expand it into the full ${artifact}.`;
             }
         } else {
             draftOrFresh = `Now, write the ${artifact} for this node.`;

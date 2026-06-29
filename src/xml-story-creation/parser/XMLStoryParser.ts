@@ -41,11 +41,17 @@ export class XMLStoryParser {
      */
     public parseResponse(
         aiResponse: string, 
-        existingElements?: Map<ElementID, StoryElement>
+        existingElements?: Map<ElementID, StoryElement>,
+        options: { includeContextCommands?: boolean } = { includeContextCommands: true }
     ): ParsedResponse {
         if (existingElements) {
             this.existingElements = existingElements;
         }
+
+        // Context-item commands are opt-in. The node chat editor leaves them on
+        // (default); the generation editor turns them off so context machinery is
+        // never parsed, synthesized, or surfaced where it has no meaning.
+        const includeContextCommands = options.includeContextCommands !== false;
         
         const result: ParsedResponse = {
             cleanedText: '',
@@ -58,7 +64,7 @@ export class XMLStoryParser {
         this.clearPreviousAIHighlights();
         
         // Extract system commands first (this also creates markers in the text)
-        const { commands, textWithMarkers } = this.extractSystemCommands(aiResponse);
+        const { commands, textWithMarkers } = this.extractSystemCommands(aiResponse, includeContextCommands);
         result.systemCommands = commands;
 
         
@@ -70,6 +76,7 @@ export class XMLStoryParser {
         
         // Convert newly created/updated elements into synthetic system commands for chat echo
         // so ALL executed actions are visible in the chat as XML.
+        if (includeContextCommands) {
         elements.forEach(el => {
             if (el.type === 'context') {
                 // Determine if element is new or updated relative to existingElements
@@ -96,6 +103,7 @@ export class XMLStoryParser {
                 }
             }
         });
+        }
         
         // Mark new elements and updates for highlighting
         this.markElementsForHighlighting(result.extractedElements);
@@ -107,7 +115,7 @@ export class XMLStoryParser {
      * Extract system commands like </refresh> and </outline_replace>
      * Also replaces them with markers for in-place highlighting
      */
-    private extractSystemCommands(text: string): { commands: SystemCommand[], textWithMarkers: string } {
+    private extractSystemCommands(text: string, includeContextCommands: boolean = true): { commands: SystemCommand[], textWithMarkers: string } {
         const commands: SystemCommand[] = [];
         let textWithMarkers = text;
         let markerIndex = 0;
@@ -303,6 +311,8 @@ export class XMLStoryParser {
         // Handle context add/edit/remove (self-closing) with optional keyword.
         // Quoted values may contain '>' (e.g. the "=>" constraint prefix), so the
         // attribute run is scanned with quote-aware TAG_ATTRS instead of [^>].
+        // Context commands are opt-in; the generation editor disables them.
+        if (includeContextCommands) {
         const contextAddRegex = new RegExp(`<context\\s+(${TAG_ATTRS})\\s*\\/>`, 'gi');
         textWithMarkers = textWithMarkers.replace(contextAddRegex, (full, parametersText) => {
             const params = this.parseCommandParameters(parametersText || '');
@@ -340,6 +350,7 @@ export class XMLStoryParser {
             }
             return markerId;
         });
+        }
 
         // Handle node lookup requests (self-closing): <requestnode path="..."/>.
         // The path may contain '/' or '\' separators, handled downstream.

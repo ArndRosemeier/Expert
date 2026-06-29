@@ -3,7 +3,7 @@ import { TreeService } from './TreeService';
 import { ContextService } from './ContextService';
 import { PromptService } from './PromptService';
 
-import { LoopOrchestrator, LoopInput } from '../LoopOrchestrator';
+import { LoopOrchestrator, LoopInput, LoopFailedEdit } from '../LoopOrchestrator';
 import { SettingsManager } from '../SettingsManager';
 import { OpenRouterClient } from '../OpenRouterClient';
 import { EventEmitter } from '../EventEmitter';
@@ -211,6 +211,9 @@ export interface UnifiedGenerationDependencies {
 export class UnifiedGenerationService {
     // Static registry for managing multiple concurrent instances
     private static activeInstances: Set<UnifiedGenerationService> = new Set();
+
+    /** Prefix marking auto-generated todos about unapplied generation edits. */
+    private static readonly EDITOR_FAILURE_TODO_MARKER = '[auto: editor edit not applied]';
     
     private instanceId: string = crypto.randomUUID();
     private deps: UnifiedGenerationDependencies;
@@ -1794,6 +1797,12 @@ export class UnifiedGenerationService {
                     }
                 }
                 
+                // Surface targeted edits the editor could not apply as a node todo,
+                // so the failure is visible on the node (tree warning icon + tooltip),
+                // not just in logs. A legitimate full-body replace is not a failure
+                // and is therefore not recorded here.
+                this.applyFailedEditTodos(node, result.failedEdits);
+
                 await this.deps.saveToStorage();
                 
                 // Log success or partial success
@@ -1858,6 +1867,40 @@ export class UnifiedGenerationService {
             // Note: Individual content generation does not manage isGenerating flag
             // Only the main unified generation process manages this flag
         }
+    }
+
+    /**
+     * Record (or clear) a node todo describing targeted edits the generation
+     * editor could not apply. The todo is marked with a fixed prefix so that
+     * reruns replace the previous one instead of stacking duplicates. When there
+     * are no failed edits, any prior auto-todo is simply cleared.
+     * @param node The node that was generated.
+     * @param failedEdits Targeted edits the editor could not apply this run.
+     */
+    private applyFailedEditTodos(node: DocumentNode, failedEdits: LoopFailedEdit[]): void {
+        // Clear previous auto-generated edit-failure todos so reruns don't stack.
+        const stale = node.todos.filter(t =>
+            t.completed !== true && t.description.startsWith(UnifiedGenerationService.EDITOR_FAILURE_TODO_MARKER)
+        );
+        for (const todo of stale) {
+            node.removeTodo(todo.id);
+        }
+
+        if (failedEdits.length === 0) {
+            return;
+        }
+
+        const details = failedEdits
+            .map(edit => {
+                const target = edit.search.length > 60 ? `${edit.search.substring(0, 60)}…` : edit.search;
+                return `"${target}" — ${edit.reason}`;
+            })
+            .join('; ');
+        const count = failedEdits.length;
+        const noun = count === 1 ? 'change' : 'changes';
+        node.addTodo(
+            `${UnifiedGenerationService.EDITOR_FAILURE_TODO_MARKER} The generation editor could not apply ${count} ${noun}; the text may not fully meet its goals. Details: ${details}`
+        );
     }
 
     /**

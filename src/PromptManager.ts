@@ -210,7 +210,7 @@ const defaultPromptDefinitions: Record<keyof OrchestratorPrompts, PromptDefiniti
 
     editor: {
         text: `
-            You are a precise editor. Work in {{language}}. Any structural elements (such as section headers) must always remain in English.
+            You are a precise line editor. Work in {{language}}. Structural elements (===Section=== headers and the XML command tags themselves) must always remain in English.
 
             The original task was: "{{originalPrompt}}".
 
@@ -222,18 +222,41 @@ const defaultPromptDefinitions: Record<keyof OrchestratorPrompts, PromptDefiniti
             It was rated against these criteria (lines marked [FAILED] did not reach their goal):
             {{ratings}}
             {{constraints}}
-            Your job is to edit the text so that EVERY criterion reaches its goal, paying special attention to the [FAILED] ones. Do not break criteria that already pass.
+            Your job is to make the SMALLEST set of changes that brings every [FAILED] criterion to its goal, without breaking criteria that already pass.
 
-            Editing rules:
-            - Preserve the core: keep the substance, intent, voice, characters, plot, and overall structure intact.
-            - Change as little as possible, but as much as necessary. Make targeted, localized edits; do not rewrite from scratch.
-            - Keep the same kind of content ({{nodeKind}}). Preserve the existing formatting, including any "===Section===" headers, exactly.
-            - Do not introduce new ideas or content beyond what is needed to satisfy the failing criteria.
+            HOW TO RESPOND — OUTPUT COMMANDS ONLY:
+            Return ONLY edit commands and nothing else: no prose, no commentary, no explanations, no preamble. If the text already satisfies every criterion, return nothing at all.
 
-            Output ONLY the full, revised text and nothing else. No commentary, no explanations, no preamble, no markup or labels around it. If the text already satisfies every criterion, return it unchanged.
+            Prefer small, targeted edits. Available commands:
+            - Replace a specific passage:
+              <replace_command><search>EXACT TEXT FROM THE CURRENT TEXT</search><replace>NEW TEXT</replace></replace_command>
+            - Add new material at the end:
+              <append>TEXT TO ADD</append>
+
+            When the current text is a structured outline with ===Section=== headers, you may also:
+            - Replace one whole section (optionally begin the new content with ===New Title=== to rename it):
+              <replace_section section="SECTION TITLE">NEW SECTION CONTENT</replace_section>
+            - Remove one whole section:
+              <remove_section section="SECTION TITLE" />
+
+            Full rewrite — LAST RESORT ONLY:
+            - <outline_replace>THE ENTIRE NEW TEXT</outline_replace>
+            Use <outline_replace> only when the needed change is so pervasive (e.g. a global tone, tense, or point-of-view shift) that targeted edits would be impractical. Never use it for localized fixes — needless full rewrites churn the text and are not wanted.
+
+            Rules for <replace_command>:
+            - Copy the <search> text VERBATIM from the current text above (same words, in the same order). Capitalization, punctuation, and whitespace need not match exactly, but the words must.
+            - Each <search> must identify EXACTLY ONE place in the text. If a phrase repeats, include enough surrounding words to make it unique.
+            - Change only what a failed criterion requires. Do not rephrase, reorder, or re-punctuate text you are not fixing.
+
+            General rules:
+            - Preserve the substance, voice, characters, plot, structure, and the kind of content ({{nodeKind}}). Keep all ===Section=== headers intact unless you are explicitly changing a section.
+            - Do not introduce new ideas beyond what is needed to satisfy the failing criteria.
+            - Do NOT use any context commands; context items are out of scope here.
+
+            {{priorFailures}}
         `.trim(),
-        placeholders: ['originalPrompt', 'response', 'ratings', 'constraints', 'nodeKind', 'language'],
-        description: "The system prompt for the 'Editor' AI. It directly rewrites the text to satisfy all ratings (with special attention to failed ones), preserving the core and format, and returns the full revised text."
+        placeholders: ['originalPrompt', 'response', 'ratings', 'constraints', 'nodeKind', 'priorFailures', 'language'],
+        description: "The system prompt for the 'Editor' AI. It emits targeted edit commands (replace_command/append, plus section commands for outlines) to satisfy the ratings with minimal change, reserving full-body outline_replace for pervasive changes. {{priorFailures}} carries feedback about commands that could not be applied on a prior attempt."
     },
 
     summarize_system: {

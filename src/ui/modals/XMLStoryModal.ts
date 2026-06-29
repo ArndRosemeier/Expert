@@ -18,6 +18,8 @@ import { OpenRouterClient, OpenRouterMessage } from '../../OpenRouterClient';
 import { createXMLStorySystem } from '../../xml-story-creation';
 import type { XMLStoryEvent } from '../../xml-story-creation';
 import { DEFAULT_XML_STORY_CONFIG } from '../../xml-story-creation/types/XMLStoryTypes';
+import type { SystemCommand } from '../../xml-story-creation/types/XMLStoryTypes';
+import { TargetedTextEditor } from '../../text-edit/TargetedTextEditor';
 import { createPromptExpansionService } from '../../services/PromptExpansionService';
 import { ModelSelector } from '../../ModelSelector';
 import { StorageService } from '../../StorageService';
@@ -3291,28 +3293,15 @@ export class XMLStoryModal extends SimpleModal {
      */
     private handleOutlineAppend(event: XMLStoryEvent): void {
         const { command } = event.payload as { command: XMLStoryCommand };
-        if (!command.content) {
-            // Append command missing content
+        const currentContent = this.getCurrentOutlineSafe();
+        const outcome = TargetedTextEditor.applyOne(currentContent, command as unknown as SystemCommand);
+        if (!outcome.ok || outcome.newText === undefined) {
+            this.emitCommandFailure(command, outcome.message);
             return;
         }
-
-        const currentContent = this.getCurrentOutlineSafe();
-        const newContent = currentContent + '\n\n' + command.content;
-        
-        this.setOutlineContentFromAI(newContent);
+        this.setOutlineContentFromAI(outcome.newText);
         // Mark executed so chat can show the checkmark in a command-agnostic way
         (command as any).executedRaw = (command as any).rawXml || '';
-        // AI content appended successfully
-    }
-
-    /**
-     * Trim trailing non-alphanumerical characters from replacement text to avoid double punctuation
-     * 
-     * When AI searches for text ignoring punctuation but includes punctuation in replacement,
-     * this prevents double punctuation marks (e.g., "word.." instead of "word.")
-     */
-    private trimTrailingNonAlphanumeric(text: string): string {
-        return text.replace(/[^a-zA-Z0-9]+$/, '');
     }
 
     /**
@@ -3320,59 +3309,34 @@ export class XMLStoryModal extends SimpleModal {
      * 
      * ARCHITECTURE NOTE: This uses fuzzy search to find and replace text within
      * the outline content (stored as plain text), ignoring whitespace/punctuation
-     * differences between AI search text and actual outline formatting.
+     * differences between AI search text and actual outline formatting. The
+     * matching/replacement logic lives in the shared TargetedTextEditor.
      */
     private handleOutlineReplace(event: XMLStoryEvent): void {
         const { command } = event.payload as { command: XMLStoryCommand };
-        if (!command.searchText || !command.replaceText) {
-            this.emitCommandFailure(command, 'Replace command missing search text or replace text');
+        const currentContent = this.getCurrentOutlineSafe();
+        const outcome = TargetedTextEditor.applyOne(currentContent, command as unknown as SystemCommand);
+        if (!outcome.ok || outcome.newText === undefined) {
+            this.emitCommandFailure(command, outcome.message);
             return;
         }
 
-        const currentContent = this.getCurrentOutlineSafe();
-        
-        // Use fuzzy search that ignores non-alphanumeric characters
-        const fuzzyMatches = this.findFuzzyMatches(currentContent, command.searchText);
-        
-        if (fuzzyMatches.length === 0) {
-            this.emitCommandFailure(command, `Search text "${command.searchText}" not found in outline (ignoring punctuation/whitespace)`);
-            return;
-        }
-        
-        if (fuzzyMatches.length > 1) {
-            this.emitCommandFailure(command, `Search text "${command.searchText}" appears ${fuzzyMatches.length} times. Must be unique for replacement.`);
-            return;
-        }
-        
-        // Perform the replacement using exact positions
-        const match = fuzzyMatches[0];
-        if (!match) {
-            this.emitCommandFailure(command, 'Match not found despite array check');
-            return;
-        }
-        
-        // Trim trailing non-alphanumerical characters from replacement to avoid double punctuation
-        const trimmedReplaceText = this.trimTrailingNonAlphanumeric(command.replaceText);
-        
-        const newContent = currentContent.substring(0, match.start) + 
-                          trimmedReplaceText + 
-                          currentContent.substring(match.end);
-        
         // Set content and setup persistent highlighting
         if (this.outlineEditor) {
-            this.outlineEditor.setText(newContent);
-            this.saveOutlineVersion(newContent, 'ai');
+            this.outlineEditor.setText(outcome.newText);
+            this.saveOutlineVersion(outcome.newText, 'ai');
         }
-        
-        // Setup persistent highlight that survives editor recreation (using trimmed length)
-        this.setPersistentHighlight(
-            match.start,
-            match.start + trimmedReplaceText.length,
-            'highlight-ai-replacement'
-        );
+
+        // Setup persistent highlight that survives editor recreation
+        if (outcome.matchRange) {
+            this.setPersistentHighlight(
+                outcome.matchRange.start,
+                outcome.matchRange.end,
+                'highlight-ai-replacement'
+            );
+        }
         // Mark executed so chat can show the checkmark in a command-agnostic way
         (command as any).executedRaw = (command as any).rawXml || '';
-        // AI content replacement completed successfully
     }
 
     /**
@@ -3381,51 +3345,15 @@ export class XMLStoryModal extends SimpleModal {
      */
     private handleSectionReplace(event: XMLStoryEvent): void {
         const { command } = event.payload as { command: XMLStoryCommand };
-        if (!command['sectionTitle'] || !command.content) {
-            this.emitCommandFailure(command, 'Section replace command missing section title or content');
-            return;
-        }
-
         const currentContent = this.getCurrentOutlineSafe();
-        
-        // Find the section using the section parsing logic from UnifiedGenerationService
-        const sections = this.parseContentSections(currentContent);
-        const targetSectionIndex = sections.findIndex(section => section.title === command['sectionTitle']);
-        
-        if (targetSectionIndex === -1) {
-            this.emitCommandFailure(command, `Section "${command['sectionTitle']}" not found in outline`);
+        const outcome = TargetedTextEditor.applyOne(currentContent, command as unknown as SystemCommand);
+        if (!outcome.ok || outcome.newText === undefined) {
+            this.emitCommandFailure(command, outcome.message);
             return;
         }
-        
-        // Rebuild content with the replaced section
-        const newSections = [...sections];
-        
-        // Check if the provided content includes a new section title
-        // If it starts with ===title===, extract that as the new title
-        let newTitle = command['sectionTitle'] as string;
-        let newContent = command.content;
-        
-        const titleMatch = newContent.match(/^===\s*(.+?)\s*===\s*\n?([\s\S]*)$/);
-        if (titleMatch) {
-            // Content includes a new title - use it
-            newTitle = titleMatch[1]!.trim();
-            newContent = titleMatch[2]!.trim();
-        }
-        
-        newSections[targetSectionIndex] = {
-            title: newTitle,
-            content: newContent
-        };
-        
-        // Reconstruct the outline with all sections
-        const finalContent = newSections.map(section => 
-            `===${section.title}===\n${section.content}`
-        ).join('\n\n');
-        
-        this.setOutlineContentFromAI(finalContent);
+        this.setOutlineContentFromAI(outcome.newText);
         // Mark executed so chat can show the checkmark in a command-agnostic way
         (command as any).executedRaw = (command as any).rawXml || '';
-        // AI section replacement completed successfully
     }
 
     /**
@@ -3434,159 +3362,15 @@ export class XMLStoryModal extends SimpleModal {
      */
     private handleSectionRemove(event: XMLStoryEvent): void {
         const { command } = event.payload as { command: XMLStoryCommand };
-        if (!command['sectionTitle']) {
-            this.emitCommandFailure(command, 'Section remove command missing section title');
-            return;
-        }
-
         const currentContent = this.getCurrentOutlineSafe();
-        
-        // Find the section using the section parsing logic from UnifiedGenerationService
-        const sections = this.parseContentSections(currentContent);
-        const targetSectionIndex = sections.findIndex(section => section.title === command['sectionTitle']);
-        
-        if (targetSectionIndex === -1) {
-            this.emitCommandFailure(command, `Section "${command['sectionTitle']}" not found in outline`);
+        const outcome = TargetedTextEditor.applyOne(currentContent, command as unknown as SystemCommand);
+        if (!outcome.ok || outcome.newText === undefined) {
+            this.emitCommandFailure(command, outcome.message);
             return;
         }
-        
-        // Remove the target section
-        const newSections = sections.filter((_, index) => index !== targetSectionIndex);
-        
-        // Reconstruct the outline without the removed section
-        const newContent = newSections.length > 0 
-            ? newSections.map(section => 
-                `===${section.title}===\n${section.content}`
-            ).join('\n\n')
-            : '';
-        
-        this.setOutlineContentFromAI(newContent);
+        this.setOutlineContentFromAI(outcome.newText);
         // Mark executed so chat can show the checkmark in a command-agnostic way
         (command as any).executedRaw = (command as any).rawXml || '';
-        // AI section removal completed successfully
-    }
-
-    /**
-     * Parse content sections that follow ===<title>=== format
-     * Returns array of sections with title and content (copied from UnifiedGenerationService)
-     */
-    private parseContentSections(content: string): Array<{title: string, content: string}> {
-        if (!content || !content.trim()) {
-            return [];
-        }
-
-        const lines = content.split('\n');
-        const sections: Array<{title: string, content: string}> = [];
-        let currentSection: {title: string, content: string[]} | null = null;
-
-        for (const line of lines) {
-            // Check if line matches ===<title>=== pattern
-            const sectionMatch = line.match(/^===(.+?)===\s*$/);
-            
-            if (sectionMatch) {
-                // Save previous section if it exists
-                if (currentSection) {
-                    sections.push({
-                        title: currentSection.title,
-                        content: currentSection.content.join('\n').trim()
-                    });
-                }
-                
-                // Start new section
-                const title = sectionMatch[1];
-                if (title) {
-                    currentSection = {
-                        title: title.trim(),
-                        content: []
-                    };
-                }
-            } else if (currentSection) {
-                // Add line to current section content
-                currentSection.content.push(line);
-            }
-            // Ignore lines before the first section
-        }
-
-        // Save the last section if it exists
-        if (currentSection) {
-            sections.push({
-                title: currentSection.title,
-                content: currentSection.content.join('\n').trim()
-            });
-        }
-
-        return sections.filter(section => section.title.length > 0);
-    }
-
-    /**
-     * Find fuzzy matches ignoring non-alphanumeric characters but preserving original positions
-     * 
-     * This is the key to making AI replace commands work reliably. The AI might search for
-     * "chapter 1 the discovery" but the actual text could be "Chapter 1:    The Discovery - "
-     * This algorithm matches based only on letters/numbers while preserving exact positions
-     * for replacement, avoiding the need to normalize text (which would lose position info).
-     */
-    private findFuzzyMatches(text: string, searchPattern: string): Array<{start: number, end: number}> {
-        const matches: Array<{start: number, end: number}> = [];
-        
-        // Helper function to check if character is alphanumeric
-        const isAlphaNumeric = (char: string): boolean => {
-            return /[a-zA-Z0-9]/.test(char);
-        };
-        
-        // Convert search pattern to lowercase alphanumeric only for comparison
-        const normalizedPattern = searchPattern.toLowerCase().replace(/[^a-zA-Z0-9]/g, '');
-        if (normalizedPattern.length === 0) {
-            return matches; // Empty pattern
-        }
-        
-        let textIndex = 0;
-        
-        while (textIndex < text.length) {
-            let matchStart = -1;
-            let matchEnd = -1;
-            let patternIndex = 0;
-            let currentTextIndex = textIndex;
-            
-            // Try to match pattern starting from currentTextIndex
-            while (currentTextIndex < text.length && patternIndex < normalizedPattern.length) {
-                const textChar = text[currentTextIndex]?.toLowerCase();
-                
-                if (textChar && isAlphaNumeric(textChar)) {
-                    if (textChar === normalizedPattern[patternIndex]) {
-                        if (matchStart === -1) {
-                            matchStart = currentTextIndex; // First alphanumeric match
-                        }
-                        patternIndex++;
-                        matchEnd = currentTextIndex + 1; // End is exclusive
-                    } else {
-                        // Mismatch in alphanumeric characters, break
-                        break;
-                    }
-                } else {
-                    // Non-alphanumeric character in text
-                    if (matchStart !== -1) {
-                        // We're in the middle of a potential match, include this character
-                        matchEnd = currentTextIndex + 1;
-                    }
-                }
-                
-                currentTextIndex++;
-            }
-            
-            // Check if we found a complete match
-            if (patternIndex === normalizedPattern.length && matchStart !== -1) {
-                matches.push({start: matchStart, end: matchEnd});
-                
-                // Continue searching from after this match
-                textIndex = matchEnd;
-            } else {
-                // No match starting at textIndex, move to next character
-                textIndex++;
-            }
-        }
-        
-        return matches;
     }
 
     /**
