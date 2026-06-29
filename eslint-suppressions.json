@@ -5,6 +5,9 @@
     },
     "@typescript-eslint/no-unnecessary-condition": {
       "count": 1
+    },
+    "@typescript-eslint/prefer-optional-chain": {
+      "count": 1
     }
   },
   "src/AILogService.ts": {
@@ -12,22 +15,58 @@
       "count": 1
     }
   },
-  "src/DocumentNode.ts": {
-    "@typescript-eslint/no-explicit-any": {
-      "count": 10
+  "src/CoherenceLog.ts": {
+    "@typescript-eslint/require-await": {
+      "count": 2
     },
+    "no-nested-ternary": {
+      "count": 1
+    }
+  },
+  "src/ContextFormat.ts": {
     "@typescript-eslint/no-unnecessary-condition": {
       "count": 3
+    }
+  },
+  "src/ContextIDGenerator.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 8
+    },
+    "@typescript-eslint/no-unnecessary-condition": {
+      "count": 2
+    }
+  },
+  "src/DocumentNode.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 18
+    },
+    "@typescript-eslint/no-unnecessary-condition": {
+      "count": 5
+    },
+    "@typescript-eslint/no-unnecessary-type-assertion": {
+      "count": 2
+    },
+    "@typescript-eslint/no-unused-vars": {
+      "count": 1
+    },
+    "@typescript-eslint/prefer-optional-chain": {
+      "count": 2
     }
   },
   "src/EventEmitter.ts": {
     "@typescript-eslint/no-explicit-any": {
       "count": 3
+    },
+    "@typescript-eslint/no-unnecessary-type-assertion": {
+      "count": 2
     }
   },
   "src/IndexedDBService.ts": {
     "@typescript-eslint/no-unnecessary-condition": {
       "count": 1
+    },
+    "@typescript-eslint/no-unnecessary-type-assertion": {
+      "count": 2
     },
     "prefer-const": {
       "count": 1
@@ -36,53 +75,71 @@
   "src/LocalStorageBlocker.ts": {
     "@typescript-eslint/no-explicit-any": {
       "count": 3
+    },
+    "no-nested-ternary": {
+      "count": 1
     }
   },
   "src/LoopOrchestrator.ts": {
     "@typescript-eslint/no-explicit-any": {
-      "count": 12
+      "count": 4
     },
     "@typescript-eslint/no-unnecessary-condition": {
-      "count": 14
+      "count": 6
     }
   },
   "src/ModelSelector.ts": {
-    "@typescript-eslint/no-misused-promises": {
+    "@typescript-eslint/no-explicit-any": {
       "count": 2
     },
+    "@typescript-eslint/no-misused-promises": {
+      "count": 10
+    },
     "@typescript-eslint/no-unnecessary-condition": {
-      "count": 3
+      "count": 7
+    },
+    "@typescript-eslint/no-unnecessary-type-assertion": {
+      "count": 4
     },
     "@typescript-eslint/no-unused-vars": {
-      "count": 3
+      "count": 7
+    },
+    "@typescript-eslint/prefer-optional-chain": {
+      "count": 1
     },
     "@typescript-eslint/require-await": {
-      "count": 1
+      "count": 3
+    },
+    "no-empty": {
+      "count": 2
     }
   },
   "src/OpenRouterClient.ts": {
     "@typescript-eslint/no-explicit-any": {
-      "count": 5
+      "count": 15
     },
-    "@typescript-eslint/no-floating-promises": {
-      "count": 1
+    "@typescript-eslint/no-misused-promises": {
+      "count": 2
     },
     "@typescript-eslint/no-unnecessary-condition": {
       "count": 9
     },
     "@typescript-eslint/no-unused-vars": {
-      "count": 7
+      "count": 9
     },
     "@typescript-eslint/require-await": {
+      "count": 2
+    },
+    "no-nested-ternary": {
       "count": 2
     }
   },
   "src/ProjectManager.ts": {
     "@typescript-eslint/no-explicit-any": {
-      "count": 5
+      "count": 4
     },
     "@typescript-eslint/no-unnecessary-condition": {
-      "count": 4
+      "count": 2
     }
   },
   "src/ProjectUtils.ts": {
@@ -90,7 +147,7 @@
       "count": 1
     },
     "@typescript-eslint/no-unnecessary-condition": {
-      "count": 4
+      "count": 5
     }
   },
   "src/PromptManager.ts": {
@@ -100,9 +157,15 @@
   },
   "src/SettingsManager.ts": {
     "@typescript-eslint/no-explicit-any": {
-      "count": 7
+      "count": 3
     },
     "@typescript-eslint/no-unnecessary-condition": {
+      "count": 11
+    },
+    "@typescript-eslint/no-unused-vars": {
+      "count": 2
+    },
+    "@typescript-eslint/prefer-optional-chain": {
       "count": 1
     }
   },
@@ -119,42 +182,97 @@
       "count": 2
     }
   },
-  "src/TestRunner.ts": {
+  "src/event-handlers.ts": {
     "@typescript-eslint/no-explicit-any": {
-      "count": 36
+      "count": 15
+    },
+    "@typescript-eslint/no-misused-promises": {
+      "count": 6
     },
     "@typescript-eslint/no-unnecessary-condition": {
       "count": 7
     },
-    "@typescript-eslint/no-unused-vars": {
+    "@typescript-eslint/no-unnecessary-type-assertion": {
       "count": 2
+    },
+    "@typescript-eslint/prefer-optional-chain": {
+      "count": 1
+    },
+    "@typescript-eslint/require-await": {
+      "count": 4
+    },
+    "no-empty": {
+      "count": 2
+    }
+  },
+  "src/idea-board/IdeaBoard.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 8
+    },
+    "@typescript-eslint/no-floating-promises": {
+      "count": 8
+    },
+    "@typescript-eslint/no-misused-promises": {
+      "count": 5
+    },
+    "@typescript-eslint/no-unnecessary-condition": {
+      "count": 13
+    },
+    "@typescript-eslint/no-unnecessary-type-assertion": {
+      "count": 2
+    },
+    "@typescript-eslint/no-unused-vars": {
+      "count": 6
+    },
+    "@typescript-eslint/require-await": {
+      "count": 2
+    },
+    "no-nested-ternary": {
+      "count": 2
+    }
+  },
+  "src/idea-board/elements/BackgroundRectangle.ts": {
+    "@typescript-eslint/no-unused-vars": {
+      "count": 1
+    }
+  },
+  "src/idea-board/elements/Connection.ts": {
+    "no-nested-ternary": {
+      "count": 12
+    }
+  },
+  "src/idea-board/elements/PostItNote.ts": {
+    "no-implicit-coercion": {
+      "count": 1
+    }
+  },
+  "src/idea-board/ui/NodeSearchModal.ts": {
+    "@typescript-eslint/no-unnecessary-type-assertion": {
+      "count": 1
     },
     "@typescript-eslint/require-await": {
       "count": 1
     }
   },
-  "src/dev-utils.ts": {
-    "@typescript-eslint/no-explicit-any": {
-      "count": 5
-    },
+  "src/idea-board/ui/ToolPanel.ts": {
     "@typescript-eslint/no-floating-promises": {
-      "count": 1
-    }
-  },
-  "src/event-handlers.ts": {
-    "@typescript-eslint/no-misused-promises": {
       "count": 2
     },
     "@typescript-eslint/no-unnecessary-condition": {
       "count": 2
-    },
-    "@typescript-eslint/require-await": {
-      "count": 1
+    }
+  },
+  "src/idea-board/ui/TransformModal.ts": {
+    "@typescript-eslint/no-unnecessary-condition": {
+      "count": 2
     }
   },
   "src/keys/AppKeyService.ts": {
     "@typescript-eslint/no-explicit-any": {
       "count": 3
+    },
+    "@typescript-eslint/no-floating-promises": {
+      "count": 1
     }
   },
   "src/keys/KeyCrypto.ts": {
@@ -174,6 +292,9 @@
     }
   },
   "src/keys/keys-ui.ts": {
+    "@typescript-eslint/no-confusing-void-expression": {
+      "count": 1
+    },
     "@typescript-eslint/no-misused-promises": {
       "count": 4
     },
@@ -186,9 +307,49 @@
   },
   "src/main.ts": {
     "@typescript-eslint/no-explicit-any": {
-      "count": 5
+      "count": 1
+    }
+  },
+  "src/overview-board/OverviewAnalysisService.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 1
     },
-    "@typescript-eslint/require-await": {
+    "@typescript-eslint/no-unnecessary-condition": {
+      "count": 26
+    },
+    "@typescript-eslint/no-unnecessary-type-assertion": {
+      "count": 2
+    },
+    "@typescript-eslint/prefer-optional-chain": {
+      "count": 2
+    }
+  },
+  "src/overview-board/OverviewBoardModal.ts": {
+    "@typescript-eslint/no-floating-promises": {
+      "count": 3
+    },
+    "@typescript-eslint/no-unnecessary-type-assertion": {
+      "count": 4
+    }
+  },
+  "src/overview-board/elements/OverviewElementBase.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 3
+    },
+    "@typescript-eslint/no-unnecessary-type-assertion": {
+      "count": 1
+    }
+  },
+  "src/overview-board/rendering/OverviewRenderer.ts": {
+    "@typescript-eslint/no-unused-vars": {
+      "count": 5
+    }
+  },
+  "src/overview-board/utils/DataConverter.ts": {
+    "@typescript-eslint/no-unnecessary-condition": {
+      "count": 10
+    },
+    "@typescript-eslint/no-unnecessary-type-assertion": {
       "count": 1
     }
   },
@@ -203,44 +364,33 @@
   "src/project/ContextExtractionService.ts": {
     "@typescript-eslint/no-unnecessary-condition": {
       "count": 5
+    },
+    "@typescript-eslint/prefer-optional-chain": {
+      "count": 10
+    }
+  },
+  "src/project/ContextService.ts": {
+    "@typescript-eslint/no-unused-vars": {
+      "count": 1
+    },
+    "@typescript-eslint/prefer-optional-chain": {
+      "count": 5
     }
   },
   "src/project/GenerationCoordinator.ts": {
     "@typescript-eslint/no-explicit-any": {
-      "count": 10
-    },
-    "@typescript-eslint/no-unnecessary-condition": {
-      "count": 5
-    },
-    "@typescript-eslint/no-unused-vars": {
-      "count": 1
-    }
-  },
-  "src/project/GenerationService.ts": {
-    "@typescript-eslint/no-explicit-any": {
-      "count": 8
-    },
-    "@typescript-eslint/no-unnecessary-condition": {
-      "count": 13
-    },
-    "@typescript-eslint/no-unused-vars": {
-      "count": 1
-    }
-  },
-  "src/project/ProjectPersistenceService.ts": {
-    "@typescript-eslint/no-explicit-any": {
-      "count": 10
+      "count": 12
     },
     "@typescript-eslint/no-unnecessary-condition": {
       "count": 3
     },
     "@typescript-eslint/no-unused-vars": {
-      "count": 3
+      "count": 1
     }
   },
   "src/project/PromptService.ts": {
-    "@typescript-eslint/no-explicit-any": {
-      "count": 2
+    "@typescript-eslint/prefer-optional-chain": {
+      "count": 1
     }
   },
   "src/project/SmartContentParser.ts": {
@@ -248,38 +398,178 @@
       "count": 12
     }
   },
-  "src/project/test-context-extraction.ts": {
+  "src/project/TreeService.ts": {
+    "@typescript-eslint/no-unused-vars": {
+      "count": 1
+    }
+  },
+  "src/project/UnifiedGenerationService.ts": {
     "@typescript-eslint/no-explicit-any": {
       "count": 1
+    },
+    "@typescript-eslint/no-unnecessary-condition": {
+      "count": 7
     },
     "@typescript-eslint/no-unused-vars": {
       "count": 2
     },
-    "@typescript-eslint/require-await": {
-      "count": 1
-    }
-  },
-  "src/project/test-phase3.ts": {
-    "@typescript-eslint/no-explicit-any": {
-      "count": 1
+    "@typescript-eslint/prefer-optional-chain": {
+      "count": 3
     },
     "@typescript-eslint/require-await": {
       "count": 1
     }
   },
-  "src/project/types/ProjectTypes.ts": {
-    "@typescript-eslint/no-explicit-any": {
+  "src/quality/MetricEvaluator.ts": {
+    "@typescript-eslint/no-unnecessary-condition": {
+      "count": 1
+    }
+  },
+  "src/quality/metrics/MetricRegistry.ts": {
+    "@typescript-eslint/no-unnecessary-condition": {
+      "count": 1
+    }
+  },
+  "src/review/ReviewCommandParser.ts": {
+    "@typescript-eslint/no-unnecessary-condition": {
+      "count": 1
+    },
+    "@typescript-eslint/no-unnecessary-type-assertion": {
+      "count": 1
+    }
+  },
+  "src/rpg-lite/ui/RPGLiteView.ts": {
+    "@typescript-eslint/no-misused-promises": {
+      "count": 2
+    },
+    "@typescript-eslint/no-unnecessary-condition": {
+      "count": 6
+    },
+    "@typescript-eslint/no-unnecessary-type-assertion": {
+      "count": 37
+    },
+    "@typescript-eslint/promise-function-async": {
+      "count": 4
+    },
+    "@typescript-eslint/require-await": {
+      "count": 1
+    }
+  },
+  "src/rpg/services/RPGInteractionService.ts": {
+    "@typescript-eslint/no-unnecessary-condition": {
+      "count": 9
+    },
+    "@typescript-eslint/no-unnecessary-type-assertion": {
+      "count": 2
+    },
+    "no-nested-ternary": {
+      "count": 5
+    }
+  },
+  "src/rpg/services/RPGStateParser.ts": {
+    "@typescript-eslint/no-unnecessary-condition": {
+      "count": 4
+    }
+  },
+  "src/rpg/types/RPGTypes.ts": {
+    "@typescript-eslint/no-unnecessary-condition": {
+      "count": 13
+    }
+  },
+  "src/rpg/ui/RPGConversationPanel.ts": {
+    "@typescript-eslint/no-unnecessary-condition": {
+      "count": 1
+    },
+    "@typescript-eslint/no-unnecessary-type-assertion": {
+      "count": 2
+    }
+  },
+  "src/rpg/ui/RPGSnapshotManager.ts": {
+    "@typescript-eslint/no-unnecessary-condition": {
+      "count": 1
+    }
+  },
+  "src/rpg/ui/RPGView.ts": {
+    "@typescript-eslint/await-thenable": {
+      "count": 2
+    },
+    "@typescript-eslint/no-confusing-void-expression": {
+      "count": 2
+    },
+    "@typescript-eslint/no-misused-promises": {
+      "count": 1
+    },
+    "@typescript-eslint/no-unnecessary-condition": {
+      "count": 1
+    },
+    "@typescript-eslint/no-unnecessary-type-assertion": {
       "count": 3
+    },
+    "@typescript-eslint/require-await": {
+      "count": 2
+    }
+  },
+  "src/rpg/ui/RPGWorldInspector.ts": {
+    "@typescript-eslint/no-unnecessary-condition": {
+      "count": 4
+    },
+    "@typescript-eslint/no-unnecessary-type-assertion": {
+      "count": 6
+    }
+  },
+  "src/services/HierarchicalImportService.ts": {
+    "@typescript-eslint/no-unnecessary-condition": {
+      "count": 1
     }
   },
   "src/services/PromptContextBuilder.ts": {
     "@typescript-eslint/no-explicit-any": {
       "count": 2
+    },
+    "@typescript-eslint/no-unnecessary-type-assertion": {
+      "count": 1
     }
   },
   "src/services/PromptExpansionService.ts": {
     "@typescript-eslint/no-unnecessary-condition": {
-      "count": 10
+      "count": 12
+    }
+  },
+  "src/services/TaskModelService.ts": {
+    "@typescript-eslint/no-unnecessary-condition": {
+      "count": 2
+    }
+  },
+  "src/services/TemplateInferenceService.ts": {
+    "no-nested-ternary": {
+      "count": 1
+    }
+  },
+  "src/services/TextSegmentationService.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 2
+    },
+    "@typescript-eslint/no-unnecessary-condition": {
+      "count": 1
+    },
+    "@typescript-eslint/no-unnecessary-type-assertion": {
+      "count": 4
+    },
+    "no-nested-ternary": {
+      "count": 1
+    }
+  },
+  "src/state.ts": {
+    "@typescript-eslint/no-unused-vars": {
+      "count": 1
+    }
+  },
+  "src/ui/DragDropManager.ts": {
+    "@typescript-eslint/no-misused-promises": {
+      "count": 1
+    },
+    "@typescript-eslint/no-unnecessary-condition": {
+      "count": 1
     }
   },
   "src/ui/Dropdown.ts": {
@@ -292,22 +582,36 @@
       "count": 1
     },
     "@typescript-eslint/no-unnecessary-condition": {
+      "count": 6
+    },
+    "@typescript-eslint/no-unnecessary-type-assertion": {
+      "count": 1
+    },
+    "@typescript-eslint/prefer-optional-chain": {
+      "count": 1
+    },
+    "no-nested-ternary": {
       "count": 4
     }
   },
   "src/ui/components/BatchUpdateModal.ts": {
-    "@typescript-eslint/no-explicit-any": {
+    "@typescript-eslint/no-floating-promises": {
       "count": 1
     },
     "@typescript-eslint/no-misused-promises": {
       "count": 1
     },
     "@typescript-eslint/no-unnecessary-condition": {
-      "count": 7
+      "count": 9
     }
   },
   "src/ui/components/RatingsRenderer.ts": {
     "@typescript-eslint/no-unnecessary-condition": {
+      "count": 1
+    }
+  },
+  "src/ui/components/SelectableNodeTree.ts": {
+    "@typescript-eslint/no-unnecessary-type-assertion": {
       "count": 1
     }
   },
@@ -317,6 +621,58 @@
     },
     "@typescript-eslint/no-unused-vars": {
       "count": 1
+    }
+  },
+  "src/ui/components/TaskModelEditor.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 1
+    },
+    "@typescript-eslint/no-unnecessary-condition": {
+      "count": 2
+    }
+  },
+  "src/ui/components/TemplateSelector.ts": {
+    "@typescript-eslint/no-unnecessary-condition": {
+      "count": 3
+    },
+    "@typescript-eslint/no-unnecessary-type-assertion": {
+      "count": 1
+    }
+  },
+  "src/ui/components/TextTransformModal.ts": {
+    "@typescript-eslint/no-unnecessary-condition": {
+      "count": 3
+    }
+  },
+  "src/ui/components/TextTransformUtils.ts": {
+    "@typescript-eslint/no-floating-promises": {
+      "count": 2
+    },
+    "@typescript-eslint/no-misused-promises": {
+      "count": 2
+    },
+    "@typescript-eslint/require-await": {
+      "count": 2
+    }
+  },
+  "src/ui/components/UniversalTextEditor.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 5
+    },
+    "@typescript-eslint/no-floating-promises": {
+      "count": 1
+    },
+    "@typescript-eslint/no-misused-promises": {
+      "count": 1
+    },
+    "@typescript-eslint/no-unnecessary-condition": {
+      "count": 18
+    },
+    "@typescript-eslint/no-unused-vars": {
+      "count": 3
+    },
+    "@typescript-eslint/prefer-optional-chain": {
+      "count": 6
     }
   },
   "src/ui/event-manager.ts": {
@@ -329,10 +685,10 @@
   },
   "src/ui/modal-manager.ts": {
     "@typescript-eslint/no-explicit-any": {
-      "count": 12
+      "count": 13
     },
     "@typescript-eslint/no-misused-promises": {
-      "count": 2
+      "count": 3
     },
     "@typescript-eslint/no-unnecessary-condition": {
       "count": 31
@@ -341,7 +697,7 @@
       "count": 3
     },
     "@typescript-eslint/require-await": {
-      "count": 2
+      "count": 3
     }
   },
   "src/ui/modals/AILogModal.ts": {
@@ -362,49 +718,58 @@
     "@typescript-eslint/no-unnecessary-condition": {
       "count": 5
     },
+    "@typescript-eslint/no-unnecessary-type-assertion": {
+      "count": 6
+    },
     "@typescript-eslint/no-unused-vars": {
       "count": 1
     }
   },
   "src/ui/modals/CoherenceModal.ts": {
     "@typescript-eslint/no-floating-promises": {
-      "count": 2
+      "count": 4
     },
     "@typescript-eslint/no-misused-promises": {
       "count": 4
     },
     "@typescript-eslint/no-unnecessary-condition": {
-      "count": 2
+      "count": 12
+    },
+    "@typescript-eslint/prefer-optional-chain": {
+      "count": 3
     }
   },
   "src/ui/modals/ComprehensiveExportModal.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 2
+    },
     "@typescript-eslint/no-misused-promises": {
       "count": 3
     },
     "@typescript-eslint/no-unnecessary-condition": {
       "count": 2
-    }
-  },
-  "src/ui/modals/ContextAdjusterModal.ts": {
-    "@typescript-eslint/no-floating-promises": {
-      "count": 2
     },
-    "@typescript-eslint/no-misused-promises": {
-      "count": 1
-    },
-    "@typescript-eslint/no-unnecessary-condition": {
+    "@typescript-eslint/no-unnecessary-type-assertion": {
       "count": 3
     },
-    "@typescript-eslint/no-unused-vars": {
+    "no-nested-ternary": {
+      "count": 2
+    }
+  },
+  "src/ui/modals/ConditionalContextModal.ts": {
+    "@typescript-eslint/no-unnecessary-condition": {
+      "count": 1
+    },
+    "no-empty": {
       "count": 1
     }
   },
-  "src/ui/modals/ContextInfoModal.ts": {
-    "@typescript-eslint/no-floating-promises": {
+  "src/ui/modals/ConversationalGenerationModal.ts": {
+    "@typescript-eslint/no-explicit-any": {
       "count": 2
     },
     "@typescript-eslint/no-unnecessary-condition": {
-      "count": 5
+      "count": 12
     }
   },
   "src/ui/modals/ExportModal.ts": {
@@ -412,17 +777,44 @@
       "count": 2
     },
     "@typescript-eslint/no-unnecessary-condition": {
-      "count": 6
+      "count": 7
+    },
+    "@typescript-eslint/no-unnecessary-type-assertion": {
+      "count": 8
     }
   },
-  "src/ui/modals/GenericModal.ts": {
+  "src/ui/modals/GenerationErrorModal.ts": {
     "@typescript-eslint/no-explicit-any": {
       "count": 1
     },
     "@typescript-eslint/no-misused-promises": {
       "count": 1
     },
+    "@typescript-eslint/no-unnecessary-condition": {
+      "count": 4
+    },
+    "@typescript-eslint/promise-function-async": {
+      "count": 1
+    }
+  },
+  "src/ui/modals/GenerationLevelsHelpModal.ts": {
+    "@typescript-eslint/no-unnecessary-condition": {
+      "count": 1
+    }
+  },
+  "src/ui/modals/GenericModal.ts": {
+    "@typescript-eslint/no-unnecessary-condition": {
+      "count": 1
+    },
     "@typescript-eslint/require-await": {
+      "count": 3
+    }
+  },
+  "src/ui/modals/GuidedReviewModal.ts": {
+    "@typescript-eslint/no-misused-promises": {
+      "count": 1
+    },
+    "@typescript-eslint/promise-function-async": {
       "count": 2
     }
   },
@@ -431,11 +823,68 @@
       "count": 2
     },
     "@typescript-eslint/no-unnecessary-condition": {
+      "count": 4
+    }
+  },
+  "src/ui/modals/LogicErrorDetectorModal.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 1
+    },
+    "@typescript-eslint/no-floating-promises": {
+      "count": 1
+    },
+    "@typescript-eslint/no-misused-promises": {
+      "count": 1
+    },
+    "@typescript-eslint/no-unnecessary-condition": {
+      "count": 4
+    },
+    "@typescript-eslint/no-unnecessary-type-assertion": {
+      "count": 1
+    }
+  },
+  "src/ui/modals/LogicOutlineFixerModal.ts": {
+    "@typescript-eslint/no-floating-promises": {
+      "count": 2
+    },
+    "@typescript-eslint/no-misused-promises": {
+      "count": 5
+    },
+    "@typescript-eslint/no-unnecessary-condition": {
+      "count": 5
+    },
+    "@typescript-eslint/no-unnecessary-type-assertion": {
       "count": 3
+    },
+    "@typescript-eslint/require-await": {
+      "count": 1
+    }
+  },
+  "src/ui/modals/ManualModal.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 3
+    },
+    "@typescript-eslint/no-floating-promises": {
+      "count": 7
+    },
+    "@typescript-eslint/no-misused-promises": {
+      "count": 5
+    },
+    "@typescript-eslint/no-unnecessary-condition": {
+      "count": 2
+    },
+    "@typescript-eslint/promise-function-async": {
+      "count": 5
     }
   },
   "src/ui/modals/ModalFactory.ts": {
+    "@typescript-eslint/no-confusing-void-expression": {
+      "count": 1
+    },
     "@typescript-eslint/no-explicit-any": {
+      "count": 1
+    },
+    "@typescript-eslint/no-floating-promises": {
       "count": 1
     },
     "@typescript-eslint/no-unnecessary-condition": {
@@ -444,56 +893,144 @@
   },
   "src/ui/modals/NewProjectModal.ts": {
     "@typescript-eslint/no-floating-promises": {
-      "count": 2
+      "count": 6
     },
     "@typescript-eslint/no-misused-promises": {
-      "count": 2
+      "count": 6
     },
     "@typescript-eslint/no-unnecessary-condition": {
       "count": 2
     }
   },
   "src/ui/modals/NodeInspectorModal.ts": {
+    "@typescript-eslint/no-confusing-void-expression": {
+      "count": 1
+    },
     "@typescript-eslint/no-explicit-any": {
-      "count": 6
+      "count": 8
+    },
+    "@typescript-eslint/no-floating-promises": {
+      "count": 1
     },
     "@typescript-eslint/no-misused-promises": {
-      "count": 6
+      "count": 7
     },
     "@typescript-eslint/no-unnecessary-condition": {
-      "count": 9
+      "count": 10
+    },
+    "@typescript-eslint/no-unnecessary-type-assertion": {
+      "count": 2
     },
     "@typescript-eslint/no-unused-vars": {
       "count": 2
+    },
+    "@typescript-eslint/prefer-nullish-coalescing": {
+      "count": 4
+    },
+    "@typescript-eslint/prefer-optional-chain": {
+      "count": 2
+    },
+    "no-empty": {
+      "count": 2
+    },
+    "no-nested-ternary": {
+      "count": 1
+    },
+    "no-restricted-globals": {
+      "count": 1
+    },
+    "no-restricted-syntax": {
+      "count": 1
     }
   },
   "src/ui/modals/PolisherModal.ts": {
+    "@typescript-eslint/no-confusing-void-expression": {
+      "count": 4
+    },
     "@typescript-eslint/no-explicit-any": {
       "count": 3
+    },
+    "@typescript-eslint/no-floating-promises": {
+      "count": 1
     },
     "@typescript-eslint/no-misused-promises": {
       "count": 3
     },
     "@typescript-eslint/no-unnecessary-condition": {
       "count": 3
+    },
+    "@typescript-eslint/no-unnecessary-type-assertion": {
+      "count": 1
     }
   },
-  "src/ui/modals/SettingsModal.ts": {
-    "@typescript-eslint/no-misused-promises": {
-      "count": 4
-    },
-    "@typescript-eslint/no-unnecessary-condition": {
-      "count": 4
-    },
-    "@typescript-eslint/no-unused-vars": {
+  "src/ui/modals/RedundancyDetectorModal.ts": {
+    "@typescript-eslint/no-floating-promises": {
       "count": 3
-    }
-  },
-  "src/ui/modals/TagManagerModal.ts": {
-    "@typescript-eslint/no-explicit-any": {
+    },
+    "@typescript-eslint/no-misused-promises": {
       "count": 1
     },
     "@typescript-eslint/no-unnecessary-condition": {
+      "count": 10
+    },
+    "no-nested-ternary": {
+      "count": 2
+    }
+  },
+  "src/ui/modals/SearchModal.ts": {
+    "@typescript-eslint/no-floating-promises": {
+      "count": 1
+    },
+    "@typescript-eslint/no-unnecessary-condition": {
+      "count": 2
+    },
+    "@typescript-eslint/prefer-optional-chain": {
+      "count": 1
+    },
+    "no-nested-ternary": {
+      "count": 1
+    }
+  },
+  "src/ui/modals/SettingsModal.ts": {
+    "@typescript-eslint/no-confusing-void-expression": {
+      "count": 1
+    },
+    "@typescript-eslint/no-explicit-any": {
+      "count": 2
+    },
+    "@typescript-eslint/no-misused-promises": {
+      "count": 6
+    },
+    "@typescript-eslint/no-unnecessary-condition": {
+      "count": 5
+    },
+    "@typescript-eslint/no-unnecessary-type-assertion": {
+      "count": 3
+    },
+    "@typescript-eslint/no-unused-vars": {
+      "count": 3
+    },
+    "no-restricted-globals": {
+      "count": 1
+    },
+    "no-restricted-syntax": {
+      "count": 1
+    }
+  },
+  "src/ui/modals/TagManagerModal.ts": {
+    "@typescript-eslint/no-confusing-void-expression": {
+      "count": 1
+    },
+    "@typescript-eslint/no-explicit-any": {
+      "count": 1
+    },
+    "@typescript-eslint/no-floating-promises": {
+      "count": 1
+    },
+    "@typescript-eslint/no-unnecessary-condition": {
+      "count": 1
+    },
+    "@typescript-eslint/no-unnecessary-type-assertion": {
       "count": 1
     },
     "@typescript-eslint/no-unused-vars": {
@@ -520,6 +1057,32 @@
       "count": 1
     }
   },
+  "src/ui/modals/XMLStoryModal.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 23
+    },
+    "@typescript-eslint/no-floating-promises": {
+      "count": 1
+    },
+    "@typescript-eslint/no-unnecessary-condition": {
+      "count": 10
+    },
+    "@typescript-eslint/no-unnecessary-type-assertion": {
+      "count": 9
+    },
+    "@typescript-eslint/no-unused-vars": {
+      "count": 1
+    },
+    "@typescript-eslint/prefer-optional-chain": {
+      "count": 1
+    },
+    "@typescript-eslint/promise-function-async": {
+      "count": 1
+    },
+    "@typescript-eslint/require-await": {
+      "count": 2
+    }
+  },
   "src/ui/modals/components/AIProjectCreator.ts": {
     "@typescript-eslint/no-floating-promises": {
       "count": 2
@@ -528,17 +1091,34 @@
       "count": 2
     },
     "@typescript-eslint/no-unnecessary-condition": {
-      "count": 13
+      "count": 11
     }
   },
   "src/ui/modals/components/CriteriaEditor.ts": {
-    "@typescript-eslint/no-explicit-any": {
-      "count": 1
+    "@typescript-eslint/no-confusing-void-expression": {
+      "count": 2
     },
     "@typescript-eslint/no-misused-promises": {
       "count": 2
     },
     "@typescript-eslint/no-unnecessary-condition": {
+      "count": 2
+    },
+    "@typescript-eslint/no-unnecessary-type-assertion": {
+      "count": 14
+    }
+  },
+  "src/ui/modals/components/GuidedOutlineCreator.ts": {
+    "@typescript-eslint/no-unnecessary-condition": {
+      "count": 4
+    },
+    "@typescript-eslint/no-unused-vars": {
+      "count": 1
+    },
+    "@typescript-eslint/promise-function-async": {
+      "count": 1
+    },
+    "@typescript-eslint/require-await": {
       "count": 1
     }
   },
@@ -547,73 +1127,139 @@
       "count": 11
     }
   },
-  "src/ui/modals/components/ProfileSelector.ts": {
+  "src/ui/modals/components/OutlineFactory.ts": {
     "@typescript-eslint/no-misused-promises": {
-      "count": 6
+      "count": 3
     },
     "@typescript-eslint/no-unnecessary-condition": {
       "count": 1
+    }
+  },
+  "src/ui/modals/components/ProfileSelector.ts": {
+    "@typescript-eslint/no-confusing-void-expression": {
+      "count": 5
+    },
+    "@typescript-eslint/no-explicit-any": {
+      "count": 1
+    },
+    "@typescript-eslint/no-floating-promises": {
+      "count": 1
+    },
+    "@typescript-eslint/no-misused-promises": {
+      "count": 5
+    },
+    "@typescript-eslint/no-unnecessary-condition": {
+      "count": 1
+    },
+    "@typescript-eslint/no-unnecessary-type-assertion": {
+      "count": 3
     },
     "@typescript-eslint/require-await": {
       "count": 1
     }
   },
-  "src/ui/modals/core/BaseModal.ts": {
-    "@typescript-eslint/no-explicit-any": {
-      "count": 1
+  "src/ui/modals/components/RPGLiteSessionCreator.ts": {
+    "@typescript-eslint/no-misused-promises": {
+      "count": 2
     },
-    "@typescript-eslint/require-await": {
+    "@typescript-eslint/no-unnecessary-condition": {
+      "count": 7
+    },
+    "@typescript-eslint/promise-function-async": {
       "count": 1
     }
   },
   "src/ui/modals/core/ModalRegistry.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 3
+    },
     "@typescript-eslint/no-unnecessary-condition": {
+      "count": 1
+    }
+  },
+  "src/ui/modals/core/SimpleGenericModal.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 1
+    },
+    "@typescript-eslint/no-misused-promises": {
+      "count": 1
+    }
+  },
+  "src/ui/modals/core/SimpleModal.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 2
+    },
+    "@typescript-eslint/require-await": {
+      "count": 1
+    }
+  },
+  "src/ui/modals/services/BaseLogicFixerService.ts": {
+    "@typescript-eslint/no-unused-vars": {
       "count": 1
     }
   },
   "src/ui/modals/services/CoherenceService.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 3
+    },
     "@typescript-eslint/no-unnecessary-condition": {
-      "count": 7
+      "count": 3
+    },
+    "@typescript-eslint/no-unused-vars": {
+      "count": 1
     }
   },
   "src/ui/modals/services/ComprehensiveExportService.ts": {
     "@typescript-eslint/no-explicit-any": {
-      "count": 2
+      "count": 3
     },
     "@typescript-eslint/no-unnecessary-condition": {
       "count": 1
     },
-    "@typescript-eslint/no-unused-vars": {
-      "count": 3
+    "no-nested-ternary": {
+      "count": 1
     }
   },
   "src/ui/modals/services/ComprehensiveImportService.ts": {
     "@typescript-eslint/no-explicit-any": {
-      "count": 11
+      "count": 7
     },
     "@typescript-eslint/no-unnecessary-condition": {
-      "count": 3
-    },
-    "@typescript-eslint/no-unused-vars": {
-      "count": 3
-    }
-  },
-  "src/ui/modals/services/ContextAdjusterService.ts": {
-    "@typescript-eslint/no-unnecessary-condition": {
-      "count": 4
-    },
-    "@typescript-eslint/no-unused-vars": {
       "count": 2
+    },
+    "@typescript-eslint/no-unused-vars": {
+      "count": 3
     }
   },
   "src/ui/modals/services/ExportService.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 4
+    },
     "@typescript-eslint/no-unnecessary-condition": {
-      "count": 6
+      "count": 12
     },
     "@typescript-eslint/no-unused-vars": {
       "count": 1
     },
-    "@typescript-eslint/require-await": {
+    "@typescript-eslint/prefer-optional-chain": {
+      "count": 7
+    }
+  },
+  "src/ui/modals/services/GenerationErrorService.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 1
+    }
+  },
+  "src/ui/modals/services/LogicErrorDetectionService.ts": {
+    "@typescript-eslint/no-unnecessary-condition": {
+      "count": 5
+    }
+  },
+  "src/ui/modals/services/LogicOutlineFixerService.ts": {
+    "@typescript-eslint/no-unused-vars": {
+      "count": 1
+    },
+    "@typescript-eslint/prefer-optional-chain": {
       "count": 1
     }
   },
@@ -622,34 +1268,64 @@
       "count": 3
     },
     "@typescript-eslint/no-unnecessary-condition": {
-      "count": 3
+      "count": 2
     },
+    "@typescript-eslint/no-unused-vars": {
+      "count": 1
+    }
+  },
+  "src/ui/modals/services/OutlineFactoryService.ts": {
     "@typescript-eslint/no-unused-vars": {
       "count": 1
     }
   },
   "src/ui/modals/services/PromptManagementService.ts": {
     "@typescript-eslint/no-floating-promises": {
-      "count": 2
+      "count": 1
+    },
+    "@typescript-eslint/no-unnecessary-type-assertion": {
+      "count": 1
     }
   },
-  "src/ui/modals/services/SettingsService.ts": {
+  "src/ui/modals/services/RedundancyDetectionService.ts": {
     "@typescript-eslint/no-explicit-any": {
       "count": 1
     },
+    "@typescript-eslint/no-unnecessary-condition": {
+      "count": 6
+    },
+    "@typescript-eslint/no-unnecessary-type-assertion": {
+      "count": 1
+    },
+    "@typescript-eslint/promise-function-async": {
+      "count": 1
+    }
+  },
+  "src/ui/modals/services/SettingsService.ts": {
     "@typescript-eslint/no-floating-promises": {
-      "count": 4
+      "count": 1
     },
     "@typescript-eslint/no-unnecessary-condition": {
-      "count": 4
+      "count": 3
     },
     "@typescript-eslint/require-await": {
       "count": 1
     }
   },
+  "src/ui/modals/services/WorkingEpubGenerator.ts": {
+    "@typescript-eslint/no-unnecessary-condition": {
+      "count": 1
+    },
+    "@typescript-eslint/no-unnecessary-type-assertion": {
+      "count": 1
+    },
+    "@typescript-eslint/no-unused-vars": {
+      "count": 1
+    }
+  },
   "src/ui/modals/types/ExportTypes.ts": {
     "@typescript-eslint/no-explicit-any": {
-      "count": 2
+      "count": 4
     }
   },
   "src/ui/modals/types/ModalTypes.ts": {
@@ -657,38 +1333,45 @@
       "count": 20
     }
   },
-  "src/ui/project-ui-enhanced.ts": {
-    "@typescript-eslint/no-unnecessary-condition": {
-      "count": 1
-    },
-    "@typescript-eslint/no-unused-vars": {
-      "count": 26
-    }
-  },
   "src/ui/project-ui.ts": {
+    "@typescript-eslint/no-confusing-void-expression": {
+      "count": 10
+    },
     "@typescript-eslint/no-explicit-any": {
-      "count": 24
+      "count": 54
     },
     "@typescript-eslint/no-floating-promises": {
-      "count": 3
+      "count": 16
     },
     "@typescript-eslint/no-misused-promises": {
-      "count": 3
+      "count": 7
     },
     "@typescript-eslint/no-unnecessary-condition": {
-      "count": 59
+      "count": 85
+    },
+    "@typescript-eslint/no-unnecessary-type-assertion": {
+      "count": 20
     },
     "@typescript-eslint/no-unused-vars": {
-      "count": 16
+      "count": 25
+    },
+    "@typescript-eslint/prefer-optional-chain": {
+      "count": 6
+    },
+    "@typescript-eslint/promise-function-async": {
+      "count": 3
+    },
+    "@typescript-eslint/require-await": {
+      "count": 1
+    },
+    "no-nested-ternary": {
+      "count": 1
+    },
+    "no-unused-expressions": {
+      "count": 1
     }
   },
   "src/ui/reader-edit-manager.ts": {
-    "@typescript-eslint/no-explicit-any": {
-      "count": 1
-    },
-    "@typescript-eslint/no-unnecessary-condition": {
-      "count": 1
-    },
     "@typescript-eslint/require-await": {
       "count": 1
     }
@@ -698,33 +1381,50 @@
       "count": 2
     },
     "@typescript-eslint/no-unnecessary-condition": {
-      "count": 7
+      "count": 6
     },
     "@typescript-eslint/no-unused-vars": {
       "count": 2
+    },
+    "@typescript-eslint/prefer-optional-chain": {
+      "count": 3
     }
   },
   "src/ui/reader-gui.ts": {
+    "@typescript-eslint/no-confusing-void-expression": {
+      "count": 1
+    },
     "@typescript-eslint/no-explicit-any": {
-      "count": 13
+      "count": 19
     },
     "@typescript-eslint/no-floating-promises": {
-      "count": 5
+      "count": 6
     },
     "@typescript-eslint/no-misused-promises": {
       "count": 2
     },
     "@typescript-eslint/no-unnecessary-condition": {
-      "count": 57
+      "count": 63
     },
     "@typescript-eslint/no-unused-vars": {
       "count": 1
+    },
+    "@typescript-eslint/prefer-optional-chain": {
+      "count": 9
     },
     "@typescript-eslint/require-await": {
       "count": 1
     }
   },
+  "src/ui/shared/XmlEchoRenderer.ts": {
+    "@typescript-eslint/no-unnecessary-condition": {
+      "count": 1
+    }
+  },
   "src/ui/template-editor.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 1
+    },
     "@typescript-eslint/no-floating-promises": {
       "count": 5
     },
@@ -738,12 +1438,94 @@
       "count": 2
     }
   },
-  "src/utils/FileDownloadService.ts": {
+  "src/ui/text-editor-with-highlighting.ts": {
+    "@typescript-eslint/no-unnecessary-condition": {
+      "count": 1
+    },
+    "@typescript-eslint/no-unused-vars": {
+      "count": 2
+    }
+  },
+  "src/ui/utils/PersistenceUtils.ts": {
     "@typescript-eslint/no-explicit-any": {
       "count": 2
     },
+    "@typescript-eslint/no-unnecessary-condition": {
+      "count": 1
+    }
+  },
+  "src/ui/utils/ServiceUtils.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 1
+    }
+  },
+  "src/ui/utils/SettingsUtils.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 8
+    },
+    "@typescript-eslint/no-unnecessary-condition": {
+      "count": 1
+    },
+    "@typescript-eslint/no-unnecessary-type-assertion": {
+      "count": 1
+    }
+  },
+  "src/utils/FileDownloadService.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 3
+    },
+    "no-nested-ternary": {
+      "count": 3
+    }
+  },
+  "src/utils/TextFormattingUtils.ts": {
+    "@typescript-eslint/no-unnecessary-condition": {
+      "count": 1
+    }
+  },
+  "src/utils/UILogger.ts": {
+    "@typescript-eslint/no-unnecessary-condition": {
+      "count": 5
+    },
+    "no-unused-expressions": {
+      "count": 1
+    }
+  },
+  "src/world-rpg/ui/WorldRpgView.ts": {
+    "@typescript-eslint/no-unnecessary-type-assertion": {
+      "count": 1
+    }
+  },
+  "src/world-rpg/ui/worldRpgTextRenderer.ts": {
+    "@typescript-eslint/no-unnecessary-type-assertion": {
+      "count": 1
+    }
+  },
+  "src/xml-story-creation/index.ts": {
+    "@typescript-eslint/promise-function-async": {
+      "count": 2
+    }
+  },
+  "src/xml-story-creation/parser/XMLStoryParser.ts": {
+    "@typescript-eslint/no-unnecessary-condition": {
+      "count": 1
+    },
+    "@typescript-eslint/no-unused-vars": {
+      "count": 2
+    }
+  },
+  "src/xml-story-creation/services/XMLStoryService.ts": {
+    "@typescript-eslint/no-explicit-any": {
+      "count": 2
+    },
+    "@typescript-eslint/no-unnecessary-type-assertion": {
+      "count": 1
+    },
     "@typescript-eslint/no-unused-vars": {
       "count": 1
+    },
+    "@typescript-eslint/require-await": {
+      "count": 4
     }
   }
 }

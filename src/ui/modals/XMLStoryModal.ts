@@ -135,9 +135,7 @@ export class XMLStoryModal extends SimpleModal {
     private settingsManager: SettingsManager;
     private openRouterClient: OpenRouterClient;
     private storySystem: ReturnType<typeof createXMLStorySystem>;
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
 
-    
     // UI elements
     private whiteboardContainer: HTMLElement | null = null;
     private messageInput: HTMLTextAreaElement | null = null;
@@ -3663,7 +3661,6 @@ export class XMLStoryModal extends SimpleModal {
     // Removed legacy add-plus-button behavior (no references)
 
     // Removed legacy add-new-empty-element (no references)
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
 
     /**
      * Initialize the unified outline editor

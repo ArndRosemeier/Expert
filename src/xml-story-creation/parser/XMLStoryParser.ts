@@ -503,9 +503,7 @@ export class XMLStoryParser {
     /**
      * Parse XML attributes from attribute string
      */
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
 
-    
     /**
      * Create story element from attributes (for self-closing tags)
      */
@@ -543,9 +541,7 @@ export class XMLStoryParser {
     /**
      * Create story element from content (for content tags)
      */
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
 
-    
     /**
      * Create a new story element
      */
