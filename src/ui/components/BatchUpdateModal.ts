@@ -188,7 +188,7 @@ export class BatchUpdateModal {
                 btn.style.borderColor = '#d1d5db';
                 btn.style.color = '#374151';
             });
-            btn.addEventListener('click', () => this.tree.toggleAllAtLevel(idx));
+            btn.addEventListener('click', () => { this.tree.toggleAllAtLevel(idx); });
             buttonBar.appendChild(btn);
         });
         controlsContainer.appendChild(buttonBar);
@@ -391,7 +391,7 @@ export class BatchUpdateModal {
             this.stopButton.style.fontSize = '1em';
             this.stopButton.style.transition = 'background 0.2s';
             this.stopButton.style.display = 'none';
-            this.stopButton.addEventListener('click', () => this.handleStop());
+            this.stopButton.addEventListener('click', () => { this.handleStop(); });
             actionsSection.appendChild(this.stopButton);
             
             // Run button

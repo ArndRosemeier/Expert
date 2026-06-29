@@ -372,7 +372,7 @@ function handleCreateProject(title: string, template: ProjectTemplate, aiData?: 
     
     // Apply AI-generated content and context to root node if provided
     const typedAiData = aiData as AIGeneratedData | undefined;
-    if (typedAiData && typedAiData.isAIGenerated) {
+    if (typedAiData?.isAIGenerated) {
         console.log('🤖 Applying AI-generated content and context to root node');
         const rootNode = project.rootNode;
         
@@ -523,7 +523,7 @@ function handleImportProject(title: string, template: ProjectTemplate, importDat
             node.template = [...template.hierarchyLevels];
             
             // Recursively propagate to all children
-            node.children.forEach(child => propagateRecursively(child));
+            node.children.forEach(child => { propagateRecursively(child); });
         };
         propagateRecursively(project.rootNode);
         
@@ -673,7 +673,7 @@ async function loadPersistedProjects(): Promise<void> {
         
         const { projects, activeProjectId } = await ProjectManager.loadAllProjectsFromStorage(orchestrator, settingsManager, client);
         
-        projects.forEach(project => state.addProject(project));
+        projects.forEach(project => { state.addProject(project); });
         if (activeProjectId) {
             state.setActiveProject(activeProjectId);
         }
@@ -998,7 +998,7 @@ export async function initialize() {
                     // Extract template - first try from project level, then from root node, then from child nodes
                     let templateData = importData.template;
                     
-                    if (!templateData || !templateData.name || !templateData.hierarchyLevels) {
+                    if (!templateData?.name || !templateData.hierarchyLevels) {
                         // Check if root node has template as array (node export format)
                         if (importData.template && Array.isArray(importData.template)) {
                             templateData = {
@@ -1202,11 +1202,11 @@ export async function initialize() {
                     const runModal = showProgressModal('Segmenting document by template...');
                     try {
                         const project = await service.buildFullTextProject(text, file.name, reviewed.template, {
-                            status: (m) => progressSetMessage(runModal, m),
-                            splitStart: (level, parentTitle) => progressLog(runModal, `Finding ${level.toLowerCase()} in "${parentTitle}"...`),
-                            splitDone: (level, parentTitle, count) => progressLog(runModal, `Found ${count} ${level.toLowerCase()} in "${parentTitle}".`),
-                            summarizeStart: (title, n) => progressLog(runModal, `Summarizing ${title} from ${n} children...`),
-                            summarizeDone: (title) => progressLog(runModal, `Summarized ${title}.`)
+                            status: (m) => { progressSetMessage(runModal, m); },
+                            splitStart: (level, parentTitle) => { progressLog(runModal, `Finding ${level.toLowerCase()} in "${parentTitle}"...`); },
+                            splitDone: (level, parentTitle, count) => { progressLog(runModal, `Found ${count} ${level.toLowerCase()} in "${parentTitle}".`); },
+                            summarizeStart: (title, n) => { progressLog(runModal, `Summarizing ${title} from ${n} children...`); },
+                            summarizeDone: (title) => { progressLog(runModal, `Summarized ${title}.`); }
                         }, reviewed.groupAboveCount);
                         closeProgressModal(runModal);
                         await finalizeImportedProject(project);

@@ -688,7 +688,7 @@ export class RPGMockView {
         // Add event listeners
         const closeBtn = this.container.querySelector('#rpg-close');
         if (closeBtn) {
-            closeBtn.addEventListener('click', () => this.closeCallback());
+            closeBtn.addEventListener('click', () => { this.closeCallback(); });
         }
 
         // View toggle functionality

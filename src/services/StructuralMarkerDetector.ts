@@ -116,7 +116,7 @@ export class StructuralMarkerDetector {
 
       // ATX heading: one to six leading '#', a space, then the title.
       const atx = trimmed.match(/^(#{1,6})\s+(.+?)\s*#*$/);
-      if (atx && atx[1] && atx[2]) {
+      if (atx?.[1] && atx[2]) {
         markers.push({ startChar: line.startChar, depth: atx[1].length, title: atx[2].trim() });
         continue;
       }
@@ -138,7 +138,7 @@ export class StructuralMarkerDetector {
 
       // Numbered heading: dotted decimal prefix, short standalone line.
       const numbered = trimmed.match(/^(\d+(?:\.\d+)*)[.)]?\s+(.+)$/);
-      if (numbered && numbered[1] && numbered[2] && trimmed.length <= MAX_NUMBERED_HEADING_LENGTH) {
+      if (numbered?.[1] && numbered[2] && trimmed.length <= MAX_NUMBERED_HEADING_LENGTH) {
         const depth = numbered[1].split('.').length;
         markers.push({ startChar: line.startChar, depth, title: trimmed });
         continue;

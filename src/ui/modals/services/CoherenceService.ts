@@ -183,8 +183,8 @@ export class CoherenceService {
             console.error('Coherence analysis failed for node:', node.title);
             console.error('Error details:', error);
             console.error('Current settings state:', {
-                hasFrozenSettings: !!frozenSettings,
-                hasCoherencePrompt: !!frozenSettings.coherenceAnalysisPrompt,
+                hasFrozenSettings: Boolean(frozenSettings),
+                hasCoherencePrompt: Boolean(frozenSettings.coherenceAnalysisPrompt),
                 language: frozenSettings.language,
                 requestChildCount: request.childNodes.length
             });
@@ -281,7 +281,7 @@ If the problem persists, try rephrasing explicit content in your project to be l
                     throw new Error(`Invalid contradiction at index ${index}`);
                 }
 
-                let offendingChildTitle = String(item.offending_child_title || '').trim();
+                const offendingChildTitle = String(item.offending_child_title || '').trim();
                 
                 const contradiction: CoherenceContradiction = {
                     fact_in_outline: String(item.fact_in_outline || '').trim(),

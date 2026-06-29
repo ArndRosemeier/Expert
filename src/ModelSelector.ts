@@ -992,7 +992,7 @@ export class ModelSelector {
           headerWrap.style.cssText = 'display: flex; align-items: center; gap: 0.5rem; cursor: pointer;';
           const enableCheck = document.createElement('input');
           enableCheck.type = 'checkbox';
-          enableCheck.checked = !!(params.thinking?.enabled || params.reasoning?.effort || params.reasoning?.budget_tokens);
+          enableCheck.checked = Boolean(params.thinking?.enabled || params.reasoning?.effort || params.reasoning?.budget_tokens);
           enableCheck.style.cssText = 'width: 16px; height: 16px;';
           
           const headerLabel = document.createElement('span');
@@ -1704,7 +1704,7 @@ export class ModelSelector {
       const activeProfileName = settingsManager.getLastUsedProfileName() || 'default';
       const activeProfile = settingsManager.getProfile(activeProfileName);
       
-      if (activeProfile && activeProfile.webSearchEnabled) {
+      if (activeProfile?.webSearchEnabled) {
         this.webSearchEnabled = { ...activeProfile.webSearchEnabled };
       } else {
         this.webSearchEnabled = {};

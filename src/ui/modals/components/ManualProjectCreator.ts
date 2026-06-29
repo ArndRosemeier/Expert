@@ -67,15 +67,15 @@ export class ManualProjectCreator {
         const cancelBtn = container.querySelector('#manual-cancel-btn') as HTMLButtonElement;
         
         if (createBtn) {
-            const createHandler = () => this.handleCreate();
+            const createHandler = () => { this.handleCreate(); };
             createBtn.addEventListener('click', createHandler);
-            this.cleanupHandlers.push(() => createBtn.removeEventListener('click', createHandler));
+            this.cleanupHandlers.push(() => { createBtn.removeEventListener('click', createHandler); });
         }
         
         if (cancelBtn) {
-            const cancelHandler = () => this.handleCancel();
+            const cancelHandler = () => { this.handleCancel(); };
             cancelBtn.addEventListener('click', cancelHandler);
-            this.cleanupHandlers.push(() => cancelBtn.removeEventListener('click', cancelHandler));
+            this.cleanupHandlers.push(() => { cancelBtn.removeEventListener('click', cancelHandler); });
         }
 
         // Enter key in title input
@@ -87,7 +87,7 @@ export class ManualProjectCreator {
                 }
             };
             titleInput.addEventListener('keydown', enterHandler);
-            this.cleanupHandlers.push(() => titleInput.removeEventListener('keydown', enterHandler));
+            this.cleanupHandlers.push(() => { titleInput.removeEventListener('keydown', enterHandler); });
         }
     }
 
@@ -125,7 +125,7 @@ export class ManualProjectCreator {
     }
 
     public cleanup(): void {
-        this.cleanupHandlers.forEach(cleanup => cleanup());
+        this.cleanupHandlers.forEach(cleanup => { cleanup(); });
         this.cleanupHandlers = [];
         this.container = null;
     }

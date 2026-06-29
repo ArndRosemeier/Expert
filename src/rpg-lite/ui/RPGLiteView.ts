@@ -609,7 +609,7 @@ export class RPGLiteView {
       });
 
       // Focus label input
-      setTimeout(() => labelInput.focus(), 100);
+      setTimeout(() => { labelInput.focus(); }, 100);
 
       // Handle Enter key in label input (move to textarea)
       labelInput.addEventListener('keydown', (e) => {
@@ -1435,7 +1435,7 @@ export class RPGLiteView {
     });
 
     (this.container.querySelector('#rpg-lite-home') as HTMLButtonElement).addEventListener('click', () => {
-      void this.loadAll().then(() => this.renderSelector());
+      void this.loadAll().then(() => { this.renderSelector(); });
     });
 
     (this.container.querySelector('#rpg-lite-title-display') as HTMLElement).addEventListener('click', () => {
@@ -2091,7 +2091,7 @@ export class RPGLiteView {
     if (!clipboardEl) return;
     
     // Append to clipboard with a separator if there's already content
-    const separator = this.currentSession.clipboard && this.currentSession.clipboard.trim() ? '\n\n---\n\n' : '';
+    const separator = this.currentSession.clipboard?.trim() ? '\n\n---\n\n' : '';
     this.currentSession.clipboard = (this.currentSession.clipboard ?? '') + separator + content;
     
     clipboardEl.value = this.currentSession.clipboard;
@@ -2199,7 +2199,7 @@ export class RPGLiteView {
             }
           }
           
-          void this.saveSession().then(() => this.renderConversation());
+          void this.saveSession().then(() => { this.renderConversation(); });
         }
       }, 150);
     });

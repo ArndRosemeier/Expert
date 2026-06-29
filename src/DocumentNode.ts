@@ -247,7 +247,7 @@ export class DocumentNode {
         // Look for numbers in the child level name
         // Pattern: "Chapter 4", "Act 3", "Section 7", etc.
         const match = childLevelName.match(/(\w+)\s+(\d+)/);
-        if (match && match[2]) {
+        if (match?.[2]) {
             const extractedCount = parseInt(match[2], 10);
             if (!isNaN(extractedCount) && extractedCount > 0 && extractedCount <= 20) {
                 return extractedCount;
@@ -342,7 +342,7 @@ export class DocumentNode {
                 return false;
             });
             
-            if (rawMasterVersion && rawMasterVersion.context) {
+            if (rawMasterVersion?.context) {
                 const legacyContext = rawMasterVersion.context;
                 
                 if (typeof legacyContext === 'string' && legacyContext.trim()) {
@@ -688,7 +688,7 @@ export class DocumentNode {
      */
     getFailingRatings(): Rating[] {
         const masterVersion = this.getMasterVersion();
-        if (!masterVersion || !masterVersion.ratings) {
+        if (!masterVersion?.ratings) {
             return [];
         }
         return masterVersion.ratings.filter(rating => rating.actual < rating.goal);
@@ -990,7 +990,7 @@ export class DocumentNode {
             const sessionToCheck = currentSession ?? latestSession;
             if (sessionToCheck) {
                 const iteration = sessionToCheck.iterations.find(iter => iter.iteration === iterationIndex);
-                if (iteration && iteration.ratings) {
+                if (iteration?.ratings) {
                     ratings = iteration.ratings.map(r => ({ ...r })); // Deep copy ratings
                 }
             }
@@ -1161,7 +1161,7 @@ export class DocumentNode {
         // Extract just the base name (remove numbers)
         // Pattern: "Part 3" -> "Part", "Chapter 10" -> "Chapter"
         const match = rawChildLevelName.match(/^(\w+)(?:\s+\d+)?$/);
-        return match && match[1] ? match[1] : rawChildLevelName;
+        return match?.[1] ? match[1] : rawChildLevelName;
     }
 
     /**
@@ -1606,7 +1606,7 @@ export class DocumentNode {
         const parts = chain.map((n) => {
             const rawLevelName = (n.template[n.level] || `Level ${n.level}`).trim();
             const match = rawLevelName.match(/^(\w+)(?:\s+\d+)?$/);
-            const levelName = (match && match[1] ? match[1] : rawLevelName).trim();
+            const levelName = (match?.[1] ? match[1] : rawLevelName).trim();
             const cleanTitle = (n.title || '').trim();
             return `${levelName}: ${cleanTitle}`;
         });

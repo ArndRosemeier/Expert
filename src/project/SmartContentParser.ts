@@ -65,7 +65,7 @@ export class SmartContentParser {
                     this.debug('parseProjectSections returned:', {
                         hasStructuredData: result.hasStructuredData,
                         parseMethod: result.metadata['parseMethod'],
-                        hasTemplate: !!result.template
+                        hasTemplate: Boolean(result.template)
                     });
                     return result;
                 } else {
@@ -86,7 +86,7 @@ export class SmartContentParser {
                     this.debug('parseProjectStructure returned:', {
                         hasStructuredData: result.hasStructuredData,
                         parseMethod: result.metadata['parseMethod'],
-                        hasTemplate: !!result.template
+                        hasTemplate: Boolean(result.template)
                     });
                     return result;
                 } else {
@@ -123,7 +123,7 @@ export class SmartContentParser {
         // Extract each section
         for (const [key, pattern] of Object.entries(sectionPatterns)) {
             const match = text.match(pattern);
-            if (match && match[1]) {
+            if (match?.[1]) {
                 const content = match[1].trim();
                 
                 if (key === 'template') {
@@ -159,7 +159,7 @@ export class SmartContentParser {
         const nameMatch = content.match(/Template\s*Name:\s*(.+?)(?=\n|$)/i);
         const hierarchyMatch = content.match(/Hierarchy:\s*(.+?)(?=\n|$)/i);
 
-        if (nameMatch && nameMatch[1] && hierarchyMatch && hierarchyMatch[1]) {
+        if (nameMatch?.[1] && hierarchyMatch?.[1]) {
             return {
                 name: nameMatch[1].trim(),
                 hierarchy: hierarchyMatch[1].trim()
@@ -224,16 +224,15 @@ export class SmartContentParser {
      */
     private static isValidProjectSections(sections: AIProjectSections): boolean {
         this.debug('🔍 Validating project sections:');
-        this.debug('  - title exists:', !!sections.title);
-        this.debug('  - concept exists:', !!sections.concept);
-        this.debug('  - template exists:', !!sections.template);
-        this.debug('  - template.name exists:', !!(sections.template && sections.template.name));
-        this.debug('  - template.hierarchy exists:', !!(sections.template && sections.template.hierarchy));
+        this.debug('  - title exists:', Boolean(sections.title));
+        this.debug('  - concept exists:', Boolean(sections.concept));
+        this.debug('  - template exists:', Boolean(sections.template));
+        this.debug('  - template.name exists:', Boolean(sections.template?.name));
+        this.debug('  - template.hierarchy exists:', Boolean(sections.template?.hierarchy));
         
-        const isValid = !!(sections.title && 
+        const isValid = Boolean(sections.title && 
                           sections.concept && 
-                          sections.template &&
-                          sections.template.name &&
+                          sections.template?.name &&
                           sections.template.hierarchy);
         
         this.debug('  - Overall valid:', isValid);
@@ -356,7 +355,7 @@ export class SmartContentParser {
             this.debug(`Trying strategy: ${strategy.name}`);
             
             const match = text.match(strategy.pattern);
-            if (match && match[1]) {
+            if (match?.[1]) {
                 const result = this.tryParseJson(match[1], strategy.name);
                 if (result) {
                     this.debug(`🎯 Strategy "${strategy.name}" returned result:`, Object.keys(result));
@@ -377,7 +376,7 @@ export class SmartContentParser {
             this.debug(`✅ Strategy "${strategyName}" succeeded`);
             this.debug(`   Parsed object keys:`, Object.keys(parsed));
             this.debug(`   Content type:`, typeof parsed.Content, parsed.Content ? `(${parsed.Content.length} chars)` : '');
-            this.debug(`   Template exists:`, !!parsed.Template);
+            this.debug(`   Template exists:`, Boolean(parsed.Template));
             this.debug(`   Context type:`, typeof parsed.Context);
             return parsed;
         } catch (e) {
@@ -403,9 +402,9 @@ export class SmartContentParser {
      */
     private static isValidProjectStructure(obj: any): obj is AIProjectStructure {
         this.debug('🔍 Validating project structure:');
-        this.debug('  - obj exists:', !!obj);
+        this.debug('  - obj exists:', Boolean(obj));
         this.debug('  - Content type:', typeof obj?.Content);
-        this.debug('  - Template exists:', !!obj?.Template);
+        this.debug('  - Template exists:', Boolean(obj?.Template));
         this.debug('  - Template.name type:', typeof obj?.Template?.name);
         this.debug('  - Template.hierarchyLevels is array:', Array.isArray(obj?.Template?.hierarchyLevels));
         this.debug('  - Context type:', typeof obj?.Context);
@@ -644,7 +643,7 @@ export class SmartContentParser {
                 this.debug('⚠️ Repaired JSON still has issues:', (testError as Error).message);
                 // Show a sample around the error position if available
                 const match = (testError as Error).message.match(/position (\d+)/);
-                if (match && match[1]) {
+                if (match?.[1]) {
                     const pos = parseInt(match[1]);
                     const start = Math.max(0, pos - 50);
                     const end = Math.min(repaired.length, pos + 50);

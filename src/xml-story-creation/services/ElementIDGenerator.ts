@@ -94,7 +94,7 @@ export class ElementIDGenerator {
      * Register multiple existing IDs
      */
     public registerExistingIds(ids: ElementID[]): void {
-        ids.forEach(id => this.registerExistingId(id));
+        ids.forEach(id => { this.registerExistingId(id); });
     }
     
     /**

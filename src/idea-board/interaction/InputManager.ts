@@ -56,7 +56,7 @@ export class InputManager {
     window.addEventListener('keyup', this.handleKeyUp.bind(this));
 
     // Prevent context menu on right click
-    this.canvas.addEventListener('contextmenu', (e) => e.preventDefault());
+    this.canvas.addEventListener('contextmenu', (e) => { e.preventDefault(); });
 
     // Focus canvas for keyboard events
     this.canvas.setAttribute('tabindex', '0');

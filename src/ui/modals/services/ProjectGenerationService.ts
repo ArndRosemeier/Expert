@@ -215,7 +215,7 @@ export class ProjectGenerationService {
      */
     public parseTemplateLayer(layer: string): TemplateLayerInfo {
         const match = layer.match(/^(.+?)\s+(\d+)$/);
-        if (match && match[1] !== undefined && match[2] !== undefined) {
+        if (match?.[1] !== undefined && match[2] !== undefined) {
             return { 
                 name: match[1], 
                 isFixed: true, 

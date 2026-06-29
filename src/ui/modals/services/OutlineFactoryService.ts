@@ -198,19 +198,19 @@ export class OutlineFactoryService {
     // headers, so terminate ONLY at the next known top-level wrapper delimiter (or end),
     // never at any "===". Otherwise internal section headers would truncate the body.
     const titleMatch = content.match(/===PROJECT TITLE===([\s\S]*?)(?=\n===PROJECT OUTLINE===|\n===BACKGROUND CONTEXT===|$)/);
-    if (titleMatch && titleMatch[1]) {
+    if (titleMatch?.[1]) {
       title = titleMatch[1].trim().replace(/^["']|["']$/g, ''); // Remove quotes
     }
     
     // Extract PROJECT OUTLINE (keeps any internal ===Section Title=== headers intact).
     const outlineMatch = content.match(/===PROJECT OUTLINE===([\s\S]*?)(?=\n===BACKGROUND CONTEXT===|$)/);
-    if (outlineMatch && outlineMatch[1]) {
+    if (outlineMatch?.[1]) {
       projectContent = outlineMatch[1].trim();
     }
     
     // Extract BACKGROUND CONTEXT - everything after its delimiter to the end.
     const contextMatch = content.match(/===BACKGROUND CONTEXT===([\s\S]*?)$/);
-    if (contextMatch && contextMatch[1]) {
+    if (contextMatch?.[1]) {
       projectContext = contextMatch[1].trim();
     }
     

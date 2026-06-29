@@ -114,18 +114,18 @@ export class TemplateSelector {
 
         const select = this.container.querySelector('.template-selector-dropdown') as HTMLSelectElement;
         if (select) {
-            const changeHandler = () => this.handleSelectionChange();
+            const changeHandler = () => { this.handleSelectionChange(); };
             select.addEventListener('change', changeHandler);
-            this.cleanupHandlers.push(() => select.removeEventListener('change', changeHandler));
+            this.cleanupHandlers.push(() => { select.removeEventListener('change', changeHandler); });
         }
 
         // Management button handlers
         if (this.config.showManagement) {
             const manageButtons = this.container.querySelectorAll('.template-manage-btn');
             manageButtons.forEach(button => {
-                const clickHandler = (e: Event) => this.handleManagementAction(e);
+                const clickHandler = (e: Event) => { this.handleManagementAction(e); };
                 button.addEventListener('click', clickHandler);
-                this.cleanupHandlers.push(() => button.removeEventListener('click', clickHandler));
+                this.cleanupHandlers.push(() => { button.removeEventListener('click', clickHandler); });
             });
         }
     }
@@ -186,7 +186,7 @@ export class TemplateSelector {
         if (!templateManager || !this.currentSelection) return;
 
         const newName = prompt(`Enter name for duplicate of "${this.currentSelection}":`);
-        if (!newName || !newName.trim()) return;
+        if (!newName?.trim()) return;
 
         try {
             const template = templateManager.getTemplate(this.currentSelection);
@@ -257,7 +257,7 @@ export class TemplateSelector {
     }
 
     public cleanup(): void {
-        this.cleanupHandlers.forEach(cleanup => cleanup());
+        this.cleanupHandlers.forEach(cleanup => { cleanup(); });
         this.cleanupHandlers = [];
         this.container = null;
     }

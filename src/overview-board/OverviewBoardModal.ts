@@ -517,7 +517,7 @@ export class OverviewBoardModal extends BaseModal {
    * Update button states based on current layer and data
    */
   private updateButtonStates(): void {
-    const hasLayer = !!this.currentLayer;
+    const hasLayer = Boolean(this.currentLayer);
     
     if (this.refreshButton) {
       this.refreshButton.style.opacity = hasLayer ? '1' : '0.5';

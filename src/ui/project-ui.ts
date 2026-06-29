@@ -41,7 +41,7 @@ function getModelNameForPhase(nodeId: string, phase: 'create' | 'rate' | 'edit')
     if (!settingsManager) return undefined;
     
     const profile = settingsManager.getLastUsedProfile();
-    if (!profile || !profile.selectedModels) return undefined;
+    if (!profile?.selectedModels) return undefined;
     
     let modelKey: string;
     if (phase === 'create') {
@@ -264,7 +264,7 @@ function countStatusTypes(rootNode: DocumentNode): Map<string, number> {
         }
         
         // Process children
-        node.children.forEach(child => countRecursively(child));
+        node.children.forEach(child => { countRecursively(child); });
     }
     
     countRecursively(rootNode);
@@ -615,7 +615,7 @@ function getCurrentLevelName(node: DocumentNode): string {
     // Extract just the base name (remove numbers)
     // Pattern: "Book 1" -> "Book", "Act 1" -> "Act", "Chapter 10" -> "Chapter"
     const match = rawLevelName.match(/^(\w+)(?:\s+\d+)?$/);
-    return match && match[1] ? match[1] : rawLevelName;
+    return match?.[1] ? match[1] : rawLevelName;
 }
 
 /**
@@ -623,7 +623,7 @@ function getCurrentLevelName(node: DocumentNode): string {
  */
 function cleanLevelName(rawLevelName: string): string {
     const match = rawLevelName.match(/^(\w+)(?:\s+\d+)?$/);
-    return match && match[1] ? match[1] : rawLevelName;
+    return match?.[1] ? match[1] : rawLevelName;
 }
 
 /**
@@ -768,7 +768,7 @@ function getAvailableLayersForDeletion(node: DocumentNode): Array<{relativeLevel
             if (rawLevelName) {
                 // Extract base name from template (e.g., "Chapter 3" -> "Chapter")
                 const match = rawLevelName.match(/^(\w+)(?:\s+\d+)?$/);
-                const levelName = match && match[1] ? match[1] : rawLevelName;
+                const levelName = match?.[1] ? match[1] : rawLevelName;
                 const pluralName = levelName + 's'; // Simple pluralization
                 
                 layers.push({
@@ -892,7 +892,7 @@ function showActionsDropdown(node: DocumentNode): void {
                         
                         // Handle layer-specific delete actions before action map lookup
                         const deleteLayerMatch = action.match(/^delete-layer-(\d+)$/);
-                        if (deleteLayerMatch && deleteLayerMatch[1]) {
+                        if (deleteLayerMatch?.[1]) {
                             // Close dropdown first
                             if (actionsDropdownInstance) {
                                 void actionsDropdownInstance.close();
@@ -924,7 +924,7 @@ async function handleNewTopLayer(oldRootNode: DocumentNode): Promise<void> {
     // Prompt user for the new layer name
     const layerName = prompt('Enter the name for the new top layer (e.g., "Series 3" for a series with 3 children target, or just "Series"):');
     
-    if (!layerName || !layerName.trim()) {
+    if (!layerName?.trim()) {
         return; // User cancelled or entered empty name
     }
 
@@ -935,7 +935,7 @@ async function handleNewTopLayer(oldRootNode: DocumentNode): Promise<void> {
     
     // Check if the name ends with a number (e.g., "Series 3")
     const match = trimmedName.match(/^(.+?)\s+(\d+)$/);
-    if (match && match[1] && match[2]) {
+    if (match?.[1] && match[2]) {
         newLevelName = match[1]!; // Non-null assertion since we checked above
         // Target count parsing available but not currently used
     }
@@ -1283,7 +1283,7 @@ function showActionsContextMenu(node: DocumentNode, mouseEvent: MouseEvent): voi
                         
                         // Handle layer-specific delete actions before action map lookup
                         const deleteLayerMatch = action.match(/^delete-layer-(\d+)$/);
-                        if (deleteLayerMatch && deleteLayerMatch[1]) {
+                        if (deleteLayerMatch?.[1]) {
                             // Close the dropdown after action
                             actionsDropdownInstance?.close();
                             const relativeLevel = parseInt(deleteLayerMatch[1], 10);
@@ -3050,7 +3050,7 @@ export async function renderNodeDetails(retryOptions?: { _isRetry?: boolean }) {
         // Show checkbox only for non-leaf nodes (outline nodes)
         const templateLevels = Object.keys(node.template || {}).map(k => parseInt(k)).filter(n => !isNaN(n));
         const maxLevel = templateLevels.length > 0 ? Math.max(...templateLevels) : -1;
-        const isLeafNode = node.template && node.template[node.level] && node.level === maxLevel;
+        const isLeafNode = node.template?.[node.level] && node.level === maxLevel;
         
         deterministicContainer.style.display = isLeafNode ? 'none' : 'flex';
         
@@ -3317,8 +3317,8 @@ export async function renderNodeDetails(retryOptions?: { _isRetry?: boolean }) {
     if (!contentTextArea || !nodeTitleDisplay) {
         // During rapid UI updates, DOM might be in transition state - retry once after a short delay
         const missingElements = {
-            contentTextArea: !!contentTextArea,
-            nodeTitleDisplay: !!nodeTitleDisplay
+            contentTextArea: Boolean(contentTextArea),
+            nodeTitleDisplay: Boolean(nodeTitleDisplay)
         };
         
         // Only log warning on second attempt (after retry)
@@ -3598,11 +3598,11 @@ function renderRatingsView() {
         let versionLabel = 'Current';
         let timestampToShow: Date | null = null;
         
-        if (currentVersion && currentVersion.ratings) {
+        if (currentVersion?.ratings) {
             versionRatings = currentVersion.ratings;
             versionLabel = currentVersion.label;
             timestampToShow = currentVersion.timestamp ?? null;
-        } else if (currentVersion && currentVersion.isCurrent) {
+        } else if (currentVersion?.isCurrent) {
             // For current version, try to get ratings from chosen iteration
             const chosenIteration = node.getChosenIteration();
             if (chosenIteration && chosenIteration.ratings) {
@@ -3620,7 +3620,7 @@ function renderRatingsView() {
                         Ratings are created when content is generated through the AI system. If you edited the content manually, 
                         the previous ratings were cleared since they no longer apply to the modified text.
                     </p>
-                    ${currentVersion && currentVersion.isCurrent ? `
+                    ${currentVersion?.isCurrent ? `
                         <button id="regenerate-ratings-btn" class="button button-primary">
                             ${BUTTON_LABELS.GENERATE_RATINGS}
                         </button>
@@ -3642,7 +3642,7 @@ function renderRatingsView() {
         // Render using shared component
         const options: import('./components/RatingsRenderer').RatingsDisplayOptions = {
             title: `Quality Ratings for ${versionLabel} Content`,
-            showTimestamp: !!timestampToShow,
+            showTimestamp: Boolean(timestampToShow),
             compact: false,
             showGoalLine: true,
             showJustification: true
@@ -3810,7 +3810,7 @@ function handleDropdownAction(buttonId: string): void {
 
     // Handle layer-specific delete actions (pattern: delete-layer-{relativeLevel})
     const deleteLayerMatch = buttonId.match(/^delete-layer-(\d+)$/);
-    if (deleteLayerMatch && deleteLayerMatch[1]) {
+    if (deleteLayerMatch?.[1]) {
         const relativeLevel = parseInt(deleteLayerMatch[1], 10);
         handleDeleteLayer(relativeLevel);
         return;
@@ -4692,7 +4692,7 @@ export async function setupEventListeners() {
     eventManager.addDelegatedEvent(mainContent, 'click', 'button[id]', (event: Event) => {
         // Use currentTarget (the button) instead of target (which might be a child element like an arrow span)
         const button = event.currentTarget as HTMLButtonElement;
-        if (!button || !button.id) return;
+        if (!button?.id) return;
         
         const handler = buttonHandlers[button.id];
         if (handler) {
@@ -5874,7 +5874,7 @@ function propagateTemplateToSubtree(rootNode: DocumentNode): void {
         node.template = [...projectTemplate];
         
         // Recursively propagate to all children
-        node.children.forEach(child => propagateRecursively(child));
+        node.children.forEach(child => { propagateRecursively(child); });
     };
 
     propagateRecursively(rootNode);
@@ -6056,7 +6056,7 @@ async function handleSendToIdeaBoard(option: 'content' | 'context' | 'both'): Pr
  * Ensure idea board modal is open
  */
 async function ensureIdeaBoardOpen(): Promise<void> {
-    let ideaBoardModal = document.getElementById('idea-board-modal');
+    const ideaBoardModal = document.getElementById('idea-board-modal');
     if (!ideaBoardModal) {
         await openIdeaBoardModal();
         // Wait a moment for the board to initialize
@@ -6545,9 +6545,9 @@ function removeAllListeners() {
 // === CHECKBOX STATE MANAGEMENT ===
 
 // Global cache for nodes that should show todo indicators (themselves or descendants have todos)
-let nodesWithTodoIndicators: Set<string> = new Set();
+const nodesWithTodoIndicators: Set<string> = new Set();
 // Cache for nodes that have direct todos (not just descendants)
-let nodesWithDirectTodos: Set<string> = new Set();
+const nodesWithDirectTodos: Set<string> = new Set();
 
 /**
  * Build todo indicator cache for all projects

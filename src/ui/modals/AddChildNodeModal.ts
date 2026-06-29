@@ -513,7 +513,7 @@ export class AddChildNodeModal extends BaseModal {
         });
 
         retryButton.addEventListener('click', async () => this.generateSuggestions());
-        fallbackButton.addEventListener('click', () => this.switchMode('simple'));
+        fallbackButton.addEventListener('click', () => { this.switchMode('simple'); });
 
         container.appendChild(errorMessage);
         container.appendChild(retryButton);
@@ -601,7 +601,7 @@ export class AddChildNodeModal extends BaseModal {
             }
         });
 
-        card.addEventListener('click', () => this.selectSuggestion(suggestion));
+        card.addEventListener('click', () => { this.selectSuggestion(suggestion); });
         card.addEventListener('mouseover', () => {
             if (!isSelected) {
                 card.style.borderColor = '#bbb';
@@ -717,7 +717,7 @@ export class AddChildNodeModal extends BaseModal {
             const createConfig: NodeCreationConfig = {
                 parentNodeId: this.childModalConfig.parentNodeId,
                 title,
-                updateParent: (this.childModalState.mode === 'ai' || (this.childModalState.mode === 'simple' && this.childModalState.manualDraft.trim() !== '')) && this.childModalState.updateParent && !!this.childModalConfig.parentNode.content
+                updateParent: (this.childModalState.mode === 'ai' || (this.childModalState.mode === 'simple' && this.childModalState.manualDraft.trim() !== '')) && this.childModalState.updateParent && Boolean(this.childModalConfig.parentNode.content)
             };
             
             if (draft) {

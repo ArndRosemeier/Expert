@@ -262,7 +262,7 @@ export class TextEditorWithHighlighting {
      */
     public clearAllHighlights(): void {
         // Clear all pending timeouts
-        this.highlightTimeouts.forEach(timeoutId => clearTimeout(timeoutId));
+        this.highlightTimeouts.forEach(timeoutId => { clearTimeout(timeoutId); });
         this.highlightTimeouts.clear();
 
         this.highlights.clear();
@@ -787,8 +787,8 @@ export class TextEditorWithHighlighting {
         const text = this.getText();
         
         // Calculate positions relative to the full text using robust mapping
-        let startPos = this.getDOMToTextPosition(range.startContainer, range.startOffset);
-        let endPos = this.getDOMToTextPosition(range.endContainer, range.endOffset);
+        const startPos = this.getDOMToTextPosition(range.startContainer, range.startOffset);
+        const endPos = this.getDOMToTextPosition(range.endContainer, range.endOffset);
         
         if (startPos === -1 || endPos === -1) return null;
 
@@ -1172,7 +1172,7 @@ export class TextEditorWithHighlighting {
      */
     public destroy(): void {
         // Clear all pending highlight timeouts
-        this.highlightTimeouts.forEach(timeoutId => clearTimeout(timeoutId));
+        this.highlightTimeouts.forEach(timeoutId => { clearTimeout(timeoutId); });
         this.highlightTimeouts.clear();
         
         this.editableDiv.remove();

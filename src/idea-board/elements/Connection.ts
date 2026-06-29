@@ -223,7 +223,7 @@ export class Connection {
     // Draw flowing arrows
     for (let i = 0; i < numFlowingArrows; i++) {
       const basePosition = i * arrowSpacing;
-      let currentPosition = (basePosition + progress) % 1;
+      const currentPosition = (basePosition + progress) % 1;
       
       // Only draw arrow if it's in valid range
       if (currentPosition >= 0 && currentPosition <= 1) {

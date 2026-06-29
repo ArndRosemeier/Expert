@@ -715,7 +715,7 @@ export class UnifiedGenerationService {
         // Look for nodes that want to expand but are blocked by sibling requirements
         for (const node of allNodes) {
             const targetState = targetStates[node.level];
-            if (!targetState || !targetState.canExpand) continue;
+            if (!targetState?.canExpand) continue;
             
             const currentState = this.getNodeCurrentState(node);
             if (currentState.hasChildren) continue; // Already has children
@@ -737,7 +737,7 @@ export class UnifiedGenerationService {
         if (!node.parentId) return;
         
         const parentNode = this.deps.treeService.findNodeById(node.parentId, this.deps.rootNode);
-        if (!parentNode || !parentNode.children || parentNode.children.length === 0) return;
+        if (!parentNode?.children || parentNode.children.length === 0) return;
         
         // Get sibling states to provide specific feedback
         const siblingStates = parentNode.children.map(sibling => {
@@ -1122,7 +1122,7 @@ export class UnifiedGenerationService {
 
             // Get the creator model name for tracking
             const currentProfile = this.deps.settingsManager.getLastUsedProfile();
-            const creatorModel = currentProfile && currentProfile.selectedModels && currentProfile.selectedModels['creator'];
+            const creatorModel = currentProfile?.selectedModels?.['creator'];
             const childIds: string[] = [];
 
             nodeItems.forEach((item, index) => {
@@ -1566,7 +1566,7 @@ export class UnifiedGenerationService {
         if (node) {
                 const profile = this.deps.settingsManager.getLastUsedProfile();
                 const modelKey = node.isLeaf ? 'prose' : 'creator';
-                const modelName = profile && profile.selectedModels && profile.selectedModels[modelKey];
+                const modelName = profile?.selectedModels?.[modelKey];
                 if (modelName) {
                     return this.formatModelName(modelName);
                 }
@@ -2080,7 +2080,7 @@ export class UnifiedGenerationService {
 
         const profile = this.deps.settingsManager.getLastUsedProfile();
         
-        if (!profile || !profile.criteria || profile.criteria.length === 0) {
+        if (!profile?.criteria || profile.criteria.length === 0) {
             throw new Error(`Cannot generate content for node "${node.title}". The active profile is missing or has no criteria.`);
         }
 
@@ -2315,7 +2315,7 @@ export class UnifiedGenerationService {
      */
     private createChildFromSection(parentId: string, title: string, content: string, sectionIndex: number) {
         const currentProfile = this.deps.settingsManager.getLastUsedProfile();
-        const creatorModel = currentProfile && currentProfile.selectedModels && currentProfile.selectedModels['creator'];
+        const creatorModel = currentProfile?.selectedModels?.['creator'];
 
         const newNode = this.deps.treeService.addNode(title, parentId, this.deps.rootNode, creatorModel, sectionIndex);
 

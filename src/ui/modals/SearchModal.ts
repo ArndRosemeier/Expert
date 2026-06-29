@@ -154,11 +154,11 @@ export class SearchModal extends BaseModal {
 
         // Search button
         const searchBtn = container.querySelector('#search-btn') as HTMLButtonElement;
-        searchBtn.addEventListener('click', () => this.performSearch());
+        searchBtn.addEventListener('click', () => { this.performSearch(); });
 
         // Replace button
         const replaceBtn = container.querySelector('#replace-all-btn') as HTMLButtonElement;
-        replaceBtn.addEventListener('click', () => this.performReplace());
+        replaceBtn.addEventListener('click', () => { this.performReplace(); });
 
         // Enter key in search input
         this.searchInput.addEventListener('keydown', (e) => {

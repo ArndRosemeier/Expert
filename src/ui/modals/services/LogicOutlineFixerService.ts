@@ -61,7 +61,7 @@ export class LogicOutlineFixerService extends BaseLogicFixerService {
         let currentNode: DocumentNode | undefined = node;
         const pathParts: string[] = [];
         
-        while (currentNode && currentNode.parentId) {
+        while (currentNode?.parentId) {
             const parent = this.findParentNode(currentNode);
             if (parent) {
                 pathParts.unshift(parent.title);

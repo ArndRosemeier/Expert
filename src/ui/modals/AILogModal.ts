@@ -516,7 +516,7 @@ export class AILogModal extends BaseModal {
         // Close button handler
         const closeButton = overlay.querySelector('.log-overlay-close');
         if (closeButton) {
-            closeButton.addEventListener('click', () => overlay.remove());
+            closeButton.addEventListener('click', () => { overlay.remove(); });
             
             closeButton.addEventListener('mouseenter', () => {
                 (closeButton as HTMLElement).style.backgroundColor = '#dc2626';

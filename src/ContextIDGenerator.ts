@@ -87,7 +87,7 @@ export class ContextIDGenerator {
             }
             
             // Recursively process children
-            node.children.forEach(child => collectIds(child));
+            node.children.forEach(child => { collectIds(child); });
         };
         
         collectIds(rootNode);
@@ -106,7 +106,7 @@ export class ContextIDGenerator {
         
         for (const id of ids) {
             const match = id.match(idPattern);
-            if (match && match[1]) {
+            if (match?.[1]) {
                 const num = parseInt(match[1], 10);
                 if (!isNaN(num)) {
                     numbers.push(num);
@@ -174,7 +174,7 @@ export class ContextIDGenerator {
         const allNodes: DocumentNode[] = [];
         const collectNodes = (node: DocumentNode): void => {
             allNodes.push(node);
-            node.children.forEach(child => collectNodes(child));
+            node.children.forEach(child => { collectNodes(child); });
         };
         collectNodes(rootNode);
         

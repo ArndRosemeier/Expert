@@ -252,7 +252,7 @@ export class Dropdown {
         if (this.options.closeOnInsideClick) {
             this.dropdown.addEventListener('click', (_e) => {
                 // Allow event to bubble up, then close
-                setTimeout(() => this.close(), 0);
+                setTimeout(() => { this.close(); }, 0);
             });
         }
 

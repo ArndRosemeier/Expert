@@ -474,7 +474,7 @@ export class OpenRouterClient {
 
       // If the provider selection is a numbered variant (like "deepinfra-1"), extract the base and find by index
       const indexMatch = providerSelection.match(/^(.+)-(\d+)$/);
-      if (indexMatch && indexMatch[1] && indexMatch[2]) {
+      if (indexMatch?.[1] && indexMatch[2]) {
         const [, baseSlug, indexStr] = indexMatch;
         const index = parseInt(indexStr, 10);
         
@@ -1048,7 +1048,7 @@ export class OpenRouterClient {
       try {
         const modelSelector = state.getModelSelector();
         const params = modelSelector?.getSelectedParams?.();
-        if (params && params[purpose]) {
+        if (params?.[purpose]) {
           const p = params[purpose] as { temperature?: number; top_p?: number; max_output_tokens?: number; verbosity?: string | number; thinking?: { enabled?: boolean; budget_tokens?: number }, reasoning?: { effort?: 'low' | 'medium' | 'high'; budget_tokens?: number } };
           if (typeof p.temperature === 'number') {
             request.temperature = Math.max(0, Math.min(2, p.temperature));
@@ -1081,7 +1081,7 @@ export class OpenRouterClient {
             request.verbosity = p.verbosity;
             console.info(`[OpenRouterClient] Setting verbosity=${String(p.verbosity)} for model ${model}`);
           }
-          if (p.thinking && p.thinking.enabled) {
+          if (p.thinking?.enabled) {
             request.thinking = {
               type: 'enabled',
               ...(p.thinking.budget_tokens ? { budget_tokens: Math.max(256, Math.floor(p.thinking.budget_tokens)) } : {})

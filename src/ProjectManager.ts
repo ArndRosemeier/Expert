@@ -160,11 +160,11 @@ export class ProjectManager extends EventEmitter<ProjectManagerEvents> {
             const currentProfileData = currentProfile ? this.settingsManager.getProfile(currentProfile) : null;
             
             // Only change the profile if the current one is invalid
-            if (!currentProfileData || !currentProfileData.criteria || currentProfileData.criteria.length === 0) {
+            if (!currentProfileData?.criteria || currentProfileData.criteria.length === 0) {
                 const availableProfiles = this.settingsManager.getProfileNames();
                 const firstValidProfile = availableProfiles.find(name => {
                     const p = this.settingsManager.getProfile(name);
-                    return p && p.criteria && p.criteria.length > 0;
+                    return p?.criteria && p.criteria.length > 0;
                 });
                 
                 if (firstValidProfile) {

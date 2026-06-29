@@ -425,21 +425,21 @@ export class OverviewAnalysisService {
 
     // FAIL LOUDLY: Validate Map objects exist and are functional
     if (!cached.data.events || typeof cached.data.events.values !== 'function') {
-      const errorMsg = `❌ CACHE CORRUPTION DETECTED: Events is not a proper Map for layer "${layerName}". Type: ${typeof cached.data.events}, hasValues: ${!!cached.data.events?.values}`;
+      const errorMsg = `❌ CACHE CORRUPTION DETECTED: Events is not a proper Map for layer "${layerName}". Type: ${typeof cached.data.events}, hasValues: ${Boolean(cached.data.events?.values)}`;
       console.error(errorMsg);
       triggeringNode.overviewBoardCache.delete(layerName);
       throw new Error(errorMsg);
     }
 
     if (!cached.data.characters || typeof cached.data.characters.values !== 'function') {
-      const errorMsg = `❌ CACHE CORRUPTION DETECTED: Characters is not a proper Map for layer "${layerName}". Type: ${typeof cached.data.characters}, hasValues: ${!!cached.data.characters?.values}`;
+      const errorMsg = `❌ CACHE CORRUPTION DETECTED: Characters is not a proper Map for layer "${layerName}". Type: ${typeof cached.data.characters}, hasValues: ${Boolean(cached.data.characters?.values)}`;
       console.error(errorMsg);
       triggeringNode.overviewBoardCache.delete(layerName);
       throw new Error(errorMsg);
     }
 
     if (!cached.data.places || typeof cached.data.places.values !== 'function') {
-      const errorMsg = `❌ CACHE CORRUPTION DETECTED: Places is not a proper Map for layer "${layerName}". Type: ${typeof cached.data.places}, hasValues: ${!!cached.data.places?.values}`;
+      const errorMsg = `❌ CACHE CORRUPTION DETECTED: Places is not a proper Map for layer "${layerName}". Type: ${typeof cached.data.places}, hasValues: ${Boolean(cached.data.places?.values)}`;
       console.error(errorMsg);
       triggeringNode.overviewBoardCache.delete(layerName);
       throw new Error(errorMsg);
@@ -519,15 +519,15 @@ export class OverviewAnalysisService {
 
     // FAIL LOUDLY: Validate Map objects exist and are functional
     if (!data.events || typeof data.events.entries !== 'function') {
-      throw new Error(`❌ SERIALIZATION ERROR: events is not a proper Map. Type: ${typeof data.events}, hasEntries: ${!!data.events?.entries}`);
+      throw new Error(`❌ SERIALIZATION ERROR: events is not a proper Map. Type: ${typeof data.events}, hasEntries: ${Boolean(data.events?.entries)}`);
     }
 
     if (!data.characters || typeof data.characters.entries !== 'function') {
-      throw new Error(`❌ SERIALIZATION ERROR: characters is not a proper Map. Type: ${typeof data.characters}, hasEntries: ${!!data.characters?.entries}`);
+      throw new Error(`❌ SERIALIZATION ERROR: characters is not a proper Map. Type: ${typeof data.characters}, hasEntries: ${Boolean(data.characters?.entries)}`);
     }
 
     if (!data.places || typeof data.places.entries !== 'function') {
-      throw new Error(`❌ SERIALIZATION ERROR: places is not a proper Map. Type: ${typeof data.places}, hasEntries: ${!!data.places?.entries}`);
+      throw new Error(`❌ SERIALIZATION ERROR: places is not a proper Map. Type: ${typeof data.places}, hasEntries: ${Boolean(data.places?.entries)}`);
     }
 
     // FAIL LOUDLY: Validate required fields

@@ -85,12 +85,12 @@ export class ReaderEditor {
      * Get current text selection from active editor
      */
     public getCurrentSelection(): TextSelection | null {
-        if (!this.currentActiveEditor || !this.currentActiveEditor.editor) {
+        if (!this.currentActiveEditor?.editor) {
             return null;
         }
 
         const selection = this.currentActiveEditor.editor.getSelection();
-        if (!selection || !selection.text) return null;
+        if (!selection?.text) return null;
 
         return {
             text: selection.text,

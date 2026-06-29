@@ -162,7 +162,7 @@ export class GuidedOutlineCreator {
         }
 
         if (cancelBtn) {
-            cancelBtn.addEventListener('click', () => this.handleCancel(container));
+            cancelBtn.addEventListener('click', () => { this.handleCancel(container); });
         }
 
         if (loadBtn) {
@@ -501,8 +501,8 @@ export class GuidedOutlineCreator {
                 resolve(confirmed);
             };
 
-            keepBtn.addEventListener('click', () => finish(false));
-            createBtn.addEventListener('click', () => finish(true));
+            keepBtn.addEventListener('click', () => { finish(false); });
+            createBtn.addEventListener('click', () => { finish(true); });
             backdrop.addEventListener('click', (e) => {
                 if (e.target === backdrop) {
                     finish(false);
@@ -645,7 +645,7 @@ export class GuidedOutlineCreator {
             // Check if this item starts with "Trigger: "
             const triggerMatch = trimmed.match(/^Trigger:\s*(.+?)\.\s*(.*)/s);
             
-            if (triggerMatch && triggerMatch[1] && triggerMatch[2]) {
+            if (triggerMatch?.[1] && triggerMatch[2]) {
                 // Convert "Trigger: word." format to "<trigger>word</trigger>" format
                 const triggerWord = triggerMatch[1].trim();
                 const contextText = triggerMatch[2].trim();

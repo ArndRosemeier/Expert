@@ -694,7 +694,7 @@ export class RPGInteractionService {
         this.rebuildSnapshotsFromCheckpoints(session);
 
         const assistantMessages = session.conversationHistory.filter(m => m.role === 'assistant');
-        const checkpointMessages = assistantMessages.filter(m => !!m.checkpointSnapshotId);
+        const checkpointMessages = assistantMessages.filter(m => Boolean(m.checkpointSnapshotId));
 
         if (checkpointMessages.length <= maxCheckpoints) {
             return;

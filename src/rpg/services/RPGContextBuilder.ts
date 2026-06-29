@@ -191,7 +191,7 @@ export class RPGContextBuilder {
             const secretTitles: string[] = [];
             for (const loreId of secretLoreIds) {
                 const lore = this.worldStateService.getLore(worldState, loreId);
-                if (lore && lore.tags.includes('secret')) {
+                if (lore?.tags.includes('secret')) {
                     secretTitles.push(lore.title);
                 }
             }

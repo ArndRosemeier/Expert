@@ -456,7 +456,7 @@ Content: ${truncatedContent}`;
 
             // Parse delete node like "Node3"
             const deleteMatch = deleteNodeString.match(/Node(\d+)/);
-            if (!deleteMatch || !deleteMatch[1]) return null;
+            if (!deleteMatch?.[1]) return null;
 
             const deleteIndex = parseInt(deleteMatch[1], 10) - 1;
 

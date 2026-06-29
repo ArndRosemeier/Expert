@@ -718,12 +718,12 @@ class PromptExpansionService {
             
             // Check for quoted title: {{input "Title with spaces"}}
             const quotedMatch = match.match(/\{\{input\s+"([^"]+)"\}\}/);
-            if (quotedMatch && quotedMatch[1]) {
+            if (quotedMatch?.[1]) {
                 title = quotedMatch[1];
             } else {
                 // Check for unquoted title: {{input Title}}
                 const unquotedMatch = match.match(/\{\{input\s+([^}"\s]+)\}\}/);
-                if (unquotedMatch && unquotedMatch[1]) {
+                if (unquotedMatch?.[1]) {
                     title = unquotedMatch[1];
                 }
                 // For simple {{input}}, use default title
@@ -740,7 +740,7 @@ class PromptExpansionService {
         this.registerAsyncPlaceholder('select', async (_context, match) => {
             // {{select "Choose option" option1,option2,option3}}
             const selectMatch = match.match(/\{\{select\s+"([^"]+)"\s+([^}]+)\}\}/);
-            if (selectMatch && selectMatch[1] && selectMatch[2]) {
+            if (selectMatch?.[1] && selectMatch[2]) {
                 const title = selectMatch[1];
                 const options = selectMatch[2].split(',').map(opt => opt.trim());
                 const selection = await this.showSelectModal(title, options);
@@ -755,7 +755,7 @@ class PromptExpansionService {
         this.registerAsyncPlaceholder('multiline', async (_context, match) => {
             // {{multiline "Enter description"}}
             const multilineMatch = match.match(/\{\{multiline\s+"([^"]+)"\}\}/);
-            if (multilineMatch && multilineMatch[1]) {
+            if (multilineMatch?.[1]) {
                 const title = multilineMatch[1];
                 const text = await this.showTextAreaModal(title);
                 return {
@@ -769,7 +769,7 @@ class PromptExpansionService {
         this.registerAsyncPlaceholder('confirm', async (_context, match) => {
             // {{confirm "Are you sure?"}}
             const confirmMatch = match.match(/\{\{confirm\s+"([^"]+)"\}\}/);
-            if (confirmMatch && confirmMatch[1]) {
+            if (confirmMatch?.[1]) {
                 const message = confirmMatch[1];
                 const result = await this.showConfirmModal(message);
                 return {

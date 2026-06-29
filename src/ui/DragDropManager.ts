@@ -504,7 +504,7 @@ export class DragDropManager {
         });
         
         // Remove drag indicators
-        document.querySelectorAll('.drag-indicator').forEach(el => el.remove());
+        document.querySelectorAll('.drag-indicator').forEach(el => { el.remove(); });
     }
 }
 

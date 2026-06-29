@@ -214,7 +214,7 @@ export class SettingsManager {
      * Use this only after calling getInstance() at least once
      */
     public static getInstanceSync(): SettingsManager {
-        if (!SettingsManager.instance || !SettingsManager.instance.initialized) {
+        if (!SettingsManager.instance?.initialized) {
             throw new Error('SettingsManager not initialized. Call getInstance() first.');
         }
         return SettingsManager.instance;

@@ -293,7 +293,7 @@ export class HierarchicalImportService {
 
   private parseFixedCount(levelName: string): number | null {
     const m = levelName.match(/\b(\d+)\b/);
-    if (!m || !m[1]) return null;
+    if (!m?.[1]) return null;
     const n = parseInt(m[1], 10);
     return Number.isFinite(n) && n > 0 ? n : null;
   }

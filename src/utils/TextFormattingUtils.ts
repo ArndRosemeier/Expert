@@ -20,7 +20,7 @@ function escapeHtml(text: string): string {
  * @returns Content ready for display with CSS white-space: pre-wrap
  */
 export function formatContentForPreWrap(content: string): string {
-    if (!content || !content.trim()) {
+    if (!content?.trim()) {
         return '';
     }
     

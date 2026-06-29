@@ -183,6 +183,6 @@ export function openNodeStatisticsModal(node: DocumentNode): void {
   showGenericModal(
     buildContent(stats),
     { title: `Statistics: ${node.title}`, maxWidth: '60rem' },
-    { onOpen: () => wireTabs() }
+    { onOpen: () => { wireTabs(); } }
   );
 }

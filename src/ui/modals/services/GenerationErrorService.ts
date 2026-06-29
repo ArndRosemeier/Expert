@@ -344,7 +344,7 @@ The AI model detected content that violates its usage policies and refused to pr
         if (message.includes('OpenRouter API error:')) {
             // Extract the actual error message
             const match = message.match(/OpenRouter API error: \d+ .+ - (.+)/);
-            if (match && match[1]) {
+            if (match?.[1]) {
                 message = match[1];
             }
         }

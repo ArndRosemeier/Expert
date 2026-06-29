@@ -644,7 +644,7 @@ export class OutlineFactory {
   }
   
   private notifyChange(): void {
-    this.changeHandlers.forEach(handler => handler(this.config));
+    this.changeHandlers.forEach(handler => { handler(this.config); });
     this.debouncedSave();
   }
   

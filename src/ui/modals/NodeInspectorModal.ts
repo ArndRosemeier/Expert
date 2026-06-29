@@ -489,7 +489,7 @@ export class NodeInspectorModal extends BaseModal {
         }
 
         // Setup editor event listeners after container is created
-        void void setTimeout(() => this.setupEditorEventListeners(), 0);
+        void void setTimeout(() => { this.setupEditorEventListeners(); }, 0);
 
         return container;
     }

@@ -7,9 +7,11 @@
 //   node scripts/lint-cleanup.mjs suggest    -> apply first suggestion for SUGGEST_RULES
 import { Core } from 'eslint-interactive';
 
-// Tier 1: rules whose autofix is structure/type-only and behavior-preserving.
+// Tier 1: rules whose autofix is structure-only and behavior-preserving.
+// NOTE: no-unnecessary-type-assertion is intentionally excluded -- its autofix
+// strips DOM casts (e.g. `as HTMLInputElement`) that the project's stricter
+// tsconfig actually needs, breaking the typecheck. It is suppressed in Tier 3.
 const SAFE_FIX_RULES = [
-  '@typescript-eslint/no-unnecessary-type-assertion',
   '@typescript-eslint/prefer-optional-chain',
   '@typescript-eslint/no-confusing-void-expression',
   '@typescript-eslint/no-unnecessary-boolean-literal-compare',

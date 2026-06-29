@@ -229,19 +229,19 @@ export class CriteriaEditor {
             classes: ['btn-primary'],
             content: 'Add Criterion'
         });
-        addButton.addEventListener('click', () => this.addCriterion());
+        addButton.addEventListener('click', () => { this.addCriterion(); });
 
         const addMetricButton = createElement('button', {
             classes: ['btn-primary'],
             content: 'Add Metric'
         });
-        addMetricButton.addEventListener('click', () => this.addMetric());
+        addMetricButton.addEventListener('click', () => { this.addMetric(); });
 
         const defaultsButton = createElement('button', {
             classes: ['btn-secondary'],
             content: 'Reset to Defaults'
         });
-        defaultsButton.addEventListener('click', () => this.resetToDefaults());
+        defaultsButton.addEventListener('click', () => { this.resetToDefaults(); });
 
         const copyButton = createElement('button', {
             classes: ['btn-secondary'],

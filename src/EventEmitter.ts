@@ -21,6 +21,6 @@ export class EventEmitter<Events extends Record<string, any[]>> {
         if (!this.listeners[eventName]) {
             return;
         }
-        this.listeners[eventName]!.forEach(listener => listener(...args));
+        this.listeners[eventName]!.forEach(listener => { listener(...args); });
     }
 } 

@@ -429,7 +429,7 @@ export class OverviewRenderer {
   public clear(): void {
     this.elements = [];
     this.connections = [];
-    this.cloudRegions.forEach(cloud => cloud.elements.clear());
+    this.cloudRegions.forEach(cloud => { cloud.elements.clear(); });
     this.interactionState.selectedElement = null;
     this.interactionState.hoveredElement = null;
     this.needsRedraw = true;
@@ -587,7 +587,7 @@ export class OverviewRenderer {
     // Check in reverse order (top to bottom)
     for (let i = this.elements.length - 1; i >= 0; i--) {
       const element = this.elements[i];
-      if (element && element.hitTest(worldPos)) {
+      if (element?.hitTest(worldPos)) {
         return element;
       }
     }

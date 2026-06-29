@@ -228,9 +228,9 @@ export class ToolPanel {
     `;
 
     const options = [
-      { text: 'Export as Markdown', icon: '📄', action: () => this.config.onExportMarkdown() },
-      { text: 'Export as JSON', icon: '📦', action: () => this.config.onExportJson() },
-      { text: 'Import from JSON', icon: '📥', action: () => this.config.onImportJson() }
+      { text: 'Export as Markdown', icon: '📄', action: () => { this.config.onExportMarkdown(); } },
+      { text: 'Export as JSON', icon: '📦', action: () => { this.config.onExportJson(); } },
+      { text: 'Import from JSON', icon: '📥', action: () => { this.config.onImportJson(); } }
     ];
 
     options.forEach((option, index) => {
@@ -662,7 +662,7 @@ export class ToolPanel {
     }
     
     // Refresh dropdown after loading
-    setTimeout(() => this.refreshModelDropdown(), 100);
+    setTimeout(() => { this.refreshModelDropdown(); }, 100);
   }
 
   /**

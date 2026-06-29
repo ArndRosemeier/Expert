@@ -289,7 +289,7 @@ export class IdeaBoard {
       const elementsArray = Array.from(this.elements.values());
       for (let i = elementsArray.length - 1; i >= 0; i--) {
         const element = elementsArray[i];
-        if (element && element.hitTest(worldPoint)) {
+        if (element?.hitTest(worldPoint)) {
           hitElement = element;
           break;
         }
@@ -530,7 +530,7 @@ export class IdeaBoard {
     // Only handle keyboard shortcuts when the canvas has focus or is being interacted with
     // Exception: copy/cut/paste should work when an element is selected, even if canvas not focused
     const canvasHasFocus = this.canvas.matches(':focus');
-    const hasSelection = !!this.selectedElement;
+    const hasSelection = Boolean(this.selectedElement);
     
     // Handle copy/cut/paste shortcuts
     if (event.ctrlKey || event.metaKey) { // Support both Ctrl (Windows/Linux) and Cmd (Mac)
@@ -739,7 +739,7 @@ export class IdeaBoard {
     const elementsArray = Array.from(this.elements.values());
     for (let i = elementsArray.length - 1; i >= 0; i--) {
       const element = elementsArray[i];
-      if (element && element.hitTest(worldPoint)) {
+      if (element?.hitTest(worldPoint)) {
         hitElement = element;
         break;
       }
@@ -2300,7 +2300,7 @@ export class IdeaBoard {
         });
       });
       
-      if (!transformResult || !transformResult.instruction.trim()) {
+      if (!transformResult?.instruction.trim()) {
         return;
       }
       
@@ -3018,7 +3018,7 @@ export class IdeaBoard {
     }
 
     const selectedPostIt = this.selectedElement;
-    let originalContent = selectedPostIt.content; // Store original content for error recovery
+    const originalContent = selectedPostIt.content; // Store original content for error recovery
     
     try {
       // Get SettingsManager first - needed for prompts and OpenRouterClient

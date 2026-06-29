@@ -112,8 +112,8 @@ export async function confirm(message: string, title?: string): Promise<boolean>
         showConfirm(
             message, 
             title,
-            () => resolve(true),
-            () => resolve(false)
+            () => { resolve(true); },
+            () => { resolve(false); }
         );
     });
 }

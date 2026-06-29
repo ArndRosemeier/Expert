@@ -209,7 +209,7 @@ export class TreeService {
      */
     public removeNode(id: string, rootNode: DocumentNode): boolean {
         const nodeToRemove = this.findNodeById(id, rootNode);
-        if (!nodeToRemove || !nodeToRemove.parentId) {
+        if (!nodeToRemove?.parentId) {
             // Cannot remove the root node or a node without a parent
             return false;
         }
@@ -260,7 +260,7 @@ export class TreeService {
      */
     public findParentNode(nodeId: string, rootNode: DocumentNode): DocumentNode | null {
         const node = this.findNodeById(nodeId, rootNode);
-        if (!node || !node.parentId) {
+        if (!node?.parentId) {
             return null;
         }
         return this.findNodeById(node.parentId, rootNode);
@@ -285,7 +285,7 @@ export class TreeService {
      */
     public getSiblings(nodeId: string, rootNode: DocumentNode): DocumentNode[] {
         const node = this.findNodeById(nodeId, rootNode);
-        if (!node || !node.parentId) {
+        if (!node?.parentId) {
             return []; // Root node has no siblings
         }
 
@@ -318,7 +318,7 @@ export class TreeService {
     public clearAllGeneratingFlags(rootNode: DocumentNode): void {
         const clearNode = (node: DocumentNode): void => {
             node.isGenerating = false;
-            node.children.forEach(child => clearNode(child));
+            node.children.forEach(child => { clearNode(child); });
         };
         clearNode(rootNode);
     }

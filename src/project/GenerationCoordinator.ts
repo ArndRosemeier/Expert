@@ -138,7 +138,7 @@ export class GenerationCoordinator {
             // Get fresh references to buttons after potential UI re-render
             const generateBtn = document.getElementById('node-generate-btn') as HTMLButtonElement;
             
-            console.log('🔘 Generation UI update - Generate button exists:', !!generateBtn);
+            console.log('🔘 Generation UI update - Generate button exists:', Boolean(generateBtn));
         
             if (generateBtn) {
                 generateBtn.disabled = true;
@@ -201,7 +201,7 @@ export class GenerationCoordinator {
                 // Get fresh references to buttons after potential UI re-render
                 const generateBtn = document.getElementById('node-generate-btn') as HTMLButtonElement;
                 
-                console.log('✅ Generation complete - Generate button exists:', !!generateBtn);
+                console.log('✅ Generation complete - Generate button exists:', Boolean(generateBtn));
             
                 if (generateBtn) {
                     generateBtn.disabled = false;

@@ -38,7 +38,7 @@ export class TagManagerModal extends BaseModal {
             closable: true,
             backdrop: true
         }, options?.onClose ? {
-            onClose: async () => options.onClose!()
+            onClose: async () => { options.onClose!(); }
         } : {});
         this.rootNode = rootNode;
         this.options = options || {};
@@ -441,30 +441,30 @@ export class TagManagerModal extends BaseModal {
         buttonContainer.style.gap = '0.75rem';
 
         // Add Tag button
-        const addTagBtn = this.createActionButton('➕ Add Another Tag', 'primary', () => this.handleAddTag());
+        const addTagBtn = this.createActionButton('➕ Add Another Tag', 'primary', () => { this.handleAddTag(); });
         buttonContainer.appendChild(addTagBtn);
 
         // Remove Tag button (not for master)
         if (!isMasterTag) {
-            const removeTagBtn = this.createActionButton('🗑️ Remove Tag', 'danger', () => this.handleRemoveTag());
+            const removeTagBtn = this.createActionButton('🗑️ Remove Tag', 'danger', () => { this.handleRemoveTag(); });
             buttonContainer.appendChild(removeTagBtn);
         }
 
         // Promote to Master button (not for master)
         if (!isMasterTag) {
-            const promoteBtn = this.createActionButton('👑 Promote to Master', 'default', () => this.handlePromoteToMaster());
+            const promoteBtn = this.createActionButton('👑 Promote to Master', 'default', () => { this.handlePromoteToMaster(); });
             buttonContainer.appendChild(promoteBtn);
         }
 
         // Copy button (not for master)
         if (!isMasterTag) {
-            const copyBtn = this.createActionButton('📋 Copy Versions', 'default', () => this.handleCopyVersions());
+            const copyBtn = this.createActionButton('📋 Copy Versions', 'default', () => { this.handleCopyVersions(); });
             buttonContainer.appendChild(copyBtn);
         }
 
         // Remove Versions button (not for master)
         if (!isMasterTag) {
-            const removeVersionsBtn = this.createActionButton('🗑️ Remove Versions', 'danger', () => this.handleRemoveVersions());
+            const removeVersionsBtn = this.createActionButton('🗑️ Remove Versions', 'danger', () => { this.handleRemoveVersions(); });
             buttonContainer.appendChild(removeVersionsBtn);
         }
 

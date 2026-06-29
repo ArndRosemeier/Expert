@@ -154,11 +154,11 @@ export class KeysUI {
 
         // Random string button
         const randomBtn = document.getElementById('random-string-btn') as HTMLButtonElement;
-        randomBtn.addEventListener('click', () => this.generateRandomString());
+        randomBtn.addEventListener('click', () => { this.generateRandomString(); });
 
         // Preset expiry button
         const presetBtn = document.getElementById('preset-expiry-btn') as HTMLButtonElement;
-        presetBtn.addEventListener('click', () => this.setPresetExpiry());
+        presetBtn.addEventListener('click', () => { this.setPresetExpiry(); });
 
         // Validation button
         const validateBtn = document.getElementById('validate-btn') as HTMLButtonElement;
@@ -176,10 +176,10 @@ export class KeysUI {
         exportBtn.addEventListener('click', () => void this.exportKeys());
 
         const importBtn = document.getElementById('import-btn') as HTMLButtonElement;
-        importBtn.addEventListener('click', () => this.importKeys());
+        importBtn.addEventListener('click', () => { this.importKeys(); });
 
         const debugBtn = document.getElementById('debug-btn') as HTMLButtonElement;
-        debugBtn.addEventListener('click', () => this.debugStorage());
+        debugBtn.addEventListener('click', () => { this.debugStorage(); });
     }
 
     private async handleCreateKey(e: Event): Promise<void> {

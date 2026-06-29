@@ -261,7 +261,7 @@ export class RPGView {
         
         try {
             this.setCreateSessionStatus('Preparing session…', true);
-            await new Promise<void>(resolve => requestAnimationFrame(() => resolve()));
+            await new Promise<void>(resolve => requestAnimationFrame(() => { resolve(); }));
 
             console.log('🎲 Generating session setup from description...');
             this.setCreateSessionStatus('Generating session setup…', true);
@@ -810,7 +810,7 @@ export class RPGView {
             this.currentSession,
             this.interactionService,
             this.worldInspector,
-            () => this.onConversationUpdate()
+            () => { this.onConversationUpdate(); }
         );
         
         // Save/Restore buttons

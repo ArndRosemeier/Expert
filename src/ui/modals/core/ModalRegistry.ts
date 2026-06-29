@@ -13,7 +13,7 @@ class SimpleEventEmitter implements ModalEventEmitter {
     emit<K extends keyof ModalEvents>(event: K, data: ModalEvents[K]): void {
         const eventHandlers = this.handlers.get(event);
         if (eventHandlers) {
-            eventHandlers.forEach(handler => handler(data));
+            eventHandlers.forEach(handler => { handler(data); });
         }
     }
 
@@ -155,7 +155,7 @@ export class ModalRegistry {
      */
     public async close(modalId: string): Promise<void> {
         const entry = this.modals.get(modalId);
-        if (!entry || !entry.state.isOpen) {
+        if (!entry?.state.isOpen) {
             return;
         }
 
@@ -244,7 +244,7 @@ export class ModalRegistry {
      */
     public clear(): void {
         void this.closeAll();
-        this.modals.forEach(entry => entry.modal.destroy());
+        this.modals.forEach(entry => { entry.modal.destroy(); });
         this.modals.clear();
         this.activeModals = [];
     }

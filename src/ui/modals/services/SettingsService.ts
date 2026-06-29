@@ -81,7 +81,7 @@ export class SettingsService {
             
             let newProfileSettings: SettingsProfile;
             
-            if (currentProfile && currentProfile.criteria) {
+            if (currentProfile?.criteria) {
                 // Deep copy all settings from the current profile to prevent contamination
                 newProfileSettings = {
                     selectedModels: { ...(currentProfile.selectedModels || {}) },
@@ -117,7 +117,7 @@ export class SettingsService {
             this.settingsManager,
             name,
             newProfileSettings,
-            (event) => this.emitChange(event)
+            (event) => { this.emitChange(event); }
         );
         
         return {
@@ -159,7 +159,7 @@ export class SettingsService {
             data: { action: 'saved', profileName }
         });
 
-        this.saveHandlers.forEach(handler => handler());
+        this.saveHandlers.forEach(handler => { handler(); });
     }
 
     /**
@@ -345,7 +345,7 @@ export class SettingsService {
             this.settingsManager,
             sourceProfileName,
             newProfileName,
-            (event) => this.emitChange(event)
+            (event) => { this.emitChange(event); }
         );
     }
 
@@ -360,7 +360,7 @@ export class SettingsService {
             this.settingsManager,
             oldName,
             newName,
-            (event) => this.emitChange(event)
+            (event) => { this.emitChange(event); }
         );
     }
 
@@ -402,7 +402,7 @@ export class SettingsService {
      * Emits a change event
      */
     private emitChange(event: SettingsChangeEvent): void {
-        this.changeHandlers.forEach(handler => handler(event));
+        this.changeHandlers.forEach(handler => { handler(event); });
     }
 
     /**

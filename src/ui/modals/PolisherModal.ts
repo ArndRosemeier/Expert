@@ -567,7 +567,7 @@ export class PolisherModal extends BaseModal {
         // Edit buttons
         const editButtonsBtn = document.getElementById('edit-polishing-buttons');
         if (editButtonsBtn) {
-            editButtonsBtn.addEventListener('click', () => this.openEditButtonsModal());
+            editButtonsBtn.addEventListener('click', () => { this.openEditButtonsModal(); });
         }
 
         // Custom polishing instructions
@@ -632,7 +632,7 @@ export class PolisherModal extends BaseModal {
         // Undo changes button
         const undoBtn = document.getElementById('undo-changes-btn');
         if (undoBtn) {
-            undoBtn.addEventListener('click', () => this.undoChanges());
+            undoBtn.addEventListener('click', () => { this.undoChanges(); });
         }
     }
 
@@ -995,7 +995,7 @@ ${content}`;
     override async close(): Promise<void> {
         // Remove any edit overlays
         const overlays = document.querySelectorAll('.polisher-edit-overlay');
-        overlays.forEach(overlay => overlay.remove());
+        overlays.forEach(overlay => { overlay.remove(); });
         
         // Restore body scrolling
         document.body.style.overflow = '';

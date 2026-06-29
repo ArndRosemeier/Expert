@@ -82,7 +82,7 @@ export abstract class SimpleModal implements IModal {
         this.isDestroyed = true;
         
         // Clean up ALL event handlers
-        this.cleanupHandlers.forEach(handler => handler());
+        this.cleanupHandlers.forEach(handler => { handler(); });
         this.cleanupHandlers = [];
         
         // Remove from DOM
@@ -283,13 +283,13 @@ export abstract class SimpleModal implements IModal {
     // Backward compatibility methods (no-op implementations)
     public getState(): any {
         return {
-            isOpen: !!this.element && !this.isDestroyed,
+            isOpen: Boolean(this.element) && !this.isDestroyed,
             isOpening: false,
             isClosing: false
         };
     }
 
     public isOpen(): boolean {
-        return !!this.element && !this.isDestroyed;
+        return Boolean(this.element) && !this.isDestroyed;
     }
 }

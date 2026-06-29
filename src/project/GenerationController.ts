@@ -53,7 +53,7 @@ export class GenerationController {
         // Abort the loop orchestrator (this will also abort OpenRouter operations)
         console.log('🛑 GenerationController: Requesting LoopOrchestrator stop');
         abortOperations.push(
-            Promise.resolve().then(() => this.loopOrchestrator.requestStop())
+            Promise.resolve().then(() => { this.loopOrchestrator.requestStop(); })
         );
         
         // Mark all generating nodes as no longer generating (immediate UI feedback)

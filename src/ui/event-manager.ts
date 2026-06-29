@@ -238,7 +238,7 @@ export class EventManager {
                 cleanups.push(cleanup);
             },
             cleanup: () => {
-                cleanups.forEach(fn => fn());
+                cleanups.forEach(fn => { fn(); });
                 cleanups.length = 0;
             }
         };
@@ -318,7 +318,7 @@ export class EventManager {
         this.directEvents = [];
 
         // Run cleanup queue
-        this.cleanupQueue.forEach(cleanup => cleanup());
+        this.cleanupQueue.forEach(cleanup => { cleanup(); });
         this.cleanupQueue = [];
 
         // Stop observing

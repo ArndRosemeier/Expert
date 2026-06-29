@@ -21,7 +21,7 @@ import { ReviewLayerInfo, ReviewScopeNode } from './ReviewTypes';
 export function baseLayerName(rawLayerName: string): string {
     const trimmed = rawLayerName.trim();
     const match = trimmed.match(/^(\w+)(?:\s+\d+)?$/);
-    return match && match[1] ? match[1] : trimmed;
+    return match?.[1] ? match[1] : trimmed;
 }
 
 export class ReviewScope {

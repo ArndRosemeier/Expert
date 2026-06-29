@@ -140,7 +140,7 @@ export class LoopOrchestrator extends EventEmitter<OrchestratorEvents> {
             try {
                 const allModels = await this.client.fetchModels();
                 const modelInfo = allModels.find(m => m.id === modelId);
-                if (modelInfo && modelInfo.name) {
+                if (modelInfo?.name) {
                     return modelInfo.name;
                 }
             } catch (error) {
@@ -172,7 +172,7 @@ export class LoopOrchestrator extends EventEmitter<OrchestratorEvents> {
         
         // Also abort any ongoing API requests in the client
         console.log('🛑 LoopOrchestrator: Aborting OpenRouter client operations');
-        abortPromises.push(Promise.resolve().then(() => this.client.abort()));
+        abortPromises.push(Promise.resolve().then(() => { this.client.abort(); }));
         
         // Execute all aborts in parallel for faster response
         Promise.all(abortPromises).then(() => {
@@ -649,7 +649,7 @@ export class LoopOrchestrator extends EventEmitter<OrchestratorEvents> {
             let jsonString: string | null = null;
             const jsonBlockMatch = response.match(/```json\s*(\[[\s\S]*?\])\s*```/s);
 
-            if (jsonBlockMatch && jsonBlockMatch[1]) {
+            if (jsonBlockMatch?.[1]) {
                 jsonString = jsonBlockMatch[1];
             } else {
                 const startIndex = response.indexOf('[');

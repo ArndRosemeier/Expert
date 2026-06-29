@@ -284,7 +284,7 @@ export class ProfileSelector {
             classes: ['btn-secondary'],
             content: 'Import'
         });
-        importButton.addEventListener('click', () => this.importProfile());
+        importButton.addEventListener('click', () => { this.importProfile(); });
 
         const renameButton = createElement('button', {
             classes: ['btn-secondary'],
@@ -296,7 +296,7 @@ export class ProfileSelector {
             classes: ['btn-secondary'],
             content: 'Reset to Defaults'
         });
-        resetToDefaultsButton.addEventListener('click', () => this.resetAllToDefaults());
+        resetToDefaultsButton.addEventListener('click', () => { this.resetAllToDefaults(); });
 
         actionsGroup.appendChild(deleteButton);
         actionsGroup.appendChild(exportButton);

@@ -126,7 +126,7 @@ export function addEventListenerWithCleanup(
     cleanupArray: (() => void)[]
 ): void {
     element.addEventListener(event, handler);
-    cleanupArray.push(() => element.removeEventListener(event, handler));
+    cleanupArray.push(() => { element.removeEventListener(event, handler); });
 }
 
 /**

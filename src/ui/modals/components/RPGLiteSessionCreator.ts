@@ -224,7 +224,7 @@ export class RPGLiteSessionCreator {
                 this.selectedSessionId = target.value;
             };
             radio.addEventListener('change', changeHandler);
-            this.cleanupHandlers.push(() => radio.removeEventListener('change', changeHandler));
+            this.cleanupHandlers.push(() => { radio.removeEventListener('change', changeHandler); });
         });
 
         // Create button
@@ -232,15 +232,15 @@ export class RPGLiteSessionCreator {
         if (createBtn) {
             const createHandler = () => this.handleCreate();
             createBtn.addEventListener('click', createHandler);
-            this.cleanupHandlers.push(() => createBtn.removeEventListener('click', createHandler));
+            this.cleanupHandlers.push(() => { createBtn.removeEventListener('click', createHandler); });
         }
 
         // Cancel button
         const cancelBtn = container.querySelector('#rpglite-cancel-btn') as HTMLButtonElement;
         if (cancelBtn) {
-            const cancelHandler = () => this.handleCancel();
+            const cancelHandler = () => { this.handleCancel(); };
             cancelBtn.addEventListener('click', cancelHandler);
-            this.cleanupHandlers.push(() => cancelBtn.removeEventListener('click', cancelHandler));
+            this.cleanupHandlers.push(() => { cancelBtn.removeEventListener('click', cancelHandler); });
         }
     }
 
@@ -299,7 +299,7 @@ export class RPGLiteSessionCreator {
             const service = new SessionToOutlineService();
             const result = await service.convertSessionToOutline(
                 session,
-                (progress) => this.updateProgress(progress)
+                (progress) => { this.updateProgress(progress); }
             );
 
             // Create AI data object similar to other outline creators
@@ -390,7 +390,7 @@ export class RPGLiteSessionCreator {
     }
 
     public cleanup(): void {
-        this.cleanupHandlers.forEach(cleanup => cleanup());
+        this.cleanupHandlers.forEach(cleanup => { cleanup(); });
         this.cleanupHandlers = [];
         this.templateSelector?.cleanup();
         this.templateSelector = null;

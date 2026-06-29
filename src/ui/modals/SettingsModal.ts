@@ -623,8 +623,8 @@ export class SettingsModal extends BaseModal {
             // Wait for ModelSelector initialization before rendering
             await this.modelSelector.waitForInitialization();
             this.modelSelector.render(modelsContainer);
-            modelsContainer.addEventListener('change', () => this.autoSave());
-            modelsContainer.addEventListener('input', () => this.autoSave());
+            modelsContainer.addEventListener('change', () => { this.autoSave(); });
+            modelsContainer.addEventListener('input', () => { this.autoSave(); });
             }
         }
 
@@ -635,7 +635,7 @@ export class SettingsModal extends BaseModal {
                 taskModelContainer,
                 this.settingsManager,
                 {
-                    onChange: () => this.autoSave(),
+                    onChange: () => { this.autoSave(); },
                     showDescriptions: true
                 }
             );

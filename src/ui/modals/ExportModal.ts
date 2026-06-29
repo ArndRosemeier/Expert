@@ -465,7 +465,7 @@ export class ExportModal extends BaseModal {
         });
 
         // Initialize format state after DOM setup
-        void void setTimeout(() => this.updateFormatState(), 0);
+        void void setTimeout(() => { this.updateFormatState(); }, 0);
 
         option.appendChild(label);
         option.appendChild(this.scopeSelect);

@@ -628,7 +628,7 @@ export class ConversationalGenerationModal extends BaseModal {
         
         if (!validationMessage || !applyButton) return;
 
-        let errors: string[] = [];
+        const errors: string[] = [];
 
         // Check if content level > draft level
         if (this.contentLevel > this.draftLevel && this.draftLevel !== -1) {

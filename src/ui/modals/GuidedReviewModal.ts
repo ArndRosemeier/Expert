@@ -205,7 +205,7 @@ export class GuidedReviewModal extends SimpleModal {
             if (selected.has(layer.level)) {
                 checkbox.setAttribute('checked', 'checked');
             }
-            addEventListenerWithCleanup(checkbox, 'change', () => this.onLayerToggle(layer.level, checkbox), this.cleanupHandlers);
+            addEventListenerWithCleanup(checkbox, 'change', () => { this.onLayerToggle(layer.level, checkbox); }, this.cleanupHandlers);
             wrap.appendChild(checkbox);
             wrap.appendChild(document.createTextNode(`${layer.label} (${layer.nodeCount})`));
             this.layersContainer.appendChild(wrap);
@@ -321,7 +321,7 @@ export class GuidedReviewModal extends SimpleModal {
             }
         };
         document.addEventListener('keydown', escapeHandler);
-        this.cleanupHandlers.push(() => document.removeEventListener('keydown', escapeHandler));
+        this.cleanupHandlers.push(() => { document.removeEventListener('keydown', escapeHandler); });
 
         this.renderConversation();
         this.renderStaged();

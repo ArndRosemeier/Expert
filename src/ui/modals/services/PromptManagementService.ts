@@ -74,7 +74,7 @@ export class PromptManagementService {
         await this.saveToStorage();
         
         // Emit save event to trigger UI refresh
-        this.saveHandlers.forEach(handler => handler());
+        this.saveHandlers.forEach(handler => { handler(); });
     }
 
     /**
@@ -82,7 +82,7 @@ export class PromptManagementService {
      */
     public async saveToStorage(): Promise<void> {
         await this.settingsManager.savePrompts(this.prompts);
-        this.saveHandlers.forEach(handler => handler());
+        this.saveHandlers.forEach(handler => { handler(); });
     }
 
     /**
@@ -215,7 +215,7 @@ export class PromptManagementService {
         });
 
         // Auto-resize on load
-        setTimeout(() => autoResizeTextarea(textarea), 0);
+        setTimeout(() => { autoResizeTextarea(textarea); }, 0);
 
         content.appendChild(textarea);
 

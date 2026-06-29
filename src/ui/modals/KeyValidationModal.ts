@@ -19,7 +19,7 @@ export class KeyValidationModal extends BaseModal {
             closable: false // Cannot be closed without valid key
         };
         super(config, {
-            onOpen: () => this.attachEventListeners()
+            onOpen: () => { this.attachEventListeners(); }
         });
     }
 
@@ -228,10 +228,10 @@ export class KeyValidationModal extends BaseModal {
         this.submitButton = this.element?.querySelector('#validate-key-btn') as HTMLButtonElement;
         
         if (this.keyInput) {
-            this.keyInput.addEventListener('input', () => this.onKeyInput());
+            this.keyInput.addEventListener('input', () => { this.onKeyInput(); });
             this.keyInput.addEventListener('paste', () => {
                 // Delay to allow paste to complete
-                setTimeout(() => this.onKeyInput(), 100);
+                setTimeout(() => { this.onKeyInput(); }, 100);
             });
         }
         

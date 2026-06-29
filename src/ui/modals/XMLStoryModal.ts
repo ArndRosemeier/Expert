@@ -2677,7 +2677,7 @@ export class XMLStoryModal extends SimpleModal {
         // Legacy context elements are no longer used in this editor
         
         // Clear any legacy editors (outline editor is persistent)
-        this.elementEditors.forEach(editor => editor.destroy());
+        this.elementEditors.forEach(editor => { editor.destroy(); });
         this.elementEditors.clear();
 
         let html = '';
@@ -3722,15 +3722,15 @@ export class XMLStoryModal extends SimpleModal {
         const redoBtn = document.getElementById('outline-redo-btn');
 
         if (resetOutlineBtn) {
-            resetOutlineBtn.addEventListener('click', () => this.resetOutlineToOriginal());
+            resetOutlineBtn.addEventListener('click', () => { this.resetOutlineToOriginal(); });
         }
 
         if (undoBtn) {
-            undoBtn.addEventListener('click', () => this.undoOutlineChange());
+            undoBtn.addEventListener('click', () => { this.undoOutlineChange(); });
         }
 
         if (redoBtn) {
-            redoBtn.addEventListener('click', () => this.redoOutlineChange());
+            redoBtn.addEventListener('click', () => { this.redoOutlineChange(); });
         }
 
         // legacy resetContextBtn removed
@@ -4084,7 +4084,7 @@ export class XMLStoryModal extends SimpleModal {
             // Add new context items
             for (let index = 0; index < data.contextItems.length; index++) {
                 const contextItem = data.contextItems[index];
-                if (contextItem && contextItem.trim()) { // Only add non-empty items
+                if (contextItem?.trim()) { // Only add non-empty items
                     await this.storySystem.service.addNewEmptyElement('context');
                     
                     // Update the empty element with content - need to find the actual element that was created
@@ -4459,7 +4459,7 @@ export class XMLStoryModal extends SimpleModal {
         // XMLStoryModal.close() called - proceeding with cleanup and close
         
         // Clean up text editors
-        this.elementEditors.forEach(editor => editor.destroy());
+        this.elementEditors.forEach(editor => { editor.destroy(); });
         this.elementEditors.clear();
         
         // Clean up outline editor
@@ -4484,7 +4484,7 @@ export class XMLStoryModal extends SimpleModal {
      */
     public async forceCloseImmediate(): Promise<void> {
         // Clean up text editors
-        this.elementEditors.forEach(editor => editor.destroy());
+        this.elementEditors.forEach(editor => { editor.destroy(); });
         this.elementEditors.clear();
         
         // Clean up outline editor

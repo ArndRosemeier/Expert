@@ -284,13 +284,13 @@ export class AIProjectCreator {
         if (generateBtn) {
             const generateHandler = async () => this.handleGenerate();
             generateBtn.addEventListener('click', generateHandler);
-            this.cleanupHandlers.push(() => generateBtn.removeEventListener('click', generateHandler));
+            this.cleanupHandlers.push(() => { generateBtn.removeEventListener('click', generateHandler); });
         }
         
         if (cancelBtn) {
-            const cancelHandler = () => this.handleCancel();
+            const cancelHandler = () => { this.handleCancel(); };
             cancelBtn.addEventListener('click', cancelHandler);
-            this.cleanupHandlers.push(() => cancelBtn.removeEventListener('click', cancelHandler));
+            this.cleanupHandlers.push(() => { cancelBtn.removeEventListener('click', cancelHandler); });
         }
 
         // Upgrade description textarea to enhanced UniversalTextEditor
@@ -437,7 +437,7 @@ export class AIProjectCreator {
     }
 
     public cleanup(): void {
-        this.cleanupHandlers.forEach(cleanup => cleanup());
+        this.cleanupHandlers.forEach(cleanup => { cleanup(); });
         this.cleanupHandlers = [];
         this.container = null;
         this.isGenerating = false;

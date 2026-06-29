@@ -106,7 +106,7 @@ export class RPGConversationPanel {
         for (let i = 0; i < this.session.conversationHistory.length; i++) {
             const message = this.session.conversationHistory[i] as RPGConversationMessage;
             const showRetry = i === lastIndex && message.role === 'assistant' && this.canRetryLastTurn();
-            const showRestore = message.role === 'assistant' && !!message.checkpointSnapshotId;
+            const showRestore = message.role === 'assistant' && Boolean(message.checkpointSnapshotId);
             this.appendMessage(message, showRetry, showRestore);
         }
         
@@ -133,7 +133,7 @@ export class RPGConversationPanel {
         if (history.length < 3) return false;
         const beforeLastAssistant = history[history.length - 3];
         if (!beforeLastAssistant) return false;
-        return beforeLastAssistant.role === 'assistant' && !!beforeLastAssistant.checkpointSnapshotId;
+        return beforeLastAssistant.role === 'assistant' && Boolean(beforeLastAssistant.checkpointSnapshotId);
     }
     
     /**

@@ -137,7 +137,7 @@ export class SelectableNodeTree {
 
         // Children (only if not collapsed)
         if (hasChildren && !isCollapsed) {
-            node.children.forEach(child => this.renderNode(child, parentEl));
+            node.children.forEach(child => { this.renderNode(child, parentEl); });
         }
     }
 

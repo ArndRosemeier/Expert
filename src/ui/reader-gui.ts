@@ -355,7 +355,7 @@ export class ReaderGUI {
                     content: '', // Always empty - content handled by textareas only
                     level: node.level,
                     isLeaf: node.children.length === 0,
-                    hasContent: !!(node.content && node.content.trim()),
+                    hasContent: Boolean(node.content && node.content.trim()),
                     position: position++,
                     wordCount,
                     estimatedReadingTime: readingTime
@@ -364,7 +364,7 @@ export class ReaderGUI {
 
             // Process children if this node shouldn't be displayed or if we want to go deeper
             if (!shouldDisplay || this.shouldProcessChildren(node)) {
-                node.children.forEach(child => processNode(child));
+                node.children.forEach(child => { processNode(child); });
             }
         };
 
@@ -399,7 +399,7 @@ export class ReaderGUI {
         } else {
             // Deepest content mode: only process children if current node doesn't have content
             // or if children might have deeper content
-            return node.children.length > 0 && (!node.content || !node.content.trim() || this.hasDeepContentInChildren(node));
+            return node.children.length > 0 && (!node.content?.trim() || this.hasDeepContentInChildren(node));
         }
     }
 
@@ -438,7 +438,7 @@ export class ReaderGUI {
      * Calculate word count for content
      */
     private calculateWordCount(content: string): number {
-        if (!content || !content.trim()) return 0;
+        if (!content?.trim()) return 0;
         return content.trim().split(/\s+/).length;
     }
 
@@ -569,7 +569,7 @@ export class ReaderGUI {
 
         const processNode = (node: DocumentNode): void => {
             // For TOC, always include all nodes with content or leaf nodes
-            const hasContent = !!(node.content && node.content.trim());
+            const hasContent = Boolean(node.content && node.content.trim());
             const isLeaf = node.children.length === 0;
             
             if (hasContent || isLeaf) {
@@ -590,7 +590,7 @@ export class ReaderGUI {
             }
 
             // Always process children for complete TOC hierarchy
-            node.children.forEach(child => processNode(child));
+            node.children.forEach(child => { processNode(child); });
         };
 
         processNode(this.rootNode);
@@ -2903,7 +2903,7 @@ export class ReaderGUI {
     private selectActionInModal(actionId: string): void {
         // Update visual selection
         const items = document.querySelectorAll('.action-item');
-        items.forEach(item => item.classList.remove('selected'));
+        items.forEach(item => { item.classList.remove('selected'); });
         
         const selectedItem = document.querySelector(`[data-action-id="${actionId}"]`);
         selectedItem?.classList.add('selected');
@@ -3169,7 +3169,7 @@ export class ReaderGUI {
             // Focus the search input when opening
             const findInput = this.container.querySelector('#find-input') as HTMLInputElement;
             if (findInput) {
-                void void setTimeout(() => findInput.focus(), 100);
+                void void setTimeout(() => { findInput.focus(); }, 100);
             }
         } else {
             // Clear search results when closing
@@ -3482,7 +3482,7 @@ export class ReaderGUI {
                 if (result) {
                     const nodeEditors = (this.readerEditor as any).nodeEditors;
                     const editor = nodeEditors?.get(result.nodeId);
-                    if (editor && editor.element) {
+                    if (editor?.element) {
                         // Scroll the editor element into view as fallback
                         editor.element.scrollIntoView({
                             behavior: 'smooth',
@@ -3894,7 +3894,7 @@ export class ReaderGUI {
             const newWordCount = this.calculateWordCount(newContent);
             contentNode.wordCount = newWordCount;
             contentNode.estimatedReadingTime = Math.ceil(newWordCount / 200);
-            contentNode.hasContent = !!(newContent && newContent.trim());
+            contentNode.hasContent = Boolean(newContent && newContent.trim());
             
             // Refresh TOC if it's visible
             if (this.config.showTOC) {

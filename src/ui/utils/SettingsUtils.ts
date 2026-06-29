@@ -44,7 +44,7 @@ function validateProfileName(name: string, context: 'create' | 'rename' | 'dupli
  * Check if profile exists with appropriate error message
  */
 function validateProfileExists(settingsManager: any, profileName: string, shouldExist: boolean = true): ProfileValidationResult {
-    const exists = !!settingsManager.getProfile(profileName);
+    const exists = Boolean(settingsManager.getProfile(profileName));
     const errors: string[] = [];
     
     if (shouldExist && !exists) {

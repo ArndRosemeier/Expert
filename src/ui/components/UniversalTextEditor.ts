@@ -301,7 +301,7 @@ export class UniversalTextEditor {
         
         // Auto-resize if enabled
         if (this.options.autoResize) {
-            setTimeout(() => autoResizeTextarea(this.simpleEditor), 0);
+            setTimeout(() => { autoResizeTextarea(this.simpleEditor); }, 0);
         }
     }
     
@@ -514,7 +514,7 @@ export class UniversalTextEditor {
     private setupSelectionOverlay(): void {
         // Create event handlers with proper binding
         this.selectionChangeHandler = () => {
-            setTimeout(() => this.handleSelectionChange(), 0);
+            setTimeout(() => { this.handleSelectionChange(); }, 0);
         };
         
         this.documentClickHandler = (e: Event) => {
@@ -563,7 +563,7 @@ export class UniversalTextEditor {
         const editorDiv = this.container.querySelector('.text-editor-with-highlighting') as HTMLElement;
         
         // Check if selection is within our editor
-        if (!editorDiv || !editorDiv.contains(range.commonAncestorContainer)) {
+        if (!editorDiv?.contains(range.commonAncestorContainer)) {
             this.hideSelectionOverlay();
             return;
         }
@@ -877,7 +877,7 @@ export class UniversalTextEditor {
      */
     private highlightSelectionWithMode(mode: 'sentences' | 'paragraphs'): void {
         const selection = this.getSelection();
-        if (!selection || !selection.text.trim()) {
+        if (!selection?.text.trim()) {
             this.hideSelectionOverlay();
             return;
         }
@@ -1072,7 +1072,7 @@ export class UniversalTextEditor {
             custom: {
                 transform_count: '1', // Always generate exactly 1 transformation
                 user_instruction: request.transformInstruction,
-                transform_context: request.context && request.context.trim() ? 
+                transform_context: request.context?.trim() ? 
                     `The text to change appears in a broader context, here it is: ${request.context.trim()}` : 
                     ''
             }
@@ -2020,8 +2020,8 @@ export class UniversalTextEditor {
         });
         
         // Button events
-        prevBtn.addEventListener('click', () => this.findPrevious());
-        nextBtn.addEventListener('click', () => this.findNext());
+        prevBtn.addEventListener('click', () => { this.findPrevious(); });
+        nextBtn.addEventListener('click', () => { this.findNext(); });
         
         findBtn.addEventListener('click', () => {
             this.performSearch();
@@ -2029,9 +2029,9 @@ export class UniversalTextEditor {
             this.findNext();
         });
         
-        replaceBtn.addEventListener('click', () => this.replaceCurrentMatch());
-        replaceAllBtn.addEventListener('click', () => this.replaceAllMatches());
-        closeBtn.addEventListener('click', () => this.hideSearch());
+        replaceBtn.addEventListener('click', () => { this.replaceCurrentMatch(); });
+        replaceAllBtn.addEventListener('click', () => { this.replaceAllMatches(); });
+        closeBtn.addEventListener('click', () => { this.hideSearch(); });
     }
     
     /**
@@ -2042,7 +2042,7 @@ export class UniversalTextEditor {
         this.searchResults = [];
         this.currentSearchIndex = -1;
         
-        if (!this.searchInput || !this.searchInput.value.trim()) {
+        if (!this.searchInput?.value.trim()) {
             return;
         }
         
@@ -2246,7 +2246,7 @@ export class UniversalTextEditor {
             if (this.currentMode === 'enhanced' && this.enhancedEditor) {
                 // For enhanced mode, work directly with the editor
                 this.enhancedEditor.clearAllHighlights();
-                let currentText = this.enhancedEditor.getText();
+                const currentText = this.enhancedEditor.getText();
                 
                 // Replace all occurrences
                 const newText = currentText.replace(

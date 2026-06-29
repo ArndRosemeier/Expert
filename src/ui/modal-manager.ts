@@ -89,7 +89,7 @@ export function openImportProjectModal(onImport: (title: string, template: Proje
     console.log('📋 Using new modal system directly...');
     try {
         // Use the new modal system directly, same as openExtractContextModal
-        newOpenGenericModal(content, () => setupImportProjectModal(onImport));
+        newOpenGenericModal(content, () => { setupImportProjectModal(onImport); });
         console.log('📋 New modal system call completed');
     } catch (error) {
         console.error('❌ Error opening import modal:', error);
@@ -142,7 +142,7 @@ function setupImportProjectModal(onImport: (title: string, template: ProjectTemp
                 // Extract template - first try from project level, then from root node, then from child nodes
                 let templateData = data.template;
                 
-                if (!templateData || !templateData.name || !templateData.hierarchyLevels) {
+                if (!templateData?.name || !templateData.hierarchyLevels) {
                     // Check if root node has template as array (node export format)
                     if (data.template && Array.isArray(data.template)) {
                         templateData = {
@@ -1030,7 +1030,7 @@ function truncateText(text: string, maxLength: number): string {
 
 export function openNodeChatModal(projectManager: ProjectManager, node: DocumentNode) {
     // Store modal reference so action handlers can close it
-    let modalInstance: any = null;
+    const modalInstance: any = null;
     
     const content = {
         content: `

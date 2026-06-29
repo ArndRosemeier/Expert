@@ -37,7 +37,7 @@ export class GenerationErrorModal extends BaseModal {
         modalDiv.appendChild(style);
         
         // Setup event listeners after render
-        setTimeout(() => this.setupEventListeners(), 0);
+        setTimeout(() => { this.setupEventListeners(); }, 0);
         
         return modalDiv;
     }
@@ -125,7 +125,7 @@ export class GenerationErrorModal extends BaseModal {
         }
 
         if (retryBtn) {
-            retryBtn.addEventListener('click', () => this.handleRetry());
+            retryBtn.addEventListener('click', () => { this.handleRetry(); });
         }
 
         if (closeBtn) {

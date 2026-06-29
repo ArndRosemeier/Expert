@@ -240,8 +240,8 @@ export class DataConverter {
     const connections: OverviewConnection[] = [];
     
     // FAIL LOUDLY: Validate OverviewData structure
-    if (!data || !data.events || typeof data.events.values !== 'function') {
-      throw new Error(`❌ DATA STRUCTURE ERROR: Invalid events data in OverviewData. Type: ${typeof data?.events}, hasValues: ${!!data?.events?.values}`);
+    if (!data?.events || typeof data.events.values !== 'function') {
+      throw new Error(`❌ DATA STRUCTURE ERROR: Invalid events data in OverviewData. Type: ${typeof data?.events}, hasValues: ${Boolean(data?.events?.values)}`);
     }
     
     // Create connections from events to characters and places
@@ -265,11 +265,11 @@ export class DataConverter {
       
       // FAIL LOUDLY: Validate characters and places Maps before using
       if (!data.characters || typeof data.characters.has !== 'function') {
-        throw new Error(`❌ DATA STRUCTURE ERROR: Invalid characters data in OverviewData. Type: ${typeof data.characters}, hasHas: ${!!data.characters?.has}`);
+        throw new Error(`❌ DATA STRUCTURE ERROR: Invalid characters data in OverviewData. Type: ${typeof data.characters}, hasHas: ${Boolean(data.characters?.has)}`);
       }
       
       if (!data.places || typeof data.places.has !== 'function') {
-        throw new Error(`❌ DATA STRUCTURE ERROR: Invalid places data in OverviewData. Type: ${typeof data.places}, hasHas: ${!!data.places?.has}`);
+        throw new Error(`❌ DATA STRUCTURE ERROR: Invalid places data in OverviewData. Type: ${typeof data.places}, hasHas: ${Boolean(data.places?.has)}`);
       }
       
       // Event to character connections

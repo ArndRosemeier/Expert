@@ -63,7 +63,7 @@ export class AIInteractionsService {
         // Set up close button
         const closeBtn = document.getElementById('close-ai-overlay');
         if (closeBtn) {
-            closeBtn.addEventListener('click', () => this.hideOverlay());
+            closeBtn.addEventListener('click', () => { this.hideOverlay(); });
         }
 
         // Close on escape key

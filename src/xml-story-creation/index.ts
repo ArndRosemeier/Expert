@@ -29,20 +29,20 @@ export function createXMLStorySystem(config?: Partial<import('./types/XMLStoryTy
         processAIResponse: (response: string) => service.processAIResponse(response),
         handleHumanEdit: (elementId: string, value: string) => 
             service.handleHumanEdit(elementId, value),
-        clearHighlights: () => service.clearAIHighlights(),
+        clearHighlights: () => { service.clearAIHighlights(); },
         getWhiteboardState: () => service.getWhiteboardState(),
         getPendingEdits: () => service.getPendingHumanEdits(),
         
         // Event handling
         addEventListener: (callback: import('./services/XMLStoryService').XMLStoryEventCallback) => 
-            service.addEventListener(callback),
+            { service.addEventListener(callback); },
         removeEventListener: (callback: import('./services/XMLStoryService').XMLStoryEventCallback) => 
-            service.removeEventListener(callback),
+            { service.removeEventListener(callback); },
         
         // State management
         exportState: () => service.exportState(),
-        importState: (state: Record<string, unknown>) => service.importState(state),
-        reset: () => service.reset()
+        importState: (state: Record<string, unknown>) => { service.importState(state); },
+        reset: () => { service.reset(); }
     };
 }
 

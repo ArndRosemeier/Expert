@@ -28,7 +28,7 @@ export interface VersionInfo {
  * @param project The ProjectManager instance to fix
  */
 export function AssertFlatTemplateCopy(project: ProjectManager): void {
-    if (!project || !project.rootNode) {
+    if (!project?.rootNode) {
         console.warn('AssertFlatTemplateCopy: Invalid project provided');
         return;
     }

@@ -204,8 +204,8 @@ export class WorldRpgView {
       const item = document.createElement('div');
       item.className = 'world-rpg-list-item';
       const when = new Date(adv.updatedAt).toLocaleString();
-      const isTemplate = adv.isTemplate === true;
-      const reroll = adv.regenerateOpeningOnStart !== false;
+      const isTemplate = adv.isTemplate;
+      const reroll = adv.regenerateOpeningOnStart;
       const badge = isTemplate ? ' <span class="world-rpg-tag">template</span>' : '';
       const primaryLabel = isTemplate ? 'Start' : 'Open';
       const rerollToggle = isTemplate ? `
@@ -268,7 +268,7 @@ export class WorldRpgView {
     // When the template re-rolls its opening, wipe back to the pristine start so
     // a brand-new first scene is generated below. Default on: legacy saves with
     // no explicit value (undefined) still re-roll, matching the checkbox.
-    if (copy.regenerateOpeningOnStart !== false) {
+    if (copy.regenerateOpeningOnStart) {
       resetAdventureToStartState(copy);
     }
     await saveAdventure(copy);
