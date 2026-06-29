@@ -51,7 +51,20 @@ async function main() {
     return;
   }
 
-  throw new Error(`Unknown mode "${mode}". Use: summary | autofix | suggest`);
+  if (mode === 'locate') {
+    const ruleId = process.argv[3];
+    if (!ruleId) throw new Error('locate requires a rule id argument');
+    for (const result of results) {
+      for (const message of result.messages) {
+        if (message.ruleId === ruleId) {
+          console.log(`${result.filePath}:${message.line}:${message.column}`);
+        }
+      }
+    }
+    return;
+  }
+
+  throw new Error(`Unknown mode "${mode}". Use: summary | autofix | suggest | locate <ruleId>`);
 }
 
 await main();

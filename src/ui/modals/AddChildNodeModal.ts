@@ -164,7 +164,7 @@ export class AddChildNodeModal extends BaseModal {
             e.stopPropagation();
             
             if (this.canCreate() && !this.childModalState.isCreating) {
-                this.createNode();
+                void this.createNode();
             }
         });
 
@@ -370,7 +370,7 @@ export class AddChildNodeModal extends BaseModal {
         });
 
         generateButton.addEventListener('click', () => {
-            this.generateSuggestions();
+            void this.generateSuggestions();
         });
 
         // Hover effect
@@ -553,7 +553,7 @@ export class AddChildNodeModal extends BaseModal {
         });
         
         regenerateButton.addEventListener('click', () => {
-            this.generateSuggestions();
+            void this.generateSuggestions();
         });
         
         // Hover effect
