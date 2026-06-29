@@ -136,4 +136,22 @@ export interface AILogEntry {
     response: string;
     model: string;
     requestDuration: number; // in milliseconds
+}
+
+/** Origin of a captured error log entry. */
+export type ErrorLogSource = 'unhandledrejection' | 'window.error' | 'manual';
+
+/**
+ * A captured runtime error. These are recorded non-blockingly so that
+ * otherwise-silent async failures become visible and exportable for diagnosis.
+ */
+export interface ErrorLogEntry {
+    id: string;
+    timestamp: Date;
+    source: ErrorLogSource;
+    message: string;
+    /** Stack trace when the captured value was an Error. */
+    stack?: string;
+    /** Extra origin info, e.g. "file.ts:12:5" for window.error events. */
+    details?: string;
 } 

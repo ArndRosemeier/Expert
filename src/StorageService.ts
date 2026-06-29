@@ -511,7 +511,7 @@ export class StorageService {
     // Configure IndexedDB with the database schema
     const dbConfig: IDBDatabaseConfig = {
       name: 'ExpertAppDB',
-      version: 7, // Increment version to add Persistent World RPG stores
+      version: 9, // Increment version to add the errorLogs store
       stores: [
         {
           name: 'keyValue',
@@ -542,6 +542,20 @@ export class StorageService {
             {
               name: 'by-purpose',
               keyPath: 'purpose'
+            }
+          ]
+        },
+        {
+          name: 'errorLogs',
+          keyPath: 'id',
+          indexes: [
+            {
+              name: 'by-timestamp',
+              keyPath: 'timestamp'
+            },
+            {
+              name: 'by-source',
+              keyPath: 'source'
             }
           ]
         },

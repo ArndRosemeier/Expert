@@ -183,6 +183,7 @@ export class SettingsModal extends BaseModal {
         advanced.appendChild(this.createPromptsSection());
         advanced.appendChild(this.createLoggingSection());
         advanced.appendChild(this.createDebugSection());
+        advanced.appendChild(this.createErrorLogSection());
 
         body.appendChild(advanced);
 
@@ -438,6 +439,44 @@ export class SettingsModal extends BaseModal {
         section.appendChild(title);
         section.appendChild(checkboxContainer);
         section.appendChild(viewLogsButton);
+
+        return section;
+    }
+
+    /**
+     * Creates the error log section. Captured runtime errors are always
+     * recorded; this exposes a viewer + JSON export for diagnosis.
+     */
+    private createErrorLogSection(): HTMLElement {
+        const section = createElement('div', {
+            classes: ['settings-section']
+        });
+
+        const title = createElement('h3', {
+            content: 'Error Log'
+        });
+
+        const description = createElement('div', {
+            content: 'Captured runtime errors (uncaught errors and unhandled promise rejections). View and export them as JSON.',
+            attributes: { style: 'font-size: 0.9em; color: #666; margin: 5px 0;' }
+        });
+
+        const viewErrorLogButton = createElement('button', {
+            classes: ['btn-secondary'],
+            content: 'View Error Log',
+            attributes: { id: 'view-error-log-btn' }
+        });
+
+        viewErrorLogButton.addEventListener('click', () => {
+            void (async () => {
+                const { openErrorLogModal } = await import('./ErrorLogModal');
+                openErrorLogModal();
+            })();
+        });
+
+        section.appendChild(title);
+        section.appendChild(description);
+        section.appendChild(viewErrorLogButton);
 
         return section;
     }

@@ -1,5 +1,53 @@
 import { VersionService } from './VersionService.js';
+import { ErrorLogService } from './ErrorLogService';
+import { ErrorLogEntry, ErrorLogSource } from './types';
 import './ui/enhanced-layout.css';
+
+// --- Global error capture ---
+// Catch otherwise-silent runtime failures (uncaught errors and unhandled
+// promise rejections) and persist them for later inspection/export. This is
+// deliberately non-blocking: we log loudly to the console and record the entry,
+// but never interrupt execution or suppress the browser's default reporting.
+function describeReason(reason: unknown): { message: string; stack?: string } {
+    if (reason instanceof Error) {
+        const result: { message: string; stack?: string } = { message: reason.message };
+        if (reason.stack !== undefined) {
+            result.stack = reason.stack;
+        }
+        return result;
+    }
+    if (typeof reason === 'string') {
+        return { message: reason };
+    }
+    return { message: JSON.stringify(reason) };
+}
+
+function recordError(source: ErrorLogSource, message: string, stack?: string, details?: string): void {
+    const entry: Omit<ErrorLogEntry, 'id'> = {
+        timestamp: new Date(),
+        source,
+        message
+    };
+    if (stack !== undefined) {
+        entry.stack = stack;
+    }
+    if (details !== undefined) {
+        entry.details = details;
+    }
+    void ErrorLogService.getInstance().addLogEntry(entry);
+}
+
+window.addEventListener('unhandledrejection', (event: PromiseRejectionEvent) => {
+    const { message, stack } = describeReason(event.reason);
+    console.error('Unhandled promise rejection captured:', event.reason);
+    recordError('unhandledrejection', message, stack);
+});
+
+window.addEventListener('error', (event: ErrorEvent) => {
+    const stack = event.error instanceof Error ? event.error.stack : undefined;
+    console.error('Uncaught error captured:', event.error ?? event.message);
+    recordError('window.error', event.message, stack, `${event.filename}:${event.lineno}:${event.colno}`);
+});
 
 // Log version info on startup (only in development or when explicitly requested)
 // Check for development mode via URL parameter or localhost
