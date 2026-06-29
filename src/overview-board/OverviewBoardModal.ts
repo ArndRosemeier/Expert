@@ -433,11 +433,11 @@ export class OverviewBoardModal extends BaseModal {
       const result = await this.analysisService.analyzeLayer({
         layerName: this.currentLayer,
         nodes: this.analysisService.getAvailableLayers(this.selectedNode)
-          .find(layer => layer.name === this.currentLayer)?.nodes || []
+          .find(layer => layer.name === this.currentLayer)?.nodes ?? []
       }, this.selectedNode);
 
       if (!result.success || !result.data) {
-        throw new Error(result.error || 'Analysis failed');
+        throw new Error(result.error ?? 'Analysis failed');
       }
 
       this.displayOverviewBoard(result.data);

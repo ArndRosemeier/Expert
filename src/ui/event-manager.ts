@@ -52,9 +52,7 @@ export class EventManager {
     }
 
     public static getInstance(): EventManager {
-        if (!EventManager.instance) {
-            EventManager.instance = new EventManager();
-        }
+        EventManager.instance ??= new EventManager();
         return EventManager.instance;
     }
 
@@ -146,8 +144,8 @@ export class EventManager {
             eventType,
             handler,
             cleanup,
-            reattachable: options.reattachable || false,
-            elementSelector: options.elementSelector || undefined
+            reattachable: options.reattachable ?? false,
+            elementSelector: options.elementSelector ?? undefined
         };
 
         this.directEvents.push(eventInfo);

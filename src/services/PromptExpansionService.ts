@@ -139,7 +139,7 @@ class PromptExpansionService {
             if (expanded.includes(placeholder)) {
                 // Check for override first
                 const overrideValue = context.globalOverrides?.[name];
-                const value = overrideValue !== undefined ? overrideValue : provider().value;
+                const value = overrideValue ?? provider().value;
                 expanded = expanded.replace(new RegExp(`\\{\\{${this.escapeRegex(name)}\\}\\}`, 'g'), value);
             }
         }
@@ -186,7 +186,7 @@ class PromptExpansionService {
             if (expanded.includes(placeholder)) {
                 // Check for override first
                 const overrideValue = context.globalOverrides?.[name];
-                const value = overrideValue !== undefined ? overrideValue : provider().value;
+                const value = overrideValue ?? provider().value;
                 expanded = expanded.replace(new RegExp(`\\{\\{${this.escapeRegex(name)}\\}\\}`, 'g'), value);
             }
         }
@@ -468,7 +468,7 @@ class PromptExpansionService {
 
         // Language placeholder - use context provider to access project language
         this.registerContextPlaceholder('language', (context) => ({
-            value: context?.project?.language || this.settingsManager.getLanguage(),
+            value: context?.project?.language ?? this.settingsManager.getLanguage(),
             description: 'Current project language setting'
         }));
 
@@ -485,7 +485,7 @@ class PromptExpansionService {
         }));
         
         this.registerContextPlaceholder('criteria', (context) => ({
-            value: context.custom?.['criteria'] || formatCriteriaAsJson(context.project!.criteria!),
+            value: context.custom?.['criteria'] ?? formatCriteriaAsJson(context.project!.criteria!),
             description: 'Project quality criteria'
         }));
         
@@ -557,7 +557,7 @@ class PromptExpansionService {
         }));
         
         this.registerContextPlaceholder('generate_count', (context) => ({
-            value: context.generation!.generateCount || `exactly ${context.generation!.count!} entries`,
+            value: context.generation!.generateCount ?? `exactly ${context.generation!.count!} entries`,
             description: 'Smart count instruction for generation'
         }));
         
@@ -585,32 +585,32 @@ class PromptExpansionService {
 
         // Prompt-specific placeholders
         this.registerContextPlaceholder('prompt', (context) => ({
-            value: context.custom?.['prompt'] || context.prompt!.userPrompt!,
+            value: context.custom?.['prompt'] ?? context.prompt!.userPrompt!,
             description: 'User prompt text'
         }));
         
         this.registerContextPlaceholder('lastResponse', (context) => ({
-            value: context.custom?.['lastResponse'] || context.prompt!.lastResponse!,
+            value: context.custom?.['lastResponse'] ?? context.prompt!.lastResponse!,
             description: 'Previous AI response'
         }));
         
         this.registerContextPlaceholder('editorAdvice', (context) => ({
-            value: context.custom?.['editorAdvice'] || context.prompt!.editorAdvice!,
+            value: context.custom?.['editorAdvice'] ?? context.prompt!.editorAdvice!,
             description: 'Editor advice for improvement'
         }));
         
         this.registerContextPlaceholder('originalPrompt', (context) => ({
-            value: context.custom?.['originalPrompt'] || context.prompt!.originalPrompt!,
+            value: context.custom?.['originalPrompt'] ?? context.prompt!.originalPrompt!,
             description: 'Original user prompt'
         }));
         
         this.registerContextPlaceholder('response', (context) => ({
-            value: context.custom?.['response'] || context.prompt!.response!,
+            value: context.custom?.['response'] ?? context.prompt!.response!,
             description: 'AI response text'
         }));
         
         this.registerContextPlaceholder('ratings', (context) => ({
-            value: context.custom?.['ratings'] || JSON.stringify(context.prompt!.ratings!, null, 2),
+            value: context.custom?.['ratings'] ?? JSON.stringify(context.prompt!.ratings!, null, 2),
             description: 'Response ratings data'
         }));
         
@@ -646,7 +646,7 @@ class PromptExpansionService {
         }));
         
         this.registerContextPlaceholder('node_title', (context) => ({
-            value: context.analysis!.nodeTitle || context.node!.title!,
+            value: context.analysis!.nodeTitle ?? context.node!.title!,
             description: 'Title of analyzed node'
         }));
         

@@ -99,7 +99,7 @@ export class RPGInteractionService {
             const used = this.collectNarratorUsedWorldItems(session);
             
             // Get prompt template (use custom if provided)
-            const systemPromptTemplate = session.customSystemPrompt || getPromptText('rpg_game_narration_system');
+            const systemPromptTemplate = session.customSystemPrompt ?? getPromptText('rpg_game_narration_system');
             
             // Expand prompt with context
             const expansionService = createRPGPromptExpansionService(settingsManager);
@@ -798,7 +798,7 @@ export class RPGInteractionService {
         const oldPlayerId = worldState.playerCharacterId;
         worldState.playerCharacterId = newPlayerCharacterId;
 
-        const oldPlayerName = this.worldStateService.getCharacter(worldState, oldPlayerId)?.name || oldPlayerId;
+        const oldPlayerName = this.worldStateService.getCharacter(worldState, oldPlayerId)?.name ?? oldPlayerId;
         session.pendingNarratorSystemNote =
             `PLAYER CHARACTER SWITCH:\n` +
             `- The player used to control: ${oldPlayerName} (id=${oldPlayerId})\n` +
@@ -957,10 +957,10 @@ export class RPGInteractionService {
 
                     const location: RPGLocation = {
                         id: locationUpdate.id,
-                        name: locationUpdate.name || locationUpdate.id,
+                        name: locationUpdate.name ?? locationUpdate.id,
                         description: combinedDescription,
-                        state: locationUpdate.state || {},
-                        sceneState: locationUpdate.sceneState || {},
+                        state: locationUpdate.state ?? {},
+                        sceneState: locationUpdate.sceneState ?? {},
                         createdTurn: turn,
                         lastUsedTurn: turn,
                         createdAt: Date.now(),
@@ -983,11 +983,11 @@ export class RPGInteractionService {
                     }
                     if (locationUpdate.state) {
                         const existing = this.worldStateService.getLocation(worldState, locationUpdate.id);
-                        updates.state = mergeJsonWithDeletions(existing?.state || {}, locationUpdate.state);
+                        updates.state = mergeJsonWithDeletions(existing?.state ?? {}, locationUpdate.state);
                     }
                     if (locationUpdate.sceneState) {
                         const existing = this.worldStateService.getLocation(worldState, locationUpdate.id);
-                        updates.sceneState = mergeJsonWithDeletions(existing?.sceneState || {}, locationUpdate.sceneState);
+                        updates.sceneState = mergeJsonWithDeletions(existing?.sceneState ?? {}, locationUpdate.sceneState);
                     }
                     updates.createdTurn = turn;
                     
@@ -1021,11 +1021,11 @@ export class RPGInteractionService {
 
                     const character: RPGCharacter = {
                         id: characterUpdate.id,
-                        name: characterUpdate.name || characterUpdate.id,
+                        name: characterUpdate.name ?? characterUpdate.id,
                         description: combinedDescription,
-                        state: characterUpdate.state || {},
-                        sceneState: characterUpdate.sceneState || {},
-                        goals: normalizeGoals([], characterUpdate.goals || [], turn),
+                        state: characterUpdate.state ?? {},
+                        sceneState: characterUpdate.sceneState ?? {},
+                        goals: normalizeGoals([], characterUpdate.goals ?? [], turn),
                         createdTurn: turn,
                         lastUsedTurn: turn,
                         createdAt: Date.now(),
@@ -1048,15 +1048,15 @@ export class RPGInteractionService {
                     }
                     if (characterUpdate.state) {
                         const existing = this.worldStateService.getCharacter(worldState, characterUpdate.id);
-                        updates.state = mergeJsonWithDeletions(existing?.state || {}, characterUpdate.state);
+                        updates.state = mergeJsonWithDeletions(existing?.state ?? {}, characterUpdate.state);
                     }
                     if (characterUpdate.sceneState) {
                         const existing = this.worldStateService.getCharacter(worldState, characterUpdate.id);
-                        updates.sceneState = mergeJsonWithDeletions(existing?.sceneState || {}, characterUpdate.sceneState);
+                        updates.sceneState = mergeJsonWithDeletions(existing?.sceneState ?? {}, characterUpdate.sceneState);
                     }
                     if (characterUpdate.goals) {
                         const existing = this.worldStateService.getCharacter(worldState, characterUpdate.id);
-                        updates.goals = normalizeGoals(existing?.goals || [], characterUpdate.goals, turn);
+                        updates.goals = normalizeGoals(existing?.goals ?? [], characterUpdate.goals, turn);
                     }
                     updates.createdTurn = turn;
                     
@@ -1072,9 +1072,9 @@ export class RPGInteractionService {
                 if (loreUpdate.action === 'create') {
                     const lore: RPGLore = {
                         id: loreUpdate.id,
-                        title: loreUpdate.title || loreUpdate.id,
-                        content: loreUpdate.content || '',
-                        tags: loreUpdate.tags || [],
+                        title: loreUpdate.title ?? loreUpdate.id,
+                        content: loreUpdate.content ?? '',
+                        tags: loreUpdate.tags ?? [],
                         createdTurn: turn,
                         lastUsedTurn: turn,
                         createdAt: Date.now(),

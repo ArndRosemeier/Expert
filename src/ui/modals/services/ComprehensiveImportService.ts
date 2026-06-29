@@ -377,7 +377,7 @@ export class ComprehensiveImportService {
                     input.style.display = 'none';
                     
                     input.onchange = () => {
-                        const file = input.files?.[0] || null;
+                        const file = input.files?.[0] ?? null;
                         document.body.removeChild(input);
                         resolve(file);
                     };

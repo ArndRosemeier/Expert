@@ -24,9 +24,7 @@ export class CoherenceLog {
     private constructor() {}
     
     public static getInstance(): CoherenceLog {
-        if (!CoherenceLog.instance) {
-            CoherenceLog.instance = new CoherenceLog();
-        }
+        CoherenceLog.instance ??= new CoherenceLog();
         return CoherenceLog.instance;
     }
     
@@ -42,7 +40,7 @@ export class CoherenceLog {
     ): void {
         const entry: CoherenceLogEntry = {
             timestamp: new Date(),
-            nodeId: contradiction.offending_child_id || '',
+            nodeId: contradiction.offending_child_id ?? '',
             nodeTitle: contradiction.offending_child_title,
             parentNodeId: parentNode.id,
             parentNodeTitle: parentNode.title,
@@ -123,9 +121,9 @@ export class CoherenceLog {
         entries.forEach(entry => {
             const severity = entry.contradiction.severity;
             const severityRange = severity >= 8 ? 'high' : severity >= 5 ? 'medium' : 'low';
-            severityBreakdown[severityRange] = (severityBreakdown[severityRange] || 0) + 1;
+            severityBreakdown[severityRange] = (severityBreakdown[severityRange] ?? 0) + 1;
             
-            reasonBreakdown[entry.reason] = (reasonBreakdown[entry.reason] || 0) + 1;
+            reasonBreakdown[entry.reason] = (reasonBreakdown[entry.reason] ?? 0) + 1;
         });
         
         const result: {

@@ -85,7 +85,7 @@ export function formatCriteriaAsJson(criteria: QualityCriterion[]): string {
         const shortName = c.name.indexOf('.') > 0 ? c.name.substring(0, c.name.indexOf('.')) : c.name;
         return {
             name: shortName,
-            description: c.description || shortName
+            description: c.description ?? shortName
         };
     });
     
@@ -111,7 +111,7 @@ export function formatCriteriaForRater(criteria: QualityCriterion[]): string {
         const isBinary = isLLMCriterion(c) && c.binary === true;
         return {
             name: shortName,
-            description: c.description || shortName,
+            description: c.description ?? shortName,
             scoring: isBinary
                 ? 'BINARY: score exactly 1 if fully satisfied, otherwise 0'
                 : 'scale 1-10'
@@ -159,17 +159,13 @@ export function analyzeTagsInHierarchy(rootNode: DocumentNode): TagAnalysis {
         for (const version of versions) {
             for (const tag of version.tags) {
                 // Map tag to nodes
-                if (!tagToNodesMap[tag]) {
-                    tagToNodesMap[tag] = [];
-                }
+                tagToNodesMap[tag] ??= [];
                 if (!tagToNodesMap[tag].includes(node)) {
                     tagToNodesMap[tag].push(node);
                 }
 
                 // Map tag to versions
-                if (!tagToVersionsMap[tag]) {
-                    tagToVersionsMap[tag] = [];
-                }
+                tagToVersionsMap[tag] ??= [];
                 tagToVersionsMap[tag].push({
                     node,
                     versionId: version.id,

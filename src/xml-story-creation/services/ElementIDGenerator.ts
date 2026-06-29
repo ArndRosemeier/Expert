@@ -36,9 +36,7 @@ export class ElementIDGenerator {
      * Get singleton instance
      */
     public static getInstance(): ElementIDGenerator {
-        if (!ElementIDGenerator.instance) {
-            ElementIDGenerator.instance = new ElementIDGenerator();
-        }
+        ElementIDGenerator.instance ??= new ElementIDGenerator();
         return ElementIDGenerator.instance;
     }
     

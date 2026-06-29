@@ -57,7 +57,7 @@ export class ContextExtractionService {
         
         // Always include the current node's content if it exists
         if (node.content && node.content.trim()) {
-            const levelName = node.template[node.level] || `Level ${node.level}`;
+            const levelName = node.template[node.level] ?? `Level ${node.level}`;
             contentParts.push(`${levelName}: "${node.title}"\n---\n${node.content}\n---\n`);
         }
 
@@ -113,7 +113,7 @@ export class ContextExtractionService {
         if (nodesWithContent.length > 0) {
             summary += `Nodes to be analyzed:\n`;
             nodesWithContent.forEach(n => {
-                const levelName = n.template[n.level] || `Level ${n.level}`;
+                const levelName = n.template[n.level] ?? `Level ${n.level}`;
                 summary += `- ${levelName}: "${n.title}" (${n.content?.length || 0} chars)\n`;
             });
         } else {
@@ -215,7 +215,7 @@ export class ContextExtractionService {
         const parts: string[] = [];
         
         // Add current node information
-        const levelName = node.template[node.level] || `Level ${node.level}`;
+        const levelName = node.template[node.level] ?? `Level ${node.level}`;
         let nodeInfo = `${prefix}${levelName}: "${node.title}"`;
         
         // For the root node (the one chat started with), include content only (context removed)
@@ -319,7 +319,7 @@ export class ContextExtractionService {
         if (childNodesWithContent.length > 0) {
             summary += `Child nodes content:\n`;
             childNodesWithContent.forEach(n => {
-                const levelName = n.template[n.level] || `Level ${n.level}`;
+                const levelName = n.template[n.level] ?? `Level ${n.level}`;
                 summary += `- ${levelName}: "${n.title}" (${n.content?.length?.toLocaleString() || 0} chars)\n`;
             });
         }
@@ -382,7 +382,7 @@ export class ContextExtractionService {
         
         // Add current node
         const hasContent = node.content && node.content.trim();
-        const levelName = node.template[node.level] || `Level ${node.level}`;
+        const levelName = node.template[node.level] ?? `Level ${node.level}`;
         parts.push(`${prefix}${levelName}: "${node.title}" ${hasContent ? '✓' : '○'}`);
         
         // Add children if within depth
@@ -422,7 +422,7 @@ export class ContextExtractionService {
         if (node.creatorModel) {
             const masterVersion = clonedNode.getMasterVersion();
             if (masterVersion) {
-                masterVersion.metadata = masterVersion.metadata || {};
+                masterVersion.metadata = masterVersion.metadata ?? {};
                 masterVersion.metadata['creatorModel'] = node.creatorModel;
             }
         }

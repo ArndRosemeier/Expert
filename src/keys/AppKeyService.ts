@@ -10,9 +10,7 @@ export class AppKeyService {
     private static instance: AppKeyService | null = null;
     
     public static getInstance(): AppKeyService {
-        if (!this.instance) {
-            this.instance = new AppKeyService();
-        }
+        this.instance ??= new AppKeyService();
         return this.instance;
     }
     
@@ -68,7 +66,7 @@ export class AppKeyService {
                 console.log('🔑 Key stored successfully');
                 return { valid: true, data: result.data };
             } else {
-                return { valid: false, reason: result.reason || 'Unknown validation error' };
+                return { valid: false, reason: result.reason ?? 'Unknown validation error' };
             }
         } catch (error) {
             return { valid: false, reason: (error as Error).message };

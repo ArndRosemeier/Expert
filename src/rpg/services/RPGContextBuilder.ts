@@ -250,7 +250,7 @@ export class RPGContextBuilder {
                 const knowers = this.worldStateService
                     .listRelationships(worldState)
                     .filter(r => r.kind === 'knows_fact' && r.toId === lore.id)
-                    .map(r => this.worldStateService.getCharacter(worldState, r.fromId)?.name || r.fromId);
+                    .map(r => this.worldStateService.getCharacter(worldState, r.fromId)?.name ?? r.fromId);
 
                 if (knowers.length > 0) {
                     text += `Known by: ${knowers.join(', ')}\n`;
@@ -272,7 +272,7 @@ export class RPGContextBuilder {
         let text = '';
         for (const distance of distances) {
             const toLocation = this.worldStateService.getLocation(worldState, distance.toLocationId);
-            const locationName = toLocation?.name || distance.toLocationId;
+            const locationName = toLocation?.name ?? distance.toLocationId;
             
             text += `- **${locationName}**: ${distance.distance} ${distance.unit}\n`;
         }

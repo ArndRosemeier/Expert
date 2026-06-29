@@ -2272,7 +2272,7 @@ export class XMLStoryModal extends SimpleModal {
                     this.setOutlineContentFromAI(command.content);
                     // Reconstruct raw XML if parser didn't retain it
                     const reconstructed = `</outline_replace>${command.content}</outline_replace>`;
-                    (command as any).executedRaw = (command as any).rawXml || reconstructed;
+                    (command as any).executedRaw = (command as any).rawXml ?? reconstructed;
                 }
             }
 
@@ -2287,7 +2287,7 @@ export class XMLStoryModal extends SimpleModal {
                     // Apply trigger words / structural scope / leaves-only when provided.
                     this.applyContextCommandFields(newId, command.parameters ?? {}, false);
                     contextChanged = true;
-                    (command as any).executedRaw = (command as any).rawXml || '';
+                    (command as any).executedRaw = (command as any).rawXml ?? '';
                 } else if (command.type === 'context_edit') {
                     if (!command.parameters) {
                         throw new Error(`context_edit command missing parameters. Command: ${JSON.stringify(command)}`);
@@ -2299,16 +2299,16 @@ export class XMLStoryModal extends SimpleModal {
                     // Only the supplied facets are updated, leaving the rest intact.
                     this.applyContextCommandFields(id, command.parameters, true);
                     contextChanged = true;
-                    (command as any).executedRaw = (command as any).rawXml || '';
+                    (command as any).executedRaw = (command as any).rawXml ?? '';
                 } else if (command.type === 'context_remove') {
                     const id = command.parameters?.['id'];
                     if (!id) continue;
                     this.sourceNode!.removeConditionalContextItem(id);
                     contextChanged = true;
-                    (command as any).executedRaw = (command as any).rawXml || '';
+                    (command as any).executedRaw = (command as any).rawXml ?? '';
                 } else if (command.type === 'request_node') {
                     const path = command.parameters?.['path'] ?? '';
-                    (command as any).executedRaw = (command as any).rawXml || '';
+                    (command as any).executedRaw = (command as any).rawXml ?? '';
                     if (path.trim().length > 0) {
                         requestedPaths.push(path);
                     }
@@ -3167,19 +3167,19 @@ export class XMLStoryModal extends SimpleModal {
     private reconstructCommandXML(command: XMLStoryCommand): string {
         switch (command.type) {
             case 'replace_command':
-                return `<replace_command><search>${command.searchText || ''}</search><replace>${command.replaceText || ''}</replace></replace_command>`;
+                return `<replace_command><search>${command.searchText ?? ''}</search><replace>${command.replaceText ?? ''}</replace></replace_command>`;
             case 'outline_replace':
-                return `</outline_replace>${command.content || ''}</outline_replace>`;
+                return `</outline_replace>${command.content ?? ''}</outline_replace>`;
             case 'append':
-                return `<append>${command.content || ''}</append>`;
+                return `<append>${command.content ?? ''}</append>`;
             case 'replace_section':
-                return `<replace_section section="${command['sectionTitle'] || ''}">${command.content || ''}</replace_section>`;
+                return `<replace_section section="${command['sectionTitle'] ?? ''}">${command.content ?? ''}</replace_section>`;
             case 'remove_section':
-                return `<remove_section section="${command['sectionTitle'] || ''}">`;
+                return `<remove_section section="${command['sectionTitle'] ?? ''}">`;
             case 'edit':
-                return `</edit id="${(command.parameters as any)?.id || 'unknown'}">${command.content || ''}</edit>`;
+                return `</edit id="${(command.parameters as any)?.id ?? 'unknown'}">${command.content ?? ''}</edit>`;
             case 'delete':
-                return `</delete id="${(command.parameters as any)?.id || 'unknown'}">`;
+                return `</delete id="${(command.parameters as any)?.id ?? 'unknown'}">`;
             case 'context_add': {
                 const p = (command.parameters as Record<string, unknown>) || {};
                 const text = typeof p['text'] === 'string' ? (p['text'] as string) : '';
@@ -3202,7 +3202,7 @@ export class XMLStoryModal extends SimpleModal {
                 return `<requestnode path="${path}" />`;
             }
             default:
-                return `<${command.type}>${command.content || ''}</${command.type}>`;
+                return `<${command.type}>${command.content ?? ''}</${command.type}>`;
         }
     }
 
@@ -3301,7 +3301,7 @@ export class XMLStoryModal extends SimpleModal {
         }
         this.setOutlineContentFromAI(outcome.newText);
         // Mark executed so chat can show the checkmark in a command-agnostic way
-        (command as any).executedRaw = (command as any).rawXml || '';
+        (command as any).executedRaw = (command as any).rawXml ?? '';
     }
 
     /**
@@ -3336,7 +3336,7 @@ export class XMLStoryModal extends SimpleModal {
             );
         }
         // Mark executed so chat can show the checkmark in a command-agnostic way
-        (command as any).executedRaw = (command as any).rawXml || '';
+        (command as any).executedRaw = (command as any).rawXml ?? '';
     }
 
     /**
@@ -3353,7 +3353,7 @@ export class XMLStoryModal extends SimpleModal {
         }
         this.setOutlineContentFromAI(outcome.newText);
         // Mark executed so chat can show the checkmark in a command-agnostic way
-        (command as any).executedRaw = (command as any).rawXml || '';
+        (command as any).executedRaw = (command as any).rawXml ?? '';
     }
 
     /**
@@ -3370,7 +3370,7 @@ export class XMLStoryModal extends SimpleModal {
         }
         this.setOutlineContentFromAI(outcome.newText);
         // Mark executed so chat can show the checkmark in a command-agnostic way
-        (command as any).executedRaw = (command as any).rawXml || '';
+        (command as any).executedRaw = (command as any).rawXml ?? '';
     }
 
     /**
@@ -3509,7 +3509,7 @@ export class XMLStoryModal extends SimpleModal {
             // Progress indicator on button
             if (buttonEl) {
                 buttonEl.disabled = true;
-                const originalText = buttonEl.textContent || '';
+                const originalText = buttonEl.textContent ?? '';
                 buttonEl.dataset['origText'] = originalText;
                 buttonEl.textContent = '⏳ Splitting…';
             }
@@ -3546,7 +3546,7 @@ export class XMLStoryModal extends SimpleModal {
             alert(`Split into parts failed: ${e instanceof Error ? e.message : String(e)}`);
         } finally {
             if (buttonEl) {
-                const originalText = buttonEl.dataset['origText'] || '✂️ Split Into Parts';
+                const originalText = buttonEl.dataset['origText'] ?? '✂️ Split Into Parts';
                 buttonEl.textContent = originalText;
                 buttonEl.disabled = false;
             }
@@ -3582,7 +3582,7 @@ export class XMLStoryModal extends SimpleModal {
                 
             case 'error':
                 updateButton.classList.add('error');
-                updateButton.innerHTML = `❌ ${message || 'Error'}`;
+                updateButton.innerHTML = `❌ ${message ?? 'Error'}`;
                 // Reset to normal after 3 seconds
                 setTimeout(() => {
                     this.setUpdateButtonState('normal');
@@ -3682,7 +3682,7 @@ export class XMLStoryModal extends SimpleModal {
         // Prefer history; if none yet, fall back to pending initialization data, then source node content
         const currentContent = (this.outlineHistory.length > 0)
             ? this.getCurrentOutlineFromHistory()
-            : (this.pendingInitializationData?.content || this.sourceNode?.content || '');
+            : ((this.pendingInitializationData?.content ?? this.sourceNode?.content) ?? '');
 
         // Create a textarea for the UniversalTextEditor
         const textarea = document.createElement('textarea');
@@ -3952,7 +3952,7 @@ export class XMLStoryModal extends SimpleModal {
         const button = document.getElementById('create-project-btn');
         if (!button || !this.sourceNode) return;
         
-        const rawLevel = this.sourceNode.template[this.sourceNode.level] || 'node';
+        const rawLevel = this.sourceNode.template[this.sourceNode.level] ?? 'node';
         const levelName = this.getBaseLevelName(rawLevel);
         button.innerHTML = `🚀 Update ${levelName}`;
     }
@@ -3964,9 +3964,9 @@ export class XMLStoryModal extends SimpleModal {
         const messageElement = document.getElementById('initial-chat-message');
         if (!messageElement || !this.sourceNode) return;
         
-        const rawLevel = this.sourceNode.template[this.sourceNode.level] || 'content';
+        const rawLevel = this.sourceNode.template[this.sourceNode.level] ?? 'content';
         const templateLevel = this.getBaseLevelName(rawLevel);
-        const title = this.titleInput?.value || this.sourceNode.title || 'this content';
+        const title = (this.titleInput?.value ?? this.sourceNode.title) || 'this content';
         
         messageElement.innerHTML = `
             Hi! I'm here to help you shape your <strong>${templateLevel.toLowerCase()}</strong> "${title}". Just tell me what you want in plain language and I'll do the work.
@@ -4051,9 +4051,7 @@ export class XMLStoryModal extends SimpleModal {
         
         // Set title if provided and element exists
         if (data.title) {
-            if (!this.titleInput) {
-                this.titleInput = document.getElementById('project-title-input') as HTMLInputElement;
-            }
+            this.titleInput ??= document.getElementById('project-title-input') as HTMLInputElement;
             if (this.titleInput) {
                 this.titleInput.value = data.title;
             }

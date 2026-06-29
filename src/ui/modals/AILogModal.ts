@@ -329,8 +329,8 @@ export class AILogModal extends BaseModal {
             element.addEventListener('dblclick', (e: Event) => {
                 e.stopPropagation();
                 e.preventDefault();
-                const fullContent = (e.currentTarget as HTMLElement).getAttribute('data-full-content') || '';
-                const contentType = (e.currentTarget as HTMLElement).getAttribute('data-type') || 'content';
+                const fullContent = (e.currentTarget as HTMLElement).getAttribute('data-full-content') ?? '';
+                const contentType = (e.currentTarget as HTMLElement).getAttribute('data-type') ?? 'content';
                 this.showFormattedLogOverlay(fullContent, contentType);
             });
         });

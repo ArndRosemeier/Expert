@@ -18,7 +18,7 @@ export function openTemplateEditor() {
     }
 
     const templateNames = templateManager.getTemplateNames();
-    currentTemplateName = templateNames[0] || null;
+    currentTemplateName = templateNames[0] ?? null;
 
     const content = `
         <style>
@@ -124,7 +124,7 @@ function setupTemplateEditorListeners() {
 
 function handleTemplateSelect(event: Event) {
     if (isDirty && !confirm("You have unsaved changes. Are you sure you want to switch?")) {
-        (event.target as HTMLSelectElement).value = currentTemplateName || '';
+        (event.target as HTMLSelectElement).value = currentTemplateName ?? '';
         return;
     }
     currentTemplateName = (event.target as HTMLSelectElement).value;
@@ -223,7 +223,7 @@ function handleDelete() {
         try {
             templateManager.deleteTemplate(currentTemplateName);
             const templateNames = templateManager.getTemplateNames();
-            currentTemplateName = templateNames[0] || null;
+            currentTemplateName = templateNames[0] ?? null;
             isDirty = false;
             populateTemplateSelector();
             renderCurrentTemplateView();
@@ -243,7 +243,7 @@ function handleRestoreDefaults() {
         try {
             templateManager.restoreDefaults();
             const templateNames = templateManager.getTemplateNames();
-            currentTemplateName = templateNames[0] || null;
+            currentTemplateName = templateNames[0] ?? null;
             isDirty = false;
             populateTemplateSelector();
             renderCurrentTemplateView();

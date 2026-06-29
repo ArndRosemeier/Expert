@@ -35,7 +35,7 @@ export class OutlineFactoryService {
     
     // Get current profile's criteria and format them using standard JSON format
     const profile = settingsManager.getLastUsedProfile();
-    const criteria = profile?.criteria || [];
+    const criteria = profile?.criteria ?? [];
     const formattedCriteria = formatCriteriaAsJson(criteria);
     
     // Prepare context for outline generation

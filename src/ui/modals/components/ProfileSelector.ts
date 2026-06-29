@@ -339,7 +339,7 @@ export class ProfileSelector {
             .map(name => `<option value="${name}" ${name === activeProfile ? 'selected' : ''}>${name}</option>`)
             .join('');
         
-        this.updateCurrentProfileDisplay(activeProfile || '');
+        this.updateCurrentProfileDisplay(activeProfile ?? '');
     }
 
     /**
@@ -493,7 +493,7 @@ export class ProfileSelector {
                 
                 this.emitAction({
                     action: 'imported',
-                    profileName: result.profileName || '',
+                    profileName: result.profileName ?? '',
                     data: result
                 });
                 

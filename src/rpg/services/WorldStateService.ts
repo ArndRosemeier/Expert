@@ -100,10 +100,10 @@ export class WorldStateService {
             console.log(`⚠️ Location '${id}' not found, creating it instead`);
             this.createLocation(worldState, {
                 id,
-                name: updates.name || id,
-                description: updates.description || '',
-                state: updates.state || {},
-                sceneState: updates.sceneState || {},
+                name: updates.name ?? id,
+                description: updates.description ?? '',
+                state: updates.state ?? {},
+                sceneState: updates.sceneState ?? {},
                 createdTurn: updates.createdTurn ?? 0,
                 lastUsedTurn: updates.lastUsedTurn ?? (updates.createdTurn ?? 0),
                 createdAt: Date.now(),
@@ -174,11 +174,11 @@ export class WorldStateService {
             console.log(`⚠️ Character '${id}' not found, creating it instead`);
             this.createCharacter(worldState, {
                 id,
-                name: updates.name || id,
-                description: updates.description || '',
-                state: updates.state || {},
-                sceneState: updates.sceneState || {},
-                goals: updates.goals || [],
+                name: updates.name ?? id,
+                description: updates.description ?? '',
+                state: updates.state ?? {},
+                sceneState: updates.sceneState ?? {},
+                goals: updates.goals ?? [],
                 createdTurn: updates.createdTurn ?? 0,
                 lastUsedTurn: updates.lastUsedTurn ?? (updates.createdTurn ?? 0),
                 createdAt: Date.now(),
@@ -244,9 +244,9 @@ export class WorldStateService {
             console.log(`⚠️ Lore '${id}' not found, creating it instead`);
             this.createLore(worldState, {
                 id,
-                title: updates.title || id,
-                content: updates.content || '',
-                tags: updates.tags || [],
+                title: updates.title ?? id,
+                content: updates.content ?? '',
+                tags: updates.tags ?? [],
                 createdTurn: updates.createdTurn ?? 0,
                 lastUsedTurn: updates.lastUsedTurn ?? (updates.createdTurn ?? 0),
                 createdAt: Date.now(),
@@ -314,10 +314,10 @@ export class WorldStateService {
         if (existing.kind === 'attitude_towards') {
             const updated: RPGRelationship = {
                 ...existing,
-                note: updates.note !== undefined ? updates.note : existing.note,
-                stance: updates.stance !== undefined ? updates.stance : existing.stance,
-                intensity: updates.intensity !== undefined ? updates.intensity : existing.intensity,
-                reason: updates.reason !== undefined ? updates.reason : existing.reason,
+                note: updates.note ?? existing.note,
+                stance: updates.stance ?? existing.stance,
+                intensity: updates.intensity ?? existing.intensity,
+                reason: updates.reason ?? existing.reason,
                 updatedAt: Date.now()
             };
             worldState.relationships.set(id, updated);
@@ -330,7 +330,7 @@ export class WorldStateService {
 
         const updated: RPGRelationship = {
             ...existing,
-            note: updates.note !== undefined ? updates.note : existing.note,
+            note: updates.note ?? existing.note,
             updatedAt: Date.now()
         };
 

@@ -39,7 +39,7 @@ export class AddChildNodeModal extends BaseModal {
         
         // Initialize modal state
         this.childModalState = {
-            mode: config.mode || 'ai',
+            mode: config.mode ?? 'ai',
             isGenerating: false,
             suggestions: [],
             selectedSuggestion: null,
@@ -74,7 +74,7 @@ export class AddChildNodeModal extends BaseModal {
         // Header
         const header = createElement('div', {
             classes: ['modal-header'],
-            innerHTML: `<h2>Add ${this.childModalConfig.parentNode.childLevelName || 'Child'} to "${this.childModalConfig.parentNode.title}"</h2>`
+            innerHTML: `<h2>Add ${this.childModalConfig.parentNode.childLevelName ?? 'Child'} to "${this.childModalConfig.parentNode.title}"</h2>`
         });
         container.appendChild(header);
 
@@ -152,7 +152,7 @@ export class AddChildNodeModal extends BaseModal {
 
         // Create button
         const createButton = createElement('button', {
-            content: isCreating ? '⚙️ Creating...' : `Create ${this.childModalConfig.parentNode.childLevelName || 'Child'}`,
+            content: isCreating ? '⚙️ Creating...' : `Create ${this.childModalConfig.parentNode.childLevelName ?? 'Child'}`,
             attributes: { 
                 style: `padding: 8px 16px; border: none; background: ${canCreate && !isCreating ? '#4CAF50' : '#ccc'}; color: white; border-radius: 4px; cursor: ${canCreate && !isCreating ? 'pointer' : 'not-allowed'};`,
                 ...(canCreate && !isCreating ? {} : { disabled: 'disabled' })
@@ -280,7 +280,7 @@ export class AddChildNodeModal extends BaseModal {
                     const newInput = this.element?.querySelector('[data-manual-input="true"]') as HTMLInputElement;
                     if (newInput) {
                         newInput.focus();
-                        newInput.setSelectionRange(cursorPosition || 0, cursorPosition || 0);
+                        newInput.setSelectionRange(cursorPosition ?? 0, cursorPosition ?? 0);
                     }
                 }, 0);
             }
@@ -469,7 +469,7 @@ export class AddChildNodeModal extends BaseModal {
         });
 
         const step = createElement('div', {
-            content: this.childModalState.creationStep || 'Initializing...',
+            content: this.childModalState.creationStep ?? 'Initializing...',
             attributes: { style: 'font-size: 14px; color: #666;' }
         });
 

@@ -281,12 +281,12 @@ If the problem persists, try rephrasing explicit content in your project to be l
                     throw new Error(`Invalid contradiction at index ${index}`);
                 }
 
-                const offendingChildTitle = String(item.offending_child_title || '').trim();
+                const offendingChildTitle = String(item.offending_child_title ?? '').trim();
                 
                 const contradiction: CoherenceContradiction = {
-                    fact_in_outline: String(item.fact_in_outline || '').trim(),
-                    fact_in_expansion: String(item.fact_in_expansion || '').trim(),
-                    justification: String(item.justification || '').trim(),
+                    fact_in_outline: String(item.fact_in_outline ?? '').trim(),
+                    fact_in_expansion: String(item.fact_in_expansion ?? '').trim(),
+                    justification: String(item.justification ?? '').trim(),
                     offending_child_title: offendingChildTitle,
                     severity: this.parseSeverity(item.severity)
                 };

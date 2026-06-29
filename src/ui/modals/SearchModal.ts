@@ -65,7 +65,7 @@ export class SearchModal extends BaseModal {
         container.className = 'search-modal-container';
         container.innerHTML = `
             <div class="search-modal-header">
-                <h2>🔍 Search in "${this.rootNode?.title || 'Unknown'}"</h2>
+                <h2>🔍 Search in "${this.rootNode?.title ?? 'Unknown'}"</h2>
                 <div class="search-scope">Scope: ${nodePath}</div>
             </div>
 

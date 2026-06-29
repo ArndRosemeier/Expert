@@ -113,7 +113,7 @@ export class Dropdown {
 
     private createDropdown(): void {
         this.dropdown = document.createElement('div');
-        this.dropdown.className = `dropdown-menu ${this.options.className || ''}`;
+        this.dropdown.className = `dropdown-menu ${this.options.className ?? ''}`;
         
         // Apply styles
         this.applyStyles();

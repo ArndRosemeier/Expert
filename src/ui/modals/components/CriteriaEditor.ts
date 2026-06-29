@@ -389,7 +389,7 @@ export class CriteriaEditor {
 
         textDisplay.addEventListener('click', () => {
             // When editing starts, ensure textarea has the full text (name + description)
-            const storedFullText = div.getAttribute('data-full-text') || fullText;
+            const storedFullText = div.getAttribute('data-full-text') ?? fullText;
             textarea.value = storedFullText;
             textDisplay.style.display = 'none';
             textarea.style.display = 'block';
@@ -602,7 +602,7 @@ export class CriteriaEditor {
             params,
             weight: isNaN(weight) ? 1 : weight,
             enabled: enabledCheckbox.checked,
-            description: div.getAttribute('data-description') || nameInput.value,
+            description: div.getAttribute('data-description') ?? nameInput.value,
             goal: isNaN(goal) ? 8 : goal,
             outline: outlineCheckbox.checked,
             leaf: leafCheckbox.checked
@@ -637,7 +637,7 @@ export class CriteriaEditor {
             
             if (textarea && goalInput && outlineCheckbox && leafCheckbox) {
                 // Use the full text from data attribute, fall back to textarea value
-                const fullText = div.getAttribute('data-full-text') || textarea.value;
+                const fullText = div.getAttribute('data-full-text') ?? textarea.value;
                 const goal = parseInt(goalInput.value, 10);
                 const outline = outlineCheckbox.checked;
                 const leaf = leafCheckbox.checked;
@@ -700,9 +700,9 @@ export class CriteriaEditor {
                 // re-assert the concrete MetricCriterion type after filling defaults.
                 return {
                     ...criterion,
-                    outline: criterion.outline !== undefined ? criterion.outline : true,
-                    leaf: criterion.leaf !== undefined ? criterion.leaf : true,
-                    enabled: criterion.enabled !== undefined ? criterion.enabled : true
+                    outline: criterion.outline ?? true,
+                    leaf: criterion.leaf ?? true,
+                    enabled: criterion.enabled ?? true
                 } as MetricCriterion;
             }
 
@@ -710,8 +710,8 @@ export class CriteriaEditor {
                 kind: 'llm',
                 name: criterion.name,
                 goal: criterion.goal,
-                outline: criterion.outline !== undefined ? criterion.outline : true,
-                leaf: criterion.leaf !== undefined ? criterion.leaf : true
+                outline: criterion.outline ?? true,
+                leaf: criterion.leaf ?? true
             };
 
             if (criterion.description) {

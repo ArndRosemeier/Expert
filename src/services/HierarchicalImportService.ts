@@ -60,7 +60,7 @@ export class HierarchicalImportService {
     }
 
     // Start from level 1 as level 0 is the root name
-    const topLevelName = levels[1] || 'Part';
+    const topLevelName = levels[1] ?? 'Part';
     const topTarget = this.parseFixedCount(topLevelName);
 
     const topSections = await this.splitOneLevel(text, topLevelName, topTarget);
@@ -68,7 +68,7 @@ export class HierarchicalImportService {
     // Iteratively split deeper levels, maintaining nested structure without overwriting
     let frontier: SegmentedSpan[] = topSections;
     for (let levelIndex = 2; levelIndex < levels.length; levelIndex++) {
-      const levelName = levels[levelIndex] || `Level ${levelIndex + 1}`;
+      const levelName = levels[levelIndex] ?? `Level ${levelIndex + 1}`;
       const target = this.parseFixedCount(levelName);
 
       const nextFrontier: SegmentedSpan[] = [];

@@ -146,7 +146,7 @@ function setupImportProjectModal(onImport: (title: string, template: ProjectTemp
                     // Check if root node has template as array (node export format)
                     if (data.template && Array.isArray(data.template)) {
                         templateData = {
-                            name: `Imported Template (${data.title || 'Unknown'})`,
+                            name: `Imported Template (${data.title ?? 'Unknown'})`,
                             hierarchyLevels: data.template,
                             
                         };
@@ -162,7 +162,7 @@ function setupImportProjectModal(onImport: (title: string, template: ProjectTemp
                         
                         if (foundTemplate) {
                             templateData = {
-                                name: `Imported Template (${data.title || 'Unknown'})`,
+                                name: `Imported Template (${data.title ?? 'Unknown'})`,
                                 hierarchyLevels: foundTemplate,
                                 
                             };
@@ -437,7 +437,7 @@ export function openExtractContextModal(projectManager: ProjectManager, node: Do
                             const extractBtn = document.querySelector('[data-action-id="extract"]') as HTMLButtonElement;
                             const loadingSection = document.getElementById('loading-section');
                             const resultSection = document.getElementById('result-section');
-                            const originalText = extractBtn?.textContent || 'Extract Context';
+                            const originalText = extractBtn?.textContent ?? 'Extract Context';
                             
                             if (extractBtn) {
                                 extractBtn.disabled = true;
@@ -934,8 +934,8 @@ async function setupAILogModal() {
                 element.addEventListener('dblclick', function(this: HTMLElement, e: Event) {
                     e.stopPropagation();
                     e.preventDefault();
-                    const fullContent = this.getAttribute('data-full-content') || '';
-                    const contentType = this.getAttribute('data-type') || 'content';
+                    const fullContent = this.getAttribute('data-full-content') ?? '';
+                    const contentType = this.getAttribute('data-type') ?? 'content';
                     showLogOverlay(fullContent, contentType);
                 });
             });
@@ -1222,8 +1222,8 @@ export function openNodeChatModal(projectManager: ProjectManager, node: Document
     }
     
     // Setup action buttons
-    const cancelBtn = modalDiv.querySelector('#cancel-btn') || modalDiv.querySelector('button[id*="cancel"]');
-    const startChatBtn = modalDiv.querySelector('#start-chat-btn') || modalDiv.querySelector('button[id*="start"]');
+    const cancelBtn = modalDiv.querySelector('#cancel-btn') ?? modalDiv.querySelector('button[id*="cancel"]');
+    const startChatBtn = modalDiv.querySelector('#start-chat-btn') ?? modalDiv.querySelector('button[id*="start"]');
     
     cancelBtn?.addEventListener('click', closeModal);
     

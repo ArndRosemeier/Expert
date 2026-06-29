@@ -153,7 +153,7 @@ export class TextEditorWithHighlighting {
         // Handle paste to allow only plain text (preserve normal copy/paste functionality)
         this.editableDiv.addEventListener('paste', (e) => {
             // Get plain text from clipboard
-            const text = e.clipboardData?.getData('text/plain') || '';
+            const text = e.clipboardData?.getData('text/plain') ?? '';
             
             if (text) {
                 // Only prevent default if we have text and can insert it
@@ -292,15 +292,15 @@ export class TextEditorWithHighlighting {
         let newEndPos = endPos;
 
         // Check what's at the current boundaries
-        const startChar = startPos < text.length ? text[startPos] || '' : '';
-        const endChar = endPos > 0 ? text[endPos - 1] || '' : '';
-        const beforeStartChar = startPos > 0 ? text[startPos - 1] || '' : '';
+        const startChar = startPos < text.length ? text[startPos] ?? '' : '';
+        const endChar = endPos > 0 ? text[endPos - 1] ?? '' : '';
+        const beforeStartChar = startPos > 0 ? text[startPos - 1] ?? '' : '';
         
         // Smart start position logic
         if (/\s/.test(startChar) || /\s/.test(beforeStartChar)) {
             // If we're on or adjacent to whitespace, shrink inward to find first word character
             while (newStartPos < newEndPos) {
-                const char = text[newStartPos] || '';
+                const char = text[newStartPos] ?? '';
                 if (char && /[\w'-]/.test(char)) {
                     break; // Found start of a word
                 }
@@ -309,7 +309,7 @@ export class TextEditorWithHighlighting {
         } else if (/[\w'-]/.test(startChar) || /[\w'-]/.test(beforeStartChar)) {
             // If we're within a word, expand backward to word start
             while (newStartPos > 0) {
-                const char = text[newStartPos - 1] || '';
+                const char = text[newStartPos - 1] ?? '';
                 if (!char || !/[\w'-]/.test(char)) {
                     break; // Found word boundary
                 }
@@ -318,10 +318,10 @@ export class TextEditorWithHighlighting {
         }
 
         // Smart end position logic
-        if (/\s/.test(endChar) || (endPos < text.length && /\s/.test(text[endPos] || ''))) {
+        if (/\s/.test(endChar) || (endPos < text.length && /\s/.test(text[endPos] ?? ''))) {
             // If we're on or adjacent to whitespace, shrink inward to find last word character
             while (newEndPos > newStartPos) {
-                const char = text[newEndPos - 1] || '';
+                const char = text[newEndPos - 1] ?? '';
                 if (char && /[\w'-]/.test(char)) {
                     break; // Found end of a word
                 }
@@ -330,7 +330,7 @@ export class TextEditorWithHighlighting {
         } else if (/[\w'-]/.test(endChar)) {
             // If we're within a word, expand forward to word end
             while (newEndPos < text.length) {
-                const char = text[newEndPos] || '';
+                const char = text[newEndPos] ?? '';
                 if (!char || !/[\w'-]/.test(char)) {
                     break; // Found word boundary
                 }
@@ -680,7 +680,7 @@ export class TextEditorWithHighlighting {
     private getCaretCharacterOffset(): number {
         let caretOffset = 0;
         const doc = this.editableDiv.ownerDocument || document;
-        const win = doc.defaultView || window;
+        const win = doc.defaultView ?? window;
         const sel = win.getSelection();
         
         if (sel && sel.rangeCount > 0) {
@@ -722,7 +722,7 @@ export class TextEditorWithHighlighting {
         
         while (walker.nextNode()) {
             const textNode = walker.currentNode;
-            const textLength = textNode.textContent?.length || 0;
+            const textLength = textNode.textContent?.length ?? 0;
             
             if (currentOffset + textLength >= offset) {
                 currentNode = textNode;
@@ -938,7 +938,7 @@ export class TextEditorWithHighlighting {
             const lines = highlightedText.split('\n');
             
             for (let i = 0; i < lines.length; i++) {
-                const line = lines[i] || '';
+                const line = lines[i] ?? '';
                 
                 // Skip empty lines (they represent the newline character itself)
                 if (line.length > 0) {
@@ -974,7 +974,7 @@ export class TextEditorWithHighlighting {
         // Find the text position for this DOM node and offset
         for (const mapping of textPositionMap) {
             if (mapping.domNode === node) {
-                const position = mapping.textStartPos + Math.min(offset, mapping.domNode.textContent?.length || 0);
+                const position = mapping.textStartPos + Math.min(offset, mapping.domNode.textContent?.length ?? 0);
                 
                 // Apply smart adjustment for selection edge cases
                 return this.adjustPositionForSelectionEdgeCases(node, offset, position, textPositionMap);
@@ -1015,7 +1015,7 @@ export class TextEditorWithHighlighting {
         let currentNode;
 
         while (currentNode = walker.nextNode()) {
-            const nodeText = currentNode.textContent || '';
+            const nodeText = currentNode.textContent ?? '';
             const isWhitespaceOnly = /^\s*$/.test(nodeText);
             
             if (nodeText.length === 0) {
@@ -1138,7 +1138,7 @@ export class TextEditorWithHighlighting {
         
         // Get the text content - DO NOT strip leading/trailing newlines
         // Those might be legitimate parts of the user's text
-        const text = tempDiv.textContent || '';
+        const text = tempDiv.textContent ?? '';
         
         return text;
     }

@@ -64,7 +64,7 @@ export class ContextService {
         if (includeParentContent && targetNode.parentId) {
             const parent = this.treeService.findNodeById(targetNode.parentId, rootNode);
             if (parent && parent.content) {
-                const parentLevelName = parent.template[parent.level] || `Level ${parent.level}`;
+                const parentLevelName = parent.template[parent.level] ?? `Level ${parent.level}`;
                 contextParts.push(`STRUCTURAL CONTEXT FROM PARENT (${parentLevelName}: "${parent.title}"):\n---\n${parent.content}\n---`);
             }
         }
@@ -72,7 +72,7 @@ export class ContextService {
         // 3. Add content from adjacent nodes at the same template level
         const previousNode = this.treeService.getPreviousNode(targetNode);
         if (previousNode && previousNode.content && previousNode.content.trim()) {
-            const nodeLevelName = targetNode.template[targetNode.level] || `Level ${targetNode.level}`;
+            const nodeLevelName = targetNode.template[targetNode.level] ?? `Level ${targetNode.level}`;
             contextParts.push(`PREVIOUS ${nodeLevelName.toUpperCase()} CONTENT ("${previousNode.title}"):\n---\n${previousNode.content}\n---`);
         }
 

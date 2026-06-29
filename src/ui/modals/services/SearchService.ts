@@ -229,7 +229,7 @@ export class SearchService {
             if (options.searchInContent) {
                 const beforeContent: string = version.content;
                 version.content = version.content.replace(regex, options.replaceText);
-                const contentReplacements: number = (beforeContent.match(regex) || []).length;
+                const contentReplacements: number = (beforeContent.match(regex) ?? []).length;
                 nodeReplacements += contentReplacements;
             }
             
@@ -323,7 +323,7 @@ export class SearchService {
             const originalText = item.text || '';
             
             // Count matches before replacement
-            const matches = originalText.match(regex) || [];
+            const matches = originalText.match(regex) ?? [];
             const replacements = matches.length;
             
             if (replacements > 0) {

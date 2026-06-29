@@ -355,7 +355,7 @@ export class RPGStateParser {
             const kindElement = element.querySelector('kind');
             const legacyTypeElement = element.querySelector('type');
             
-            const kindText = kindElement?.textContent?.trim() || legacyTypeElement?.textContent?.trim();
+            const kindText = kindElement?.textContent?.trim() ?? legacyTypeElement?.textContent?.trim();
             if (!fromIdElement?.textContent || !toIdElement?.textContent || !kindText) {
                 console.warn('Relationship element missing required fields, skipping');
                 continue;
@@ -369,7 +369,7 @@ export class RPGStateParser {
                 kind: kindText as NonNullable<RPGStateUpdateXML['relationships']>[number]['kind']
             };
 
-            const noteElement = element.querySelector('note') || element.querySelector('description');
+            const noteElement = element.querySelector('note') ?? element.querySelector('description');
             if (noteElement?.textContent) {
                 relationship.note = noteElement.textContent.trim();
             }

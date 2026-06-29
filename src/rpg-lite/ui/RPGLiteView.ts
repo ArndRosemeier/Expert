@@ -473,7 +473,7 @@ export class RPGLiteView {
 
   private async showCreateActionButtonDialog(): Promise<void> {
     const inputEl = this.container.querySelector('#rpg-lite-input') as HTMLTextAreaElement | null;
-    const currentText = inputEl?.value.trim() || '';
+    const currentText = inputEl?.value.trim() ?? '';
 
     const result = await this.showActionButtonEditorModal({
       title: 'Create Action Button',
@@ -1309,21 +1309,17 @@ export class RPGLiteView {
 
     // Get the model name for the current purpose
     const modelSelector = state.getModelSelector();
-    const selectedModels = modelSelector?.getSelectedModels() || {};
-    const modelName = selectedModels[session.narratorPurpose] || 'Not configured';
+    const selectedModels = modelSelector?.getSelectedModels() ?? {};
+    const modelName = selectedModels[session.narratorPurpose] ?? 'Not configured';
     
     // Initialize temperature if not set
-    if (session.temperature === undefined) {
-      session.temperature = 1.0;
-    }
+    session.temperature ??= 1.0;
 
     // Initialize retry fields if not set (default: 10 retries, 0 used)
     if (session.retryLimit === undefined) {
       session.retryLimit = 10;
     }
-    if (session.retriesUsed === undefined) {
-      session.retriesUsed = 0;
-    }
+    session.retriesUsed ??= 0;
 
     this.ensureModal();
     this.container.innerHTML = `
@@ -1448,8 +1444,8 @@ export class RPGLiteView {
     purposeSelect.addEventListener('change', () => {
       session.narratorPurpose = purposeSelect.value as RPGLiteModelPurpose;
       const ms = state.getModelSelector();
-      const models = ms?.getSelectedModels() || {};
-      modelNameEl.textContent = models[session.narratorPurpose] || 'Not configured';
+      const models = ms?.getSelectedModels() ?? {};
+      modelNameEl.textContent = models[session.narratorPurpose] ?? 'Not configured';
       void this.saveSession();
     });
 
@@ -2481,9 +2477,7 @@ export class RPGLiteView {
         if (imageCount === 1 && chunkCount === 0) {
           this.removeWaitingIndicator(msgEl);
         }
-        if (!assistantMsg.images) {
-          assistantMsg.images = [];
-        }
+        assistantMsg.images ??= [];
         assistantMsg.images.push(...imageUrls);
         this.appendImagesToMessageEl(msgEl, imageUrls);
       },
@@ -2508,9 +2502,7 @@ export class RPGLiteView {
         }
         
         // Add this response as a new version
-        if (!assistantMsg.versions) {
-          assistantMsg.versions = [];
-        }
+        assistantMsg.versions ??= [];
         assistantMsg.versions.push({
           content: assistantMsg.content,
           createdAt: now(),
@@ -2672,9 +2664,7 @@ export class RPGLiteView {
         if (imageCount === 1 && chunkCount === 0) {
           this.removeWaitingIndicator(msgEl);
         }
-        if (!assistantMsg.images) {
-          assistantMsg.images = [];
-        }
+        assistantMsg.images ??= [];
         assistantMsg.images.push(...imageUrls);
         this.appendImagesToMessageEl(msgEl, imageUrls);
       },
@@ -2699,9 +2689,7 @@ export class RPGLiteView {
         }
         
         // Add this response as a new version
-        if (!assistantMsg.versions) {
-          assistantMsg.versions = [];
-        }
+        assistantMsg.versions ??= [];
         assistantMsg.versions.push({
           content: assistantMsg.content,
           createdAt: now(),

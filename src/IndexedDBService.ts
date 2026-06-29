@@ -308,8 +308,8 @@ export class IndexedDBService {
     if ('storage' in navigator && 'estimate' in navigator.storage) {
       const estimate = await navigator.storage.estimate();
       return {
-        quota: estimate.quota || 0,
-        usage: estimate.usage || 0
+        quota: estimate.quota ?? 0,
+        usage: estimate.usage ?? 0
       };
     }
     

@@ -78,7 +78,7 @@ export class ReaderGUI {
     constructor(projectManager: ProjectManager, container: HTMLElement, rootNode?: DocumentNode, onNavigateToNode?: (nodeId: string) => void) {
         this.projectManager = projectManager;
         this.container = container;
-        this.rootNode = rootNode || projectManager.rootNode; // Use specified node or default to project root
+        this.rootNode = rootNode ?? projectManager.rootNode; // Use specified node or default to project root
         this.onNavigateToNode = onNavigateToNode;
         
         // Bind event handler methods
@@ -148,8 +148,8 @@ export class ReaderGUI {
             replaceValue: replaceInput ? replaceInput.value : '',
             findFocused: document.activeElement === findInput,
             replaceFocused: replaceInput ? document.activeElement === replaceInput : false,
-            selectionStart: findInput.selectionStart || 0,
-            selectionEnd: findInput.selectionEnd || 0,
+            selectionStart: findInput.selectionStart ?? 0,
+            selectionEnd: findInput.selectionEnd ?? 0,
             visible: this.isSearchVisible
         };
     }
@@ -2687,7 +2687,7 @@ export class ReaderGUI {
                 
                 <div class="field-group">
                     <label class="field-label" for="action-description">Description</label>
-                    <input type="text" id="action-description" class="field-input" value="${action.description || ''}" placeholder="Optional description for this action">
+                    <input type="text" id="action-description" class="field-input" value="${action.description ?? ''}" placeholder="Optional description for this action">
                     <div class="field-description">Help text that appears when hovering over the button</div>
                 </div>
                 
@@ -3091,7 +3091,7 @@ export class ReaderGUI {
             button.textContent = action.title;
             button.setAttribute('data-action-id', action.id);
             button.setAttribute('data-original-text', action.title);
-            button.title = action.description || action.title;
+            button.title = action.description ?? action.title;
             
             container.appendChild(button);
         });
@@ -4007,7 +4007,7 @@ export async function openReaderView(projectManager: ProjectManager, rootNode?: 
     }
 
     // Check if we need to create a new reader instance or update the existing one
-    const currentRootNode = rootNode || projectManager.rootNode;
+    const currentRootNode = rootNode ?? projectManager.rootNode;
     if (!globalReaderInstance || 
         globalReaderInstance.projectManager !== projectManager || 
         (globalReaderInstance as any).rootNode !== currentRootNode) {

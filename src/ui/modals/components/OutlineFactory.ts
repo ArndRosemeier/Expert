@@ -537,7 +537,7 @@ export class OutlineFactory {
   
   private updateConfigFromUI(): void {
     // Update ideas
-    this.config.ideas = this.ideasTextarea?.value || '';
+    this.config.ideas = this.ideasTextarea?.value ?? '';
     
     // Update genres
     this.genreCheckboxes.forEach((checkboxes, category) => {
@@ -606,7 +606,7 @@ export class OutlineFactory {
     
     // Apply genres
     this.genreCheckboxes.forEach((checkboxes, category) => {
-      const selected = this.config.genres[category] || [];
+      const selected = this.config.genres[category] ?? [];
       checkboxes.forEach(checkbox => {
         checkbox.checked = selected.includes(checkbox.value);
       });
@@ -614,7 +614,7 @@ export class OutlineFactory {
     
     // Apply styles
     this.styleCheckboxes.forEach((checkboxes, category) => {
-      const selected = this.config.styleGuide[category] || [];
+      const selected = this.config.styleGuide[category] ?? [];
       checkboxes.forEach(checkbox => {
         checkbox.checked = selected.includes(checkbox.value);
       });

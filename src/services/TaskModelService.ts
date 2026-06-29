@@ -144,7 +144,7 @@ export class TaskModelService {
         }
 
         // Get current task configs or use defaults
-        const currentConfigs = profile.taskModelConfigs || { ...DEFAULT_TASK_MODEL_CONFIGS };
+        const currentConfigs = profile.taskModelConfigs ?? { ...DEFAULT_TASK_MODEL_CONFIGS };
         
         // Update the specific task config
         currentConfigs[taskType] = config;
@@ -188,8 +188,8 @@ export class TaskModelService {
      */
     public getCurrentModelName(purpose: ModelPurpose): string {
         const profile = this.settingsManager.getLastUsedProfile();
-        const selectedModels = profile?.selectedModels || {};
-        return selectedModels[purpose] || 'Not configured';
+        const selectedModels = profile?.selectedModels ?? {};
+        return selectedModels[purpose] ?? 'Not configured';
     }
 
     /**

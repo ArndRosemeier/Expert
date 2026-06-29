@@ -93,7 +93,7 @@ export class BoardSerializer {
     try {
       const storage = await this.getStorageService();
       const boardIds = await storage.get<string[]>(this.BOARD_LIST_KEY);
-      return boardIds || [];
+      return boardIds ?? [];
     } catch (error) {
       console.error('Failed to load board list:', error);
       return [];

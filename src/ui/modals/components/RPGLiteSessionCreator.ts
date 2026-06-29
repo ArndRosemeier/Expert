@@ -259,10 +259,10 @@ export class RPGLiteSessionCreator {
 
         // Get initial selection
         const templateManager = state.getTemplateManager();
-        const templateNames = templateManager?.getTemplateNames() || [];
+        const templateNames = templateManager?.getTemplateNames() ?? [];
         const defaultTemplate = templateNames.includes('Short Story') ? 'Short Story' : templateNames[0];
         if (defaultTemplate) {
-            this.selectedTemplate = templateManager?.getTemplate(defaultTemplate) || null;
+            this.selectedTemplate = templateManager?.getTemplate(defaultTemplate) ?? null;
         }
     }
 

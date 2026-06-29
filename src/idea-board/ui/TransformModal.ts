@@ -445,7 +445,7 @@ export class TransformModal extends BaseModal {
         if (deleteButton) {
           // Handle delete button click
           event.stopPropagation(); // Prevent triggering the history item click
-          const deleteIndex = parseInt(deleteButton.getAttribute('data-delete-index') || '0');
+          const deleteIndex = parseInt(deleteButton.getAttribute('data-delete-index') ?? '0');
           void this.deleteHistoryItem(deleteIndex);
           return;
         }
@@ -509,7 +509,7 @@ export class TransformModal extends BaseModal {
     try {
       const storage = await this.storageService;
       const history = await storage.get<string[]>(STORAGE_KEY_TRANSFORM_HISTORY);
-      this.transformHistory = history || [];
+      this.transformHistory = history ?? [];
     } catch (error) {
       console.warn('Failed to load transform history:', error);
       this.transformHistory = [];

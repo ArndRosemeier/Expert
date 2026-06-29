@@ -92,7 +92,7 @@ export function showAlert(
             ]
         },
         { 
-            title: title || 'Alert',
+            title: title ?? 'Alert',
             maxWidth: '400px'
         }
     );
@@ -130,7 +130,7 @@ export function showConfirm(
             ]
         },
         { 
-            title: title || 'Confirm',
+            title: title ?? 'Confirm',
             maxWidth: '400px'
         }
     );

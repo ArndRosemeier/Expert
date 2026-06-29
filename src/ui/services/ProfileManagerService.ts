@@ -84,7 +84,7 @@ export class ProfileManagerService {
         if (!this.currentActiveProfile) return null;
         
         const settingsManager = state.getSettingsManager()!;
-        return settingsManager.getProfile(this.currentActiveProfile) || null;
+        return settingsManager.getProfile(this.currentActiveProfile) ?? null;
     }
     
     /**
@@ -133,7 +133,7 @@ export class ProfileManagerService {
     private syncCurrentProfileFromSettings(): void {
         const settingsManager = state.getSettingsManager();
         if (settingsManager) {
-            this.currentActiveProfile = settingsManager.getLastUsedProfileName() || 'default';
+            this.currentActiveProfile = settingsManager.getLastUsedProfileName() ?? 'default';
             state.setCurrentlyLoadedProfileName(this.currentActiveProfile);
         }
     }
@@ -187,8 +187,6 @@ let globalProfileManager: ProfileManagerService | null = null;
  * Get the global ProfileManagerService instance
  */
 export function getProfileManagerService(): ProfileManagerService {
-    if (!globalProfileManager) {
-        globalProfileManager = new ProfileManagerService();
-    }
+    globalProfileManager ??= new ProfileManagerService();
     return globalProfileManager;
 } 

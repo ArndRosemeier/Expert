@@ -659,7 +659,7 @@ export class UnifiedGenerationService {
         if (DEBUG_STATELESS_GENERATION) {
             console.log(`🔍 STATELESS DEBUG: Current state of "${node.title}" (level ${node.level}):`);
             console.log(`   contextPruning=${state.hasContextPruning}, content=${state.hasContent}, coherence=${state.hasCoherenceCheck}, children=${state.hasChildren} (count: ${node.children.length})`);
-            console.log(`   nodeState=${node.getState()}, tags=${Array.from(masterVersion?.tags || []).join(',')}`);
+            console.log(`   nodeState=${node.getState()}, tags=${Array.from(masterVersion?.tags ?? []).join(',')}`);
         }
         
         return state;
@@ -1092,7 +1092,7 @@ export class UnifiedGenerationService {
                 context,
                 this.deps.treeService.getNodePath(nodeId, this.deps.rootNode),
                 undefined,
-                this.getProjectLanguageForNode() || null
+                this.getProjectLanguageForNode() ?? null
             );
 
             // Apply remaining placeholder replacements using centralized service
@@ -1245,8 +1245,8 @@ export class UnifiedGenerationService {
                         (progressMessage: string, current?: number, total?: number) => {
                             // Update stage progress to show autofix progress
                             this.currentStageProgress = {
-                                current: current || 2,
-                                total: total || 2,
+                                current: current ?? 2,
+                                total: total ?? 2,
                                 message: progressMessage
                             };
                             this.emitUnifiedProgress();
@@ -1460,7 +1460,7 @@ export class UnifiedGenerationService {
                     hasContradictions: true,
                     contradictions: this.accumulatedContradictions.contradictions,
                     analysisTimestamp: new Date(), // Add timestamp for modal rendering
-                    parentNodeId: this.accumulatedContradictions.analyzedNodes[0]?.id || '',
+                    parentNodeId: this.accumulatedContradictions.analyzedNodes[0]?.id ?? '',
                     childNodeIds: this.accumulatedContradictions.analyzedNodes.flatMap(node => node.children.map(child => child.id)),
                     analyzedNodes: this.accumulatedContradictions.analyzedNodes,
                     totalAnalyzed: this.accumulatedContradictions.totalAnalyzed
@@ -1848,7 +1848,7 @@ export class UnifiedGenerationService {
             
             // End the generation session with failure if it's still active
             if (node.currentGenerationSession) {
-                node.endGenerationSession(false, currentIterationContent || '');
+                node.endGenerationSession(false, currentIterationContent ?? '');
             }
             
             // Note: Individual content generation does not emit completion events
@@ -1983,7 +1983,7 @@ export class UnifiedGenerationService {
         const root = this.deps.rootNode;
         const conditionalContext = node.assembleApplicableConditionalContext(root);
         const match = conditionalContext.match(/\[settings:([^\]]+)\]/);
-        return match ? match[1] || null : null;
+        return match ? match[1] ?? null : null;
     }
 
 
@@ -2022,8 +2022,8 @@ export class UnifiedGenerationService {
             
             if (Array.isArray(parsed)) {
                 return parsed.map(item => ({
-                    title: String(item.title || '').trim(),
-                    description: String(item.description || '').trim()
+                    title: String(item.title ?? '').trim(),
+                    description: String(item.description ?? '').trim()
                 })).filter(item => item.title);
             }
             
@@ -2044,8 +2044,8 @@ export class UnifiedGenerationService {
                 
                 if (Array.isArray(parsed)) {
                     return parsed.map(item => ({
-                        title: String(item.title || '').trim(),
-                        description: String(item.description || '').trim()
+                        title: String(item.title ?? '').trim(),
+                        description: String(item.description ?? '').trim()
                     })).filter(item => item.title);
                 }
                 
@@ -2064,11 +2064,11 @@ export class UnifiedGenerationService {
      */
     private buildLoopInput(node: DocumentNode, levels: GenerationLevels): LoopInput {
         // CRITICAL: Get project language dynamically at generation time to prevent race conditions
-        const capturedLanguage = this.getProjectLanguageForNode() || this.deps.settingsManager.getLanguage();
+        const capturedLanguage = this.getProjectLanguageForNode() ?? this.deps.settingsManager.getLanguage();
         
         // Check for settings override from parent node
         const settingsOverride = this.extractSettingsOverride(node);
-        const originalProfileName = settingsOverride ? this.deps.settingsManager.getLastUsedProfileName() || null : null;
+        const originalProfileName = settingsOverride ? this.deps.settingsManager.getLastUsedProfileName() ?? null : null;
         
         if (settingsOverride) {
             const overrideProfile = this.deps.settingsManager.getProfile(settingsOverride);
@@ -2085,7 +2085,7 @@ export class UnifiedGenerationService {
         }
 
         // Get the raw prompt from the node
-        const rawPrompt = node.generationPrompt || this.deps.promptService.getRawGenerationPrompt(node, levels.deterministicChildCreation);
+        const rawPrompt = node.generationPrompt ?? this.deps.promptService.getRawGenerationPrompt(node, levels.deterministicChildCreation);
 
         // Fill the placeholders.
         //

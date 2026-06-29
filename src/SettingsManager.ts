@@ -202,9 +202,7 @@ export class SettingsManager {
             return SettingsManager.instance;
         }
 
-        if (!SettingsManager.initializationPromise) {
-            SettingsManager.initializationPromise = SettingsManager.initializeInstance();
-        }
+        SettingsManager.initializationPromise ??= SettingsManager.initializeInstance();
 
         return SettingsManager.initializationPromise;
     }
@@ -297,12 +295,9 @@ export class SettingsManager {
                         if (!profile.contextExtractionPrompt) {
                             profile.contextExtractionPrompt = DEFAULT_CONTEXT_EXTRACTION_PROMPT;
                         }
-                        if (!profile.webSearchEnabled) {
-                            profile.webSearchEnabled = {};
-                        }
+                        profile.webSearchEnabled ??= {};
                         // Add default task model configs to existing profiles that don't have them
-                        if (!profile.taskModelConfigs) {
-                            profile.taskModelConfigs = {
+                        profile.taskModelConfigs ??= {
                                 coherence_analysis: {
                                     outline: 'creator' as const,
                                     prose: 'prose' as const
@@ -329,7 +324,6 @@ export class SettingsManager {
                                     prose: 'creator' as const
                                 }
                             };
-                        }
                         
 
                     }
@@ -429,7 +423,7 @@ export class SettingsManager {
         try {
             const storage = await this.storageService;
             const savedProfile = await storage.get<string>(LAST_USED_PROFILE_KEY);
-            this.lastUsedProfileName = savedProfile || null;
+            this.lastUsedProfileName = savedProfile ?? null;
         } catch (error) {
             console.error('Failed to load last used profile from storage', error);
             this.lastUsedProfileName = null;
@@ -439,7 +433,7 @@ export class SettingsManager {
     private async loadAILoggingSetting(): Promise<void> {
         try {
             const storage = await this.storageService;
-            this.aiLoggingEnabled = await storage.get<boolean>(AI_LOGGING_ENABLED_KEY) || false;
+            this.aiLoggingEnabled = await storage.get<boolean>(AI_LOGGING_ENABLED_KEY) ?? false;
         } catch (error) {
             console.error('Failed to load AI logging setting from storage', error);
             this.aiLoggingEnabled = false;
@@ -449,7 +443,7 @@ export class SettingsManager {
     private async loadDebugGenerationSetting(): Promise<void> {
         try {
             const storage = await this.storageService;
-            this.debugGenerationEnabled = await storage.get<boolean>(DEBUG_GENERATION_ENABLED_KEY) || false;
+            this.debugGenerationEnabled = await storage.get<boolean>(DEBUG_GENERATION_ENABLED_KEY) ?? false;
             
             // Update the global debug flag
             const { setDebugStatelessGeneration } = await import('./constants');
@@ -467,7 +461,7 @@ export class SettingsManager {
     private async loadGlobalLanguage(): Promise<void> {
         try {
             const storage = await this.storageService;
-            this.globalLanguage = await storage.get<string>(STORAGE_KEYS.GLOBAL_LANGUAGE) || 'English';
+            this.globalLanguage = await storage.get<string>(STORAGE_KEYS.GLOBAL_LANGUAGE) ?? 'English';
         } catch (error) {
             console.error('Failed to load global language setting from storage', error);
             this.globalLanguage = 'English';
@@ -581,7 +575,7 @@ export class SettingsManager {
         Object.entries(this.profiles).forEach(([profileName, profile]) => {
             modifiedProfiles.push({
                 profileName,
-                isDefault: this.areDefaultCriteria(profile.criteria || DEFAULT_CRITERIA)
+                isDefault: this.areDefaultCriteria(profile.criteria ?? DEFAULT_CRITERIA)
             });
         });
         
@@ -637,7 +631,7 @@ export class SettingsManager {
             // Ensure criteria are populated with defaults if missing
             return {
                 ...profile,
-                criteria: profile.criteria || DEFAULT_CRITERIA
+                criteria: profile.criteria ?? DEFAULT_CRITERIA
             };
         }
         return undefined;
@@ -650,8 +644,8 @@ export class SettingsManager {
         // Deep copy to prevent cross-profile contamination
         const profileToSave: SettingsProfile = {
             selectedModels: { ...(profile.selectedModels || {}) },
-            selectedProviders: { ...(profile.selectedProviders || {}) },
-            webSearchEnabled: { ...(profile.webSearchEnabled || {}) },
+            selectedProviders: { ...(profile.selectedProviders ?? {}) },
+            webSearchEnabled: { ...(profile.webSearchEnabled ?? {}) },
             criteria: profile.criteria ? [...profile.criteria] : [...DEFAULT_CRITERIA],
             maxIterations: profile.maxIterations,
             contextExtractionPrompt: profile.contextExtractionPrompt || '',
@@ -696,7 +690,7 @@ export class SettingsManager {
                 // Ensure criteria are populated with defaults if missing
                 return {
                     ...profile,
-                    criteria: profile.criteria || DEFAULT_CRITERIA
+                    criteria: profile.criteria ?? DEFAULT_CRITERIA
                 };
             }
         }
@@ -707,7 +701,7 @@ export class SettingsManager {
             if (profile) {
                 return {
                     ...profile,
-                    criteria: profile.criteria || DEFAULT_CRITERIA
+                    criteria: profile.criteria ?? DEFAULT_CRITERIA
                 };
             }
         }
@@ -797,7 +791,7 @@ export class SettingsManager {
             
             Object.entries(this.profiles).forEach(([profileName, profile]) => {
                 if (profile) {
-                    const isDefaultCriteria = this.areDefaultCriteria(profile.criteria || DEFAULT_CRITERIA);
+                    const isDefaultCriteria = this.areDefaultCriteria(profile.criteria ?? DEFAULT_CRITERIA);
                     
                     if (isDefaultCriteria) {
                         // Remove criteria from storage version - they'll be populated from defaults on load
@@ -902,7 +896,7 @@ export class SettingsManager {
 
             // Create the imported profile
             const importedProfile: SettingsProfile = {
-                criteria: profileData.criteria || DEFAULT_CRITERIA,
+                criteria: profileData.criteria ?? DEFAULT_CRITERIA,
                 maxIterations: profileData.maxIterations,
                 selectedModels: finalSelectedModels,
                 contextExtractionPrompt: profileData.contextExtractionPrompt || DEFAULT_CONTEXT_EXTRACTION_PROMPT
@@ -1062,8 +1056,8 @@ export class SettingsManager {
     public async resetToDefaults(preserveModels?: { selectedModels?: Record<string, string>; webSearchEnabled?: Record<string, boolean> }): Promise<void> {
         
         // Preserve model selections if provided, otherwise use empty objects
-        const modelsToKeep = preserveModels?.selectedModels || {};
-        const webSearchToKeep = preserveModels?.webSearchEnabled || {};
+        const modelsToKeep = preserveModels?.selectedModels ?? {};
+        const webSearchToKeep = preserveModels?.webSearchEnabled ?? {};
         
         // Create a new default profile with current version
         const defaultProfile: SettingsProfile = {

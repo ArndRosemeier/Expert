@@ -236,7 +236,7 @@ class ContentViewer extends UIComponent {
             return;
         }
 
-        const ratings = this.version.metadata?.['ratings'] || [];
+        const ratings = this.version.metadata?.['ratings'] ?? [];
         
         this.element.innerHTML = `
             <div class="content-viewer-header">
@@ -889,7 +889,7 @@ export class NodeInspectorModal extends BaseModal {
             if (t && c) {
                 t.addEventListener('click', () => {
                     const isCollapsed = c.classList.toggle('collapsed');
-                    const label = t.textContent || '';
+                    const label = t.textContent ?? '';
                     const clean = label.replace(/^([▼▶])\s*/, '');
                     t.textContent = (isCollapsed ? '▶ ' : '▼ ') + clean;
                 });
@@ -2056,7 +2056,7 @@ class TagSelectionModal extends BaseModal {
                 
                 // Select this tag
                 target.style.backgroundColor = '#e3f2fd';
-                this.selectedTag = target.dataset['tag'] || '';
+                this.selectedTag = target.dataset['tag'] ?? '';
                 tagInput.value = this.selectedTag;
             }
         });

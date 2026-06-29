@@ -55,9 +55,7 @@ export class TextSegmentationService {
   private static instance: TextSegmentationService | null = null;
 
   public static getInstance(): TextSegmentationService {
-    if (!TextSegmentationService.instance) {
-      TextSegmentationService.instance = new TextSegmentationService();
-    }
+    TextSegmentationService.instance ??= new TextSegmentationService();
     return TextSegmentationService.instance;
   }
 
@@ -74,9 +72,9 @@ export class TextSegmentationService {
     originalText: string,
     options: SegmentationOptions = {}
   ): Promise<SegmentationResult> {
-    const language = options.language || this.settings.getGlobalLanguage();
-    const purpose = options.purpose || 'editor';
-    const granularity = options.granularity || 'custom';
+    const language = options.language ?? this.settings.getGlobalLanguage();
+    const purpose = options.purpose ?? 'editor';
+    const granularity = options.granularity ?? 'custom';
 
     const paragraphs = this.computeParagraphs(originalText);
     const curated = this.buildCuratedText(paragraphs);

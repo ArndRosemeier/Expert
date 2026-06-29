@@ -108,7 +108,7 @@ export class LoopOrchestrator extends EventEmitter<OrchestratorEvents> {
     constructor(settingsManager: SettingsManager, client: OpenRouterClient, prompts?: OrchestratorPrompts) {
         super();
         this.client = client;
-        this.prompts = prompts || { ...defaultPrompts };
+        this.prompts = prompts ?? { ...defaultPrompts };
         this.expansionService = createPromptExpansionService(settingsManager);
     }
 
@@ -149,7 +149,7 @@ export class LoopOrchestrator extends EventEmitter<OrchestratorEvents> {
             
             // Fallback: extract name from model ID
             const parts = modelId.split('/');
-            const modelName = parts[parts.length - 1] || modelId;
+            const modelName = parts[parts.length - 1] ?? modelId;
             return modelName.charAt(0).toUpperCase() + modelName.slice(1).replace(/-/g, ' ');
             
         } catch (error) {

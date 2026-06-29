@@ -55,7 +55,7 @@ function createElement(tag: string, options: CreateElementOptions = {}): HTMLEle
 export function createButton(content: string, options: ButtonOptions = {}): HTMLButtonElement {
     const elementOptions: CreateElementOptions = {
         content: options.loading ? 'Loading...' : content,
-        classes: ['btn', ...(options.classes || [])]
+        classes: ['btn', ...(options.classes ?? [])]
     };
     
     if (options.id) elementOptions.id = options.id;
@@ -137,7 +137,7 @@ export class ButtonStateManager {
     
     setLoading(button: HTMLButtonElement, loadingText: string = 'Loading...'): void {
         if (!this.originalContent.has(button)) {
-            this.originalContent.set(button, button.textContent || '');
+            this.originalContent.set(button, button.textContent ?? '');
         }
         
         button.disabled = true;

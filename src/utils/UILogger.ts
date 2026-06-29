@@ -20,9 +20,7 @@ export class UILogger {
     }
 
     public static getInstance(): UILogger {
-        if (!UILogger.instance) {
-            UILogger.instance = new UILogger();
-        }
+        UILogger.instance ??= new UILogger();
         return UILogger.instance;
     }
 

@@ -41,7 +41,7 @@ export class TagManagerModal extends BaseModal {
             onClose: async () => { options.onClose!(); }
         } : {});
         this.rootNode = rootNode;
-        this.options = options || {};
+        this.options = options ?? {};
         this.tree = new SelectableNodeTree(rootNode, document.createElement('div'));
         this.leftPanel = document.createElement('div');
         this.rightPanel = document.createElement('div');
@@ -252,8 +252,8 @@ export class TagManagerModal extends BaseModal {
         this.tagListContainer.innerHTML = '';
 
         tags.forEach(tag => {
-            const nodeCount = this.tagToNodesMap[tag]?.length || 0;
-            const versionCount = this.tagToVersionsMap[tag]?.length || 0;
+            const nodeCount = this.tagToNodesMap[tag]?.length ?? 0;
+            const versionCount = this.tagToVersionsMap[tag]?.length ?? 0;
             
             const tagItem = document.createElement('div');
             
@@ -366,7 +366,7 @@ export class TagManagerModal extends BaseModal {
     }
 
     private highlightNodesWithTag(tag: string): void {
-        const nodesWithTag = this.tagToNodesMap[tag] || [];
+        const nodesWithTag = this.tagToNodesMap[tag] ?? [];
         
         // First, uncheck all checkboxes and remove highlights
         const allCheckboxes = document.querySelectorAll('.selectable-node-tree input[type="checkbox"]') as NodeListOf<HTMLInputElement>;
@@ -408,8 +408,8 @@ export class TagManagerModal extends BaseModal {
         }
 
         const isMasterTag = this.selectedTag === 'master';
-        const nodeCount = this.tagToNodesMap[this.selectedTag]?.length || 0;
-        const versionCount = this.tagToVersionsMap[this.selectedTag]?.length || 0;
+        const nodeCount = this.tagToNodesMap[this.selectedTag]?.length ?? 0;
+        const versionCount = this.tagToVersionsMap[this.selectedTag]?.length ?? 0;
         
         // Selected tag info
         const selectedTagInfo = document.createElement('div');
@@ -618,7 +618,7 @@ export class TagManagerModal extends BaseModal {
         const nodeVersionCounts = new Map<DocumentNode, number>();
         
         versions.forEach(versionInfo => {
-            const count = nodeVersionCounts.get(versionInfo.node) || 0;
+            const count = nodeVersionCounts.get(versionInfo.node) ?? 0;
             nodeVersionCounts.set(versionInfo.node, count + 1);
         });
 
@@ -656,7 +656,7 @@ export class TagManagerModal extends BaseModal {
         const nodeVersionCounts = new Map<DocumentNode, number>();
         
         versions.forEach(versionInfo => {
-            const count = nodeVersionCounts.get(versionInfo.node) || 0;
+            const count = nodeVersionCounts.get(versionInfo.node) ?? 0;
             nodeVersionCounts.set(versionInfo.node, count + 1);
         });
 
@@ -712,7 +712,7 @@ export class TagManagerModal extends BaseModal {
             return;
         }
 
-        const nodeCount = this.tagToNodesMap[this.selectedTag]?.length || 0;
+        const nodeCount = this.tagToNodesMap[this.selectedTag]?.length ?? 0;
         
         if (!confirm(`Remove all ${versions.length} versions with tag "${this.selectedTag}" from ${nodeCount} nodes?\n\nThis will permanently delete these versions. This action cannot be undone.`)) {
             return;

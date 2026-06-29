@@ -28,7 +28,7 @@ export class BackgroundRectangle extends PostItNote {
     
     // Set lighter background color and remove text styling
     this.style = {
-      backgroundColor: BackgroundRectangle.BACKGROUND_COLORS[0] || '#f0f9ff', // Default to light blue
+      backgroundColor: BackgroundRectangle.BACKGROUND_COLORS[0] ?? '#f0f9ff', // Default to light blue
       textColor: 'transparent', // Make text invisible
       fontSize: 14
     };
@@ -48,7 +48,7 @@ export class BackgroundRectangle extends PostItNote {
     }
     
     // If all colors used, return first color
-    return BackgroundRectangle.BACKGROUND_COLORS[0] || '#f0f9ff';
+    return BackgroundRectangle.BACKGROUND_COLORS[0] ?? '#f0f9ff';
   }
 
   /**

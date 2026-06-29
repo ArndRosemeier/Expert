@@ -181,7 +181,7 @@ export class ExportModal extends BaseModal {
         const defaultConfig = this.getDefaultHierarchyTitleConfig();
 
         hierarchyLevels.forEach((levelName, index) => {
-            const checkboxOption = this.createHierarchyTitleCheckbox(index, levelName, defaultConfig[index] || false);
+            const checkboxOption = this.createHierarchyTitleCheckbox(index, levelName, defaultConfig[index] ?? false);
             this.hierarchyTitleContainer!.appendChild(checkboxOption);
         });
 

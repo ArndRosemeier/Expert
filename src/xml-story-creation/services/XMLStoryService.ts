@@ -511,12 +511,12 @@ export class XMLStoryService {
                 
             case 'edit':
                 this.handleEditCommand(command);
-                (command as any).executedRaw = command.rawXml || '';
+                (command as any).executedRaw = command.rawXml ?? '';
                 break;
                 
             case 'delete':
                 this.handleDeleteCommand(command);
-                (command as any).executedRaw = command.rawXml || '';
+                (command as any).executedRaw = command.rawXml ?? '';
                 break;
                 
             case 'append':
@@ -590,7 +590,7 @@ export class XMLStoryService {
         // Support both old and new syntax:
         // Old: </edit id="element_id" description="New description">
         // New: </edit id="element_id">New description content</edit>
-        const newDescription = command.content || command.parameters['description'];
+        const newDescription = command.content ?? command.parameters['description'];
         
         if (!elementId) {
             console.warn('Edit command missing required id parameter');

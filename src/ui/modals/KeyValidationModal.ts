@@ -251,7 +251,7 @@ export class KeyValidationModal extends BaseModal {
     }
 
     private onKeyInput(): void {
-        const key = this.keyInput?.value.trim() || '';
+        const key = this.keyInput?.value.trim() ?? '';
         const isValidFormat = key.startsWith('EXPERT_KEY_V2_') && key.length > 20;
         
         if (this.submitButton) {
@@ -273,7 +273,7 @@ export class KeyValidationModal extends BaseModal {
     }
 
     private async validateKey(): Promise<void> {
-        const key = this.keyInput?.value.trim() || '';
+        const key = this.keyInput?.value.trim() ?? '';
         
         if (!key) {
             this.showStatus('error', '❌ Please enter a key');
@@ -305,7 +305,7 @@ export class KeyValidationModal extends BaseModal {
                 }, 1500);
                 
             } else {
-                this.showStatus('error', `❌ ${result.reason || 'Invalid key'}`);
+                this.showStatus('error', `❌ ${result.reason ?? 'Invalid key'}`);
             }
         } catch (error) {
             this.showStatus('error', `❌ Validation failed: ${(error as Error).message}`);

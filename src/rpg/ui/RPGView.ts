@@ -593,7 +593,7 @@ export class RPGView {
             const gameContext = this.contextBuilder.buildGameNarrationContext(session);
             
             // Get prompt template (use custom if provided)
-            const systemPromptTemplate = session.customSystemPrompt || getPromptText('rpg_game_narration_system');
+            const systemPromptTemplate = session.customSystemPrompt ?? getPromptText('rpg_game_narration_system');
             
             // Expand prompt with context
             const expansionService = createRPGPromptExpansionService(settingsManager);
@@ -942,7 +942,7 @@ export class RPGView {
         // Find the session to get its title and snapshots
         const sessions = await this.loadSessions();
         const session = sessions.find(s => s.id === sessionId);
-        const sessionTitle = session?.title || 'this session';
+        const sessionTitle = session?.title ?? 'this session';
         
         // Confirm deletion
         const confirmed = confirm(`Are you sure you want to delete "${sessionTitle}"?\n\nThis action cannot be undone. All conversation history and snapshots will be deleted.`);

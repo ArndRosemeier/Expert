@@ -387,7 +387,7 @@ export class AIProjectCreator {
     }
 
     private getDescription(): string {
-        return this.descriptionEditor?.value?.trim() || '';
+        return this.descriptionEditor?.value?.trim() ?? '';
     }
 
     private getGenerationOptions(): ProjectGenerationOptions {
@@ -467,7 +467,7 @@ export class AIProjectCreator {
         try {
             const storage = await StorageService.getInstance();
             const prompts = await storage.get<string[]>(AIProjectCreator.CREATION_PROMPTS_KEY);
-            this.cachedPrompts = prompts || [];
+            this.cachedPrompts = prompts ?? [];
         } catch (error) {
             console.error('Failed to load cached prompts:', error);
             this.cachedPrompts = [];

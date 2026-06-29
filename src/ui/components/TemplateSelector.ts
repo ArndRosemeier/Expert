@@ -33,7 +33,7 @@ export class TemplateSelector {
             showManagement: false,
             ...config
         };
-        this.currentSelection = config.selectedTemplate || '';
+        this.currentSelection = config.selectedTemplate ?? '';
     }
 
     public render(): void {
@@ -139,7 +139,7 @@ export class TemplateSelector {
 
         if (this.config.onSelectionChange) {
             const templateManager = state.getTemplateManager();
-            const template = selectedName ? templateManager?.getTemplate(selectedName) || null : null;
+            const template = selectedName ? templateManager?.getTemplate(selectedName) ?? null : null;
             this.config.onSelectionChange(template, selectedName);
         }
 
@@ -216,7 +216,7 @@ export class TemplateSelector {
         if (!this.currentSelection) return null;
         
         const templateManager = state.getTemplateManager();
-        return templateManager?.getTemplate(this.currentSelection) || null;
+        return templateManager?.getTemplate(this.currentSelection) ?? null;
     }
 
     public getSelectedTemplateName(): string {

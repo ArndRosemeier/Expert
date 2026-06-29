@@ -141,7 +141,7 @@ export class ComprehensiveExportService {
                     const writable = await fileHandle.createWritable();
                     await writable.write(zipBlob);
                     await writable.close();
-                    actualFilename = fileHandle.name || filename;
+                    actualFilename = fileHandle.name ?? filename;
                     console.log('✅ Backup saved using file handle:', actualFilename);
                 } catch (writeError) {
                     console.error('❌ Failed to write to file handle:', writeError);
@@ -172,7 +172,7 @@ export class ComprehensiveExportService {
                     };
                 }
                 
-                actualFilename = downloadResult.actualFilename || filename;
+                actualFilename = downloadResult.actualFilename ?? filename;
             }
 
             return {

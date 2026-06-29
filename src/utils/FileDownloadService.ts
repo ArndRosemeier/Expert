@@ -152,7 +152,7 @@ export class FileDownloadService {
         // If custom extensions provided, use them
         if (options.extensions && options.extensions.length > 0) {
             return {
-                description: options.description || 'File',
+                description: options.description ?? 'File',
                 accept: { [options.mimeType]: options.extensions }
             };
         }
@@ -163,37 +163,37 @@ export class FileDownloadService {
         switch (extension.toLowerCase()) {
             case '.json':
                 return {
-                    description: options.description || 'JSON File',
+                    description: options.description ?? 'JSON File',
                     accept: { 'application/json': ['.json'] }
                 };
             case '.html':
                 return {
-                    description: options.description || 'HTML Document',
+                    description: options.description ?? 'HTML Document',
                     accept: { 'text/html': ['.html'] }
                 };
             case '.md':
                 return {
-                    description: options.description || 'Markdown Document',
+                    description: options.description ?? 'Markdown Document',
                     accept: { 'text/markdown': ['.md'] }
                 };
             case '.txt':
                 return {
-                    description: options.description || 'Text Document',
+                    description: options.description ?? 'Text Document',
                     accept: { 'text/plain': ['.txt'] }
                 };
             case '.zip':
                 return {
-                    description: options.description || 'ZIP Archive',
+                    description: options.description ?? 'ZIP Archive',
                     accept: { 'application/zip': ['.zip'] }
                 };
             case '.epub':
                 return {
-                    description: options.description || 'EPUB eBook',
+                    description: options.description ?? 'EPUB eBook',
                     accept: { 'application/epub+zip': ['.epub'] }
                 };
             default:
                 return {
-                    description: options.description || 'File',
+                    description: options.description ?? 'File',
                     accept: { [options.mimeType]: [extension] }
                 };
         }
@@ -235,7 +235,7 @@ export class FileDownloadService {
         return await this.downloadText(content, {
             filename,
             mimeType: 'application/json',
-            description: description || 'JSON Export',
+            description: description ?? 'JSON Export',
             forceFileSelector: false // Allow fallback for browser compatibility
         });
     }
@@ -254,7 +254,7 @@ export class FileDownloadService {
         return await this.downloadBlob(blob, {
             filename,
             mimeType: 'application/zip',
-            description: description || 'ZIP Archive',
+            description: description ?? 'ZIP Archive',
             forceFileSelector: true // CRITICAL: Force file selector for save/load all functionality - DO NOT CHANGE TO false!
         });
     }
@@ -320,7 +320,7 @@ export class FileDownloadService {
             } else if (result.cancelled) {
                 return { success: false, message: '❌ Test cancelled by user' };
             } else {
-                return { success: false, message: `❌ File selector failed: ${result.error || 'Unknown error'}` };
+                return { success: false, message: `❌ File selector failed: ${result.error ?? 'Unknown error'}` };
             }
         } catch (error) {
             return { success: false, message: `❌ Test failed: ${error}` };
@@ -352,8 +352,8 @@ export class FileDownloadService {
                             userAgent.includes('Edg') ? 'Edge' :
                             userAgent.includes('Firefox') ? 'Firefox' :
                             userAgent.includes('Safari') ? 'Safari' : 'Unknown';
-        const versionMatch = userAgent.match(/Chrome\/(\d+)/) || userAgent.match(/Edg\/(\d+)/) || userAgent.match(/Firefox\/(\d+)/) || userAgent.match(/Safari\/(\d+)/);
-        const version = versionMatch ? (versionMatch[1] || 'Unknown') : 'Unknown';
+        const versionMatch = (userAgent.match(/Chrome\/(\d+)/) ?? userAgent.match(/Edg\/(\d+)/)) ?? userAgent.match(/Firefox\/(\d+)/) ?? userAgent.match(/Safari\/(\d+)/);
+        const version = versionMatch ? (versionMatch[1] ?? 'Unknown') : 'Unknown';
         return { name: browserName, version };
     }
 } 

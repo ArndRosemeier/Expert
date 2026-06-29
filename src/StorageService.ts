@@ -186,7 +186,7 @@ class IndexedDBStorageService implements IStorageService {
   async loadRPGSession<T>(sessionId: string): Promise<T | null> {
     try {
       const session = await this.indexedDBService.get<T>('rpg_sessions', sessionId);
-      return session || null;
+      return session ?? null;
     } catch (error) {
       console.error('Failed to load RPG session:', error);
       throw new Error(`Failed to load RPG session: ${error instanceof Error ? error.message : error}`);
@@ -236,7 +236,7 @@ class IndexedDBStorageService implements IStorageService {
   async loadRPGSnapshot<T>(snapshotId: string): Promise<T | null> {
     try {
       const snapshot = await this.indexedDBService.get<T>('rpg_snapshots', snapshotId);
-      return snapshot || null;
+      return snapshot ?? null;
     } catch (error) {
       console.error('Failed to load RPG snapshot:', error);
       throw new Error(`Failed to load RPG snapshot: ${error instanceof Error ? error.message : error}`);
@@ -284,7 +284,7 @@ class IndexedDBStorageService implements IStorageService {
   async loadRPGLiteSession<T>(sessionId: string): Promise<T | null> {
     try {
       const session = await this.indexedDBService.get<T>('rpg_lite_sessions', sessionId);
-      return session || null;
+      return session ?? null;
     } catch (error) {
       console.error('Failed to load RPG Lite session:', error);
       throw new Error(`Failed to load RPG Lite session: ${error instanceof Error ? error.message : error}`);
@@ -322,7 +322,7 @@ class IndexedDBStorageService implements IStorageService {
   async loadRPGLiteStartPreset<T>(presetId: string): Promise<T | null> {
     try {
       const preset = await this.indexedDBService.get<T>('rpg_lite_start_presets', presetId);
-      return preset || null;
+      return preset ?? null;
     } catch (error) {
       console.error('Failed to load RPG Lite start preset:', error);
       throw new Error(`Failed to load RPG Lite start preset: ${error instanceof Error ? error.message : error}`);
@@ -360,7 +360,7 @@ class IndexedDBStorageService implements IStorageService {
   async loadRPGLiteActionButton<T>(buttonId: string): Promise<T | null> {
     try {
       const button = await this.indexedDBService.get<T>('rpg_lite_action_buttons', buttonId);
-      return button || null;
+      return button ?? null;
     } catch (error) {
       console.error('Failed to load RPG Lite action button:', error);
       throw new Error(`Failed to load RPG Lite action button: ${error instanceof Error ? error.message : error}`);
@@ -408,7 +408,7 @@ class IndexedDBStorageService implements IStorageService {
   async loadWorldRpgWorld<T>(worldId: string): Promise<T | null> {
     try {
       const world = await this.indexedDBService.get<T>('world_rpg_worlds', worldId);
-      return world || null;
+      return world ?? null;
     } catch (error) {
       console.error('Failed to load World RPG world:', error);
       throw new Error(`Failed to load World RPG world: ${error instanceof Error ? error.message : error}`);
@@ -446,7 +446,7 @@ class IndexedDBStorageService implements IStorageService {
   async loadWorldRpgAdventure<T>(adventureId: string): Promise<T | null> {
     try {
       const adventure = await this.indexedDBService.get<T>('world_rpg_adventures', adventureId);
-      return adventure || null;
+      return adventure ?? null;
     } catch (error) {
       console.error('Failed to load World RPG adventure:', error);
       throw new Error(`Failed to load World RPG adventure: ${error instanceof Error ? error.message : error}`);

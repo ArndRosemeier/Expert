@@ -110,7 +110,7 @@ export class ModalFactory {
             id: 'settings-modal',
             settingsManager: this.dependencies.settingsManager,
             modelSelector: this.dependencies.modelSelector,
-            refreshGlobalProfileSelector: this.dependencies.refreshGlobalProfileSelector || (() => {})
+            refreshGlobalProfileSelector: this.dependencies.refreshGlobalProfileSelector ?? (() => {})
         };
 
         const modal = new SettingsModal(config);
@@ -392,7 +392,7 @@ export class ModalFactory {
 
         const modal = new GenericModal({
             id,
-            title: title || 'Modal',
+            title: title ?? 'Modal',
             content: typeof content === 'string' ? { content } : content
         });
 

@@ -50,7 +50,7 @@ export class SettingsService {
     public getProfile(name: string): SettingsProfile | null {
         const profile = this.settingsManager.getProfile(name);
         // Return null if profile doesn't exist - this is expected behavior for profile existence checking
-        return profile || null;
+        return profile ?? null;
     }
 
     /**
@@ -77,7 +77,7 @@ export class SettingsService {
     public async createProfile(name: string): Promise<{ success: boolean; message: string }> {
             // Get the current active profile to copy from
             const currentProfile = this.getLastUsedProfile();
-            const sourceProfileName = currentProfile ? (this.getLastUsedProfileName() || undefined) : undefined;
+            const sourceProfileName = currentProfile ? (this.getLastUsedProfileName() ?? undefined) : undefined;
             
             let newProfileSettings: SettingsProfile;
             
@@ -85,12 +85,12 @@ export class SettingsService {
                 // Deep copy all settings from the current profile to prevent contamination
                 newProfileSettings = {
                     selectedModels: { ...(currentProfile.selectedModels || {}) },
-                    selectedProviders: { ...(currentProfile.selectedProviders || {}) },
-                    webSearchEnabled: { ...(currentProfile.webSearchEnabled || {}) },
+                    selectedProviders: { ...(currentProfile.selectedProviders ?? {}) },
+                    webSearchEnabled: { ...(currentProfile.webSearchEnabled ?? {}) },
                     criteria: [...(currentProfile.criteria || [])],
                     maxIterations: currentProfile.maxIterations || DEFAULT_MAX_ITERATIONS,
                     contextExtractionPrompt: currentProfile.contextExtractionPrompt || '',
-                    version: currentProfile.version || ''
+                    version: currentProfile.version ?? ''
                 };
                 
                 // Deep copy taskModelConfigs if present
@@ -143,7 +143,7 @@ export class SettingsService {
             webSearchEnabled: this.modelSelector.getWebSearchEnabled(),
             criteria,
             maxIterations,
-            contextExtractionPrompt: existingProfile?.contextExtractionPrompt || '' // Preserve existing context extraction prompt
+            contextExtractionPrompt: existingProfile?.contextExtractionPrompt ?? '' // Preserve existing context extraction prompt
         };
 
         // Add optional properties only if they exist
@@ -413,7 +413,7 @@ export class SettingsService {
         if (!profile) return null;
 
         return {
-            criteriaCount: profile.criteria?.length || 0,
+            criteriaCount: profile.criteria?.length ?? 0,
             modelsCount: Object.keys(profile.selectedModels || {}).length || 0
         };
     }

@@ -140,7 +140,7 @@ export class PlaceNode extends OverviewElementBase implements PlaceElement {
    * Get detailed information for tooltip or details panel
    */
   public getDetailedInfo(): string {
-    const description = this.data.description || 'No description available';
+    const description = this.data.description ?? 'No description available';
     
     return `Place: ${this.data.name}\n\nType: ${this.data.type}\n\nSignificance: ${this.significance}\n\nDescription: ${description}\n\nConnected Events: ${this.data.connectedEvents.length}\nConnected Characters: ${this.data.connectedCharacters.length}`;
   }

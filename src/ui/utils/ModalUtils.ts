@@ -46,14 +46,14 @@ function createPanelWithConfig(defaultConfig: PanelConfig, userConfig: Partial<P
     const finalConfig = { ...defaultConfig, ...userConfig };
 
     panel.style.width = finalConfig.width!;
-    panel.style.minWidth = finalConfig.minWidth || '';
-    panel.style.maxWidth = finalConfig.maxWidth || '';
+    panel.style.minWidth = finalConfig.minWidth ?? '';
+    panel.style.maxWidth = finalConfig.maxWidth ?? '';
     panel.style.background = finalConfig.background!;
-    panel.style.borderRight = finalConfig.borderRight || '';
+    panel.style.borderRight = finalConfig.borderRight ?? '';
     panel.style.display = 'flex';
     panel.style.flexDirection = finalConfig.flexDirection!;
     panel.style.position = finalConfig.position!;
-    panel.style.transition = finalConfig.transition || '';
+    panel.style.transition = finalConfig.transition ?? '';
     panel.style.overflow = finalConfig.overflow!;
     panel.style.height = finalConfig.height!;
     panel.style.minHeight = finalConfig.minHeight!;

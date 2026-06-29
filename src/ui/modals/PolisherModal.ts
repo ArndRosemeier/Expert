@@ -503,7 +503,7 @@ export class PolisherModal extends BaseModal {
         const currentProfile = this.settingsManager.getLastUsedProfile();
         if (!currentProfile || !this.node) return [];
         
-        const allCriteria = currentProfile.criteria || [];
+        const allCriteria = currentProfile.criteria ?? [];
         return this.filterCriteriaForNodeType(allCriteria, this.node.isLeaf);
     }
 
@@ -550,7 +550,7 @@ export class PolisherModal extends BaseModal {
         styleButtons.forEach(btn => {
             btn.addEventListener('click', async (e) => {
                 const button = e.target as HTMLButtonElement;
-                const detail = button.dataset['detail'] || '';
+                const detail = button.dataset['detail'] ?? '';
                 
                 // Process {{input}} placeholders using centralized system
                 const processedDetail = await this.processInputPlaceholders(detail);
@@ -871,7 +871,7 @@ ${content}`;
         inputs.forEach(input => {
             input.addEventListener('input', (e) => {
                 const target = e.target as HTMLInputElement;
-                const index = parseInt(target.dataset['index'] || '0');
+                const index = parseInt(target.dataset['index'] ?? '0');
                 const field = target.dataset['field'] as 'label' | 'detail';
                 
                 if (this.polishingButtons[index] && field) {
@@ -884,7 +884,7 @@ ${content}`;
         const removeButtons = overlay.querySelectorAll('.remove-button-btn');
         removeButtons.forEach(btn => {
             btn.addEventListener('click', (e) => {
-                const index = parseInt((e.target as HTMLElement).dataset['index'] || '0');
+                const index = parseInt((e.target as HTMLElement).dataset['index'] ?? '0');
                 this.polishingButtons.splice(index, 1);
                 this.refreshButtonEditor(overlay);
             });

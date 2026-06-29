@@ -165,7 +165,7 @@ export class WorkingEpubGenerator {
         // Add required files to ZIP
         this.addMimeType();
         this.addContainerXml();
-        this.addPackageOpf(node.title, chapters, config.author || 'Expert Application');
+        this.addPackageOpf(node.title, chapters, config.author ?? 'Expert Application');
         this.addNavXhtml(node, chapters);
         this.addStyles();
         this.addChapterFiles(chapters);

@@ -172,9 +172,7 @@ export class GenerationErrorService {
     }
 
     public static getInstance(): GenerationErrorService {
-        if (!GenerationErrorService.instance) {
-            GenerationErrorService.instance = new GenerationErrorService();
-        }
+        GenerationErrorService.instance ??= new GenerationErrorService();
         return GenerationErrorService.instance;
     }
 
@@ -295,12 +293,12 @@ The AI model detected content that violates its usage policies and refused to pr
 🎯 **This is completely normal** for projects with mature content when using restrictive models like Google Gemini.`;
 
         await this.handleError(new Error(enhancedMessage), {
-            title: context.title || '🚨 Content Filtering - Settings Fix Needed',
+            title: context.title ?? '🚨 Content Filtering - Settings Fix Needed',
             message: enhancedMessage,
             ...(context.purpose && { purpose: context.purpose }),
             ...(modelName !== 'Unknown model' && { model: modelName }),
             ...(context.operation && { operation: context.operation })
-        }, context.operation || 'AI operation');
+        }, context.operation ?? 'AI operation');
     }
 
     /**
@@ -326,12 +324,12 @@ The AI model detected content that violates its usage policies and refused to pr
         operation?: string;
     } = {}): Promise<void> {
         await this.handleError(error, {
-            title: context.title || 'AI Operation Failed',
+            title: context.title ?? 'AI Operation Failed',
             message: this.formatErrorMessage(error),
             ...(context.purpose && { purpose: context.purpose }),
             ...(context.model && { model: context.model }),
             ...(context.operation && { operation: context.operation })
-        }, context.operation || 'AI operation');
+        }, context.operation ?? 'AI operation');
     }
 
     /**

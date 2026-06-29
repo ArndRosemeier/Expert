@@ -46,18 +46,18 @@ export class ExportService implements IExportService {
         if (config.format === ExportFormat.Reimport) {
             // Export for reimport - JSON format with full node data
             content = this.exportNodeForReimport(node);
-            filename = config.filename || `${sanitizeFilename(node.title)}_export.json`;
+            filename = config.filename ?? `${sanitizeFilename(node.title)}_export.json`;
             mimeType = 'application/json';
         } else if (config.format === ExportFormat.EPUB) {
             // Export as EPUB - binary format
             content = await this.generateEpubContent(node, config, projectManager);
-            filename = config.filename || `${sanitizeFilename(node.title)}.epub`;
+            filename = config.filename ?? `${sanitizeFilename(node.title)}.epub`;
             mimeType = 'application/epub+zip';
         } else {
             // Export for reading - formatted content
             content = this.exportNodeContent(node, config.scope, config.format, config, projectManager);
             const extension = this.getFileExtension(config.format);
-            filename = config.filename || `${sanitizeFilename(node.title)}.${extension}`;
+            filename = config.filename ?? `${sanitizeFilename(node.title)}.${extension}`;
             mimeType = this.getMimeType(config.format);
         }
 
@@ -95,11 +95,11 @@ export class ExportService implements IExportService {
     public generateContent(nodes: DocumentNode[], format: ExportFormat, title?: string, config?: ExportConfig, projectManager?: ProjectManager): string {
         switch (format) {
             case ExportFormat.HTML:
-                return this.generateHtmlContent(nodes, title || 'Export', config, projectManager);
+                return this.generateHtmlContent(nodes, title ?? 'Export', config, projectManager);
             case ExportFormat.Markdown:
-                return this.generateMarkdownContent(nodes, title || 'Export', config, projectManager);
+                return this.generateMarkdownContent(nodes, title ?? 'Export', config, projectManager);
             case ExportFormat.Plain:
-                return this.generatePlainTextContent(nodes, title || 'Export', config, projectManager);
+                return this.generatePlainTextContent(nodes, title ?? 'Export', config, projectManager);
             default:
                 throw new Error(`Unsupported format: ${format}`);
         }
@@ -134,7 +134,7 @@ export class ExportService implements IExportService {
      * Gets a user-friendly description for the file based on its extension
      */
     private getFileDescription(filename: string): string {
-        const extension = filename.split('.').pop()?.toLowerCase() || '';
+        const extension = filename.split('.').pop()?.toLowerCase() ?? '';
         switch (extension) {
             case 'html':
                 return 'HTML Document Export';
@@ -195,7 +195,7 @@ export class ExportService implements IExportService {
             console.log('Export cancelled by user');
         } else {
             // Export failed - show detailed error
-            const errorMessage = downloadResult.error || 'Unknown error occurred';
+            const errorMessage = downloadResult.error ?? 'Unknown error occurred';
             alert(`Export failed: ${errorMessage}\n\nPlease try again or check browser compatibility.`);
             throw new Error(`Export failed: ${errorMessage}`);
         }
@@ -412,7 +412,7 @@ export class ExportService implements IExportService {
      * Generates HTML content for a list of nodes
      */
     private generateHtmlContent(nodes: DocumentNode[], title: string, config?: ExportConfig, projectManager?: ProjectManager): string {
-        const includeToc = config?.includeHtmlToc || false;
+        const includeToc = config?.includeHtmlToc ?? false;
         
         let html = `<!DOCTYPE html>
 <html>
@@ -477,7 +477,7 @@ export class ExportService implements IExportService {
      */
     private generateHtmlHierarchy(node: DocumentNode, level: number = 1, config?: ExportConfig, _projectManager?: ProjectManager): string {
         if (level === 1) {
-            const includeToc = config?.includeHtmlToc || false;
+            const includeToc = config?.includeHtmlToc ?? false;
             
             let html = `<!DOCTYPE html>
 <html>

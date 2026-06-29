@@ -576,7 +576,7 @@ export class RedundancyDetectorModal extends BaseModal {
                 <div style="background: #f5f5f5; padding: 15px; border-radius: 8px; text-align: left; margin-bottom: 30px;">
                     <strong>Analysis Summary:</strong>
                     <ul style="margin: 10px 0; padding-left: 20px;">
-                        <li>Children analyzed: ${this.analysisResult?.childrenAnalyzed || 0}</li>
+                        <li>Children analyzed: ${this.analysisResult?.childrenAnalyzed ?? 0}</li>
                         <li>Redundancy threshold: ${actualThreshold}%</li>
                         <li>Redundancies found: 0</li>
                     </ul>
@@ -768,7 +768,7 @@ export class RedundancyDetectorModal extends BaseModal {
                 // Update the header to show deleted status
                 const headerTitle = redundancyItem.querySelector('h4');
                 if (headerTitle && !headerTitle.textContent?.includes('🗑️ Deleted:')) {
-                    headerTitle.textContent = headerTitle.textContent?.replace('⚠️ Suggested Deletion:', '🗑️ Deleted:') || '';
+                    headerTitle.textContent = headerTitle.textContent?.replace('⚠️ Suggested Deletion:', '🗑️ Deleted:') ?? '';
                     console.log(`Updated header for item ${index + 1}`);
                 }
             } else {

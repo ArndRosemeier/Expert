@@ -603,7 +603,7 @@ export class ModelSelector {
         const webSearchCheckbox = document.createElement('input');
         webSearchCheckbox.type = 'checkbox';
         webSearchCheckbox.id = `web-search-${purpose.key}`;
-        webSearchCheckbox.checked = this.webSearchEnabled[purpose.key] || false;
+        webSearchCheckbox.checked = this.webSearchEnabled[purpose.key] ?? false;
         webSearchCheckbox.style.cssText = `
           width: 16px;
           height: 16px;
@@ -798,8 +798,8 @@ export class ModelSelector {
 
       // Model parameter controls (temperature/top_p/max tokens, thinking)
       if (validModel) {
-        const supported = new Set<string>(validModel.supported_parameters || []);
-        const params = { ...(this.selectedParams[purpose.key] || {}) };
+        const supported = new Set<string>(validModel.supported_parameters ?? []);
+        const params = { ...(this.selectedParams[purpose.key] ?? {}) };
 
         
 
@@ -992,7 +992,7 @@ export class ModelSelector {
           headerWrap.style.cssText = 'display: flex; align-items: center; gap: 0.5rem; cursor: pointer;';
           const enableCheck = document.createElement('input');
           enableCheck.type = 'checkbox';
-          enableCheck.checked = Boolean(params.thinking?.enabled || params.reasoning?.effort || params.reasoning?.budget_tokens);
+          enableCheck.checked = Boolean((params.thinking?.enabled ?? params.reasoning?.effort) ?? params.reasoning?.budget_tokens);
           enableCheck.style.cssText = 'width: 16px; height: 16px;';
           
           const headerLabel = document.createElement('span');
@@ -1139,7 +1139,7 @@ export class ModelSelector {
         let errorMessage: string;
         try {
           const errorData = await response.json();
-          errorMessage = errorData?.error?.message || `HTTP ${response.status}: ${response.statusText}`;
+          errorMessage = errorData?.error?.message ?? `HTTP ${response.status}: ${response.statusText}`;
         } catch (jsonError) {
           // If JSON parsing fails, the API returned invalid JSON which is a different error
           throw new Error(`API returned invalid JSON response: ${response.status} ${response.statusText}. Original error: ${jsonError}`);
@@ -1428,9 +1428,7 @@ export class ModelSelector {
 
       // Ensure all purposes have a provider selection (default to automatic)
       PURPOSES.forEach(purpose => {
-        if (!this.selectedProviders[purpose.key]) {
-          this.selectedProviders[purpose.key] = 'automatic';
-        }
+        this.selectedProviders[purpose.key] ??= 'automatic';
       });
 
       // Web search preferences are now loaded from the current profile, not global storage
@@ -1613,7 +1611,7 @@ export class ModelSelector {
         return;
       }
 
-      const activeProfileName = settingsManager.getLastUsedProfileName() || 'default';
+      const activeProfileName = settingsManager.getLastUsedProfileName() ?? 'default';
       const activeProfile = settingsManager.getProfile(activeProfileName);
       
       if (activeProfile) {
@@ -1640,16 +1638,14 @@ export class ModelSelector {
         
         // Ensure all purposes have a provider selection (default to automatic)
         PURPOSES.forEach(purpose => {
-          if (!this.selectedProviders[purpose.key]) {
-            this.selectedProviders[purpose.key] = 'automatic';
-          }
+          this.selectedProviders[purpose.key] ??= 'automatic';
         });
         
         // Load per-model params (global for now)
         try {
           const storage = await this.storageService;
           const savedParams = await storage.get<Record<string, any>>('openrouter_model_params');
-          this.selectedParams = savedParams || {};
+          this.selectedParams = savedParams ?? {};
         } catch {
           this.selectedParams = {};
         }
@@ -1701,7 +1697,7 @@ export class ModelSelector {
         return;
       }
 
-      const activeProfileName = settingsManager.getLastUsedProfileName() || 'default';
+      const activeProfileName = settingsManager.getLastUsedProfileName() ?? 'default';
       const activeProfile = settingsManager.getProfile(activeProfileName);
       
       if (activeProfile?.webSearchEnabled) {
@@ -1727,7 +1723,7 @@ export class ModelSelector {
         return;
       }
 
-      const activeProfileName = settingsManager.getLastUsedProfileName() || 'default';
+      const activeProfileName = settingsManager.getLastUsedProfileName() ?? 'default';
       const activeProfile = settingsManager.getProfile(activeProfileName);
       
       if (activeProfile) {
@@ -1784,14 +1780,14 @@ export class ModelSelector {
   private async logModelParameterSupport(modelId: string): Promise<void> {
     const model = this.models.find(m => m.id === modelId)!;
     const endpoints = this.modelEndpoints[modelId]!;
-    const modelParams = (model.supported_parameters || []).join(', ') || '(none)';
+    const modelParams = (model.supported_parameters ?? []).join(', ') || '(none)';
     const lines: string[] = [];
     lines.push(`Model: ${model.name} (${model.id})`);
     lines.push(`Supported parameters (model-level): ${modelParams}`);
     if (endpoints && endpoints.length > 0) {
       lines.push(`Provider endpoints: ${endpoints.length}`);
       endpoints.forEach((ep, idx) => {
-        const epParams = (ep.supported_parameters || []).join(', ') || '(none)';
+        const epParams = (ep.supported_parameters ?? []).join(', ') || '(none)';
         const providerLabel = ep.provider_name || ep.name || `endpoint-${idx}`;
         lines.push(`- ${providerLabel}: ${epParams}`);
       });
@@ -1817,13 +1813,13 @@ export class ModelSelector {
     
     
     
-    const modelParams = new Set(model.supported_parameters || []);
-    const endpoints = this.getProvidersForModel(modelId) || [];
+    const modelParams = new Set(model.supported_parameters ?? []);
+    const endpoints = this.getProvidersForModel(modelId) ?? [];
     
     // Collect all supported parameters from endpoints too
     const allParams = new Set(modelParams);
     endpoints.forEach(ep => {
-      (ep.supported_parameters || []).forEach(param => allParams.add(param));
+      (ep.supported_parameters ?? []).forEach(param => allParams.add(param));
     });
     
     const hasReasoning = allParams.has('reasoning');
@@ -1910,14 +1906,14 @@ export class ModelSelector {
         const option = document.createElement('option');
         option.value = opt.value;
         option.textContent = opt.label;
-        if (opt.value === (params.reasoning?.effort || '')) option.selected = true;
+        if (opt.value === (params.reasoning?.effort ?? '')) option.selected = true;
         effortSelect.appendChild(option);
       });
       
       effortSelect.addEventListener('change', async () => {
         // Clear any token-based params when using effort
         delete params.thinking;
-        if (!params.reasoning) params.reasoning = {};
+        params.reasoning ??= {};
         params.reasoning.effort = effortSelect.value === '' ? undefined : effortSelect.value as 'low' | 'medium' | 'high';
         if (params.reasoning.budget_tokens) delete params.reasoning.budget_tokens;
         await this.setSelectedParams(purposeKey, params);
@@ -1942,7 +1938,7 @@ export class ModelSelector {
       tokenInput.max = '32000';
       tokenInput.step = '256';
       tokenInput.placeholder = 'e.g., 2048';
-      tokenInput.value = (params.thinking?.budget_tokens || params.reasoning?.budget_tokens) ? String(params.thinking?.budget_tokens || params.reasoning?.budget_tokens) : '';
+      tokenInput.value = (params.thinking?.budget_tokens || params.reasoning?.budget_tokens) ? String(params.thinking?.budget_tokens ?? params.reasoning?.budget_tokens) : '';
       tokenInput.style.cssText = 'padding: 0.5rem 0.75rem; border: 1.5px solid #d1d5db; border-radius: 0.5rem; font-size: 0.95rem; background: #fff;';
       
       tokenInput.addEventListener('focus', () => { tokenInput.style.borderColor = '#3b82f6'; });
@@ -1955,7 +1951,7 @@ export class ModelSelector {
         if (params.reasoning?.effort) delete params.reasoning.effort;
         
         // Use thinking object for token-only models
-        params.thinking = params.thinking || {};
+        params.thinking = params.thinking ?? {};
         if (numVal === undefined) {
           delete params.thinking.budget_tokens;
         } else {
@@ -2016,7 +2012,7 @@ export class ModelSelector {
     // For unknown providers, use a safe fallback that only keeps the first word
     // This prevents malformed strings like "groqmoonshotaikimik2"
     const words = providerName.split(/[\s\/\-_]+/);
-    const firstWord = words[0] || 'unknown';
+    const firstWord = words[0] ?? 'unknown';
     const normalized = firstWord.toLowerCase().replace(/[^a-z0-9]/g, '');
     
     // Only use the normalized version if it's a reasonable length

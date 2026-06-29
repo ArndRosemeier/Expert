@@ -109,10 +109,10 @@ export class TextImportService {
     const childLevels = template.hierarchyLevels.slice(1);
     const groupingNames = childLevels.slice(0, groupAboveCount); // outermost -> innermost
     const segmentationChildLevels = childLevels.slice(groupAboveCount);
-    const rootLabel = template.hierarchyLevels[0] || template.name;
+    const rootLabel = template.hierarchyLevels[0] ?? template.name;
     const segmentationTemplate = new ProjectTemplate(rootLabel, [rootLabel, ...segmentationChildLevels]);
 
-    const segTopLabel = (segmentationChildLevels[0] || 'parts').toLowerCase();
+    const segTopLabel = (segmentationChildLevels[0] ?? 'parts').toLowerCase();
     hooks?.status?.(`Finding ${segTopLabel} in ${fileName}...`);
     const spans = await importer.segmentByTemplate(text, segmentationTemplate, {
       splitStart: (level, parentTitle) => hooks?.splitStart?.(level, parentTitle),

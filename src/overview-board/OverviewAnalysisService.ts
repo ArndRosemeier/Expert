@@ -216,7 +216,7 @@ export class OverviewAnalysisService {
         role: rawChar.role,
         connectedEvents: [],
         connectedPlaces: [],
-        firstMention: sourceNodes[0]?.id || ''
+        firstMention: sourceNodes[0]?.id ?? ''
       };
       
       if (rawChar.description) {
@@ -264,7 +264,7 @@ export class OverviewAnalysisService {
         id: eventId,
         title: rawEvent.title,
         description: rawEvent.description,
-        nodeId: this.findSourceNode(rawEvent.title, sourceNodes)?.id || '',
+        nodeId: this.findSourceNode(rawEvent.title, sourceNodes)?.id ?? '',
         connectedCharacters,
         connectedPlaces,
         significance: rawEvent.significance
@@ -353,7 +353,7 @@ export class OverviewAnalysisService {
       }
     }
     
-    return sourceNodes[0] || null;
+    return sourceNodes[0] ?? null;
   }
 
   /**
@@ -385,7 +385,7 @@ export class OverviewAnalysisService {
       const nodesAtLevel = projectManager.getTreeService().getNodesAtTemplateLevel(rootNode, absoluteLevel);
       
       if (nodesAtLevel.length > 1) { // Only include levels with multiple nodes
-        const levelName = nodesAtLevel[0]?.template[absoluteLevel] || `Level ${absoluteLevel}`;
+        const levelName = nodesAtLevel[0]?.template[absoluteLevel] ?? `Level ${absoluteLevel}`;
         layers.push({
           name: levelName,
           nodes: nodesAtLevel.filter((node: DocumentNode) => node.content && node.content.trim()) // Only nodes with content

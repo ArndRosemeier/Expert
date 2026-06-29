@@ -730,7 +730,7 @@ export class RPGMockView {
             });
             link.addEventListener('click', () => {
                 // Mock: Show which entity would be navigated to
-                const text = (link as HTMLElement).textContent || '';
+                const text = (link as HTMLElement).textContent ?? '';
                 console.log('🎲 Navigate to:', text);
                 // In real implementation, this would scroll to and expand the target entity
             });

@@ -2454,7 +2454,7 @@ export class IdeaBoard {
           const postIt = targetPostIts[i];
           if (!postIt) continue;
           
-          const result = results[i] || `${type.charAt(0).toUpperCase() + type.slice(0, -1)} ${i + 1}: (Content generation incomplete)`;
+          const result = results[i] ?? `${type.charAt(0).toUpperCase() + type.slice(0, -1)} ${i + 1}: (Content generation incomplete)`;
           postIt.content = result.trim();
           this.updateElementData(postIt);
         }
@@ -3956,6 +3956,6 @@ export class IdeaBoard {
       '#ffcdd2': 'Red'
     };
     
-    return colorMap[hexColor.toLowerCase()] || 'Custom';
+    return colorMap[hexColor.toLowerCase()] ?? 'Custom';
   }
 } 

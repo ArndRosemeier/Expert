@@ -214,7 +214,7 @@ export const removeProject = (projectId: string) => {
                 return found;
             })() : null;
             notifyActiveProjectChange(newActiveProject);
-            console.log(`🔄 Active project changed after removal: ${newActiveProject?.projectTitle || 'None'}`);
+            console.log(`🔄 Active project changed after removal: ${newActiveProject?.projectTitle ?? 'None'}`);
         }
         
         console.log(`🗑️ Project removed: ${removedProject.projectTitle} (${projectId})`);

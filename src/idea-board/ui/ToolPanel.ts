@@ -737,7 +737,7 @@ export class ToolPanel {
       
       if (settingsManager) {
         const profile = settingsManager.getLastUsedProfile();
-        const selectedModels = profile?.selectedModels || {};
+        const selectedModels = profile?.selectedModels ?? {};
 
         // Add options with actual model names
         AI_MODEL_PURPOSES.forEach(purpose => {

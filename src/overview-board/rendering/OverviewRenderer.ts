@@ -648,10 +648,10 @@ export class OverviewRenderer {
        cloudRegions: new Map(this.cloudRegions.map(c => [c.id, c])),
        theme: this.theme,
        layout: {
-         events: eventsCloud?.center || { x: 0, y: 0 },
-         characters: charactersCloud?.center || { x: 0, y: 0 },
-         places: placesCloud?.center || { x: 0, y: 0 },
-         cloudRadius: eventsCloud?.radius || 120,
+         events: eventsCloud?.center ?? { x: 0, y: 0 },
+         characters: charactersCloud?.center ?? { x: 0, y: 0 },
+         places: placesCloud?.center ?? { x: 0, y: 0 },
+         cloudRadius: eventsCloud?.radius ?? 120,
          cloudSpacing: 300
        },
       constraints: {

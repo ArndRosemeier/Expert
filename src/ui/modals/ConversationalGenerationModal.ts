@@ -55,7 +55,7 @@ export class ConversationalGenerationModal extends BaseModal {
         if (level < 0 || level >= this.node.template.length) return 'Unknown';
         const levelName = this.node.template[level];
         if (!levelName) return 'Unknown';
-        return levelName.match(/^(\w+)(?:\s+\d+)?$/)?.[1] || levelName;
+        return levelName.match(/^(\w+)(?:\s+\d+)?$/)?.[1] ?? levelName;
     }
 
     /**

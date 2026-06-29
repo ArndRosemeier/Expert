@@ -17,7 +17,7 @@ export class CoherenceUtils {
             coherenceAnalysisPrompt: prompts.coherence_analysis || '',
             fixContradictionPrompt: prompts.fix_contradiction || '',
             language: settingsManager.getLanguage(),
-            taskModelConfigs: profile?.taskModelConfigs || {
+            taskModelConfigs: profile?.taskModelConfigs ?? {
                 coherence_analysis: { outline: 'creator', prose: 'prose' },
                 fix_contradiction: { outline: 'creator', prose: 'prose' },
                 context_adjustment: { outline: 'creator', prose: 'prose' },

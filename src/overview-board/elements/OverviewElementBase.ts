@@ -233,7 +233,7 @@ export abstract class OverviewElementBase implements OverviewElement {
     this.position = data.position;
     this.size = data.size;
     this.significance = data.significance;
-    this.connections = data.connections || [];
+    this.connections = data.connections ?? [];
     this.data = data.data;
   }
 
@@ -259,6 +259,6 @@ export abstract class OverviewElementBase implements OverviewElement {
   }
 
   public getDescription(): string {
-    return this.data.description || '';
+    return this.data.description ?? '';
   }
 } 

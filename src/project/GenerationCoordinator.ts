@@ -207,7 +207,7 @@ export class GenerationCoordinator {
                     generateBtn.disabled = false;
                     // Restore the depth-aware idle label set by renderNodeDetails (e.g.
                     // "Generate down to Scene"); fall back to the plain label if unset.
-                    const idleLabel = generateBtn.dataset['idleLabel'] || BUTTON_LABELS.GENERATE;
+                    const idleLabel = generateBtn.dataset['idleLabel'] ?? BUTTON_LABELS.GENERATE;
                     // Use safe button update to prevent listener loss
                     void import('../ui/event-manager').then(({ eventManager }) => {
                         eventManager.updateButtonContent('node-generate-btn', 
@@ -226,7 +226,7 @@ export class GenerationCoordinator {
             if (!success && error) {
                 console.error('Generation operation failed:', error);
                 console.error('Full error details:', error);
-                alert(`Generation failed: ${error.message || error}`);
+                alert(`Generation failed: ${error.message ?? error}`);
             }
         }
     }

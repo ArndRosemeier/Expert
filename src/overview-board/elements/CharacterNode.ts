@@ -140,7 +140,7 @@ export class CharacterNode extends OverviewElementBase implements CharacterEleme
    * Get detailed information for tooltip or details panel
    */
   public getDetailedInfo(): string {
-    const description = this.data.description || 'No description available';
+    const description = this.data.description ?? 'No description available';
     const aliases = this.data.aliases.length > 0 ? this.data.aliases.join(', ') : 'None';
     
     return `Character: ${this.data.name}\n\nRole: ${this.data.role}\n\nDescription: ${description}\n\nAliases: ${aliases}\n\nConnected Events: ${this.data.connectedEvents.length}\nConnected Places: ${this.data.connectedPlaces.length}`;

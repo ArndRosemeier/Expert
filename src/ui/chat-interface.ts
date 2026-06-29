@@ -47,9 +47,9 @@ export class ChatInterface {
     constructor(openRouterClient: OpenRouterClient, settingsManager: SettingsManager, systemPrompt?: string, title?: string, nodeStructure?: DocumentNode) {
         this.openRouterClient = openRouterClient;
         this.settingsManager = settingsManager;
-        this.customSystemPrompt = systemPrompt || null;
-        this.chatTitle = title || 'AI Chat';
-        this.nodeStructure = nodeStructure || null;
+        this.customSystemPrompt = systemPrompt ?? null;
+        this.chatTitle = title ?? 'AI Chat';
+        this.nodeStructure = nodeStructure ?? null;
     }
 
     /**
@@ -1018,7 +1018,7 @@ export class ChatInterface {
             if (!modelSelector) return 'Not configured';
             
             const selectedModels = modelSelector.getSelectedModels();
-            return selectedModels[purpose] || 'Not configured';
+            return selectedModels[purpose] ?? 'Not configured';
         } catch (error) {
             console.warn(`Failed to get model display name for ${purpose}:`, error);
             return 'Not configured';

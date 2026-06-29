@@ -319,12 +319,12 @@ export class DocumentNode {
         // Older saves predate per-layer length hints; default to none. Kept
         // aligned with `template` by AssertFlatTemplateCopy on load.
         node.layerLengths = Array.isArray(data.layerLengths) ? data.layerLengths : [];
-        node.collapsed = data.collapsed || false;
+        node.collapsed = data.collapsed ?? false;
         node.generationPrompt = data.generationPrompt;
         node.isPromptGenerating = false; // Always reset transient state on load
-        node.generationHistory = data.generationHistory || [];
+        node.generationHistory = data.generationHistory ?? [];
         node.isGenerating = false; // Always reset transient state on load
-        node.generationSessions = data.generationSessions || [];
+        node.generationSessions = data.generationSessions ?? [];
         
         // MIGRATION: Check for legacy context migration BEFORE processing anything else
         const hasNoConditionalContext = !data.conditionalContextItems || data.conditionalContextItems.length === 0;
@@ -337,7 +337,7 @@ export class DocumentNode {
                 if (Array.isArray(v.tags)) {
                     return v.tags.includes('master');
                 } else if (v.tags && typeof v.tags === 'object') {
-                    return v.tags.master || Object.values(v.tags).includes('master');
+                    return v.tags.master ?? Object.values(v.tags).includes('master');
                 }
                 return false;
             });
@@ -467,10 +467,10 @@ export class DocumentNode {
         }
         
         // Restore last generation parameters
-        node.lastGenerationParameters = data.lastGenerationParameters || null;
+        node.lastGenerationParameters = data.lastGenerationParameters ?? null;
         
         // Restore notes
-        node.notes = data.notes || '';
+        node.notes = data.notes ?? '';
 
         // Restore conditional context items (fail loudly on malformed data)
         // Only restore if not already migrated from legacy context
@@ -548,8 +548,8 @@ export class DocumentNode {
             node.versions = [];
             
             // 1. Handle main content (from data.content or data._content)
-            const mainContent = data.content || data._content || '';
-            const mainTitle = data.title || safeTitle;
+            const mainContent = (data.content ?? data._content) ?? '';
+            const mainTitle = data.title ?? safeTitle;
             
             if (mainContent || mainTitle !== 'Untitled') {
                 const masterMetadata: { [key: string]: any } = {};
@@ -583,7 +583,7 @@ export class DocumentNode {
                             
                             const iterationMetadata: { [key: string]: any } = {
                                 sessionId: session.sessionId,
-                                ratings: iteration.ratings || []
+                                ratings: iteration.ratings ?? []
                             };
                             
                             // If this was the chosen iteration, it might have been the master
@@ -594,7 +594,7 @@ export class DocumentNode {
                                 content: iteration.content,
                                 title: mainTitle,
                                 tags: tags,
-                                timestamp: new Date(iteration.timestamp || session.startTime),
+                                timestamp: new Date(iteration.timestamp ?? session.startTime),
                                 metadata: iterationMetadata
                             });
                             } else if (iteration.wasChosen && iteration.content === mainContent) {
@@ -815,7 +815,7 @@ export class DocumentNode {
             title: fields?.title ?? defaultTitle,
             tags: tagSet,
             timestamp: new Date(),
-            metadata: metadata || {},
+            metadata: metadata ?? {},
             ...(ratings && { ratings: ratings })
         };
         
@@ -1104,7 +1104,7 @@ export class DocumentNode {
     getChosenIteration(): GenerationIteration | null {
         const latestSession = this.getLatestGenerationSession();
         return latestSession 
-            ? latestSession.iterations.find(iter => iter.wasChosen) || null
+            ? latestSession.iterations.find(iter => iter.wasChosen) ?? null
             : null;
     }
 
@@ -1161,7 +1161,7 @@ export class DocumentNode {
         // Extract just the base name (remove numbers)
         // Pattern: "Part 3" -> "Part", "Chapter 10" -> "Chapter"
         const match = rawChildLevelName.match(/^(\w+)(?:\s+\d+)?$/);
-        return match?.[1] ? match[1] : rawChildLevelName;
+        return match?.[1] ?? rawChildLevelName;
     }
 
     /**
@@ -1604,9 +1604,9 @@ export class DocumentNode {
             throw new Error(`Cannot build path: node ${this.id} not found under provided root`);
         }
         const parts = chain.map((n) => {
-            const rawLevelName = (n.template[n.level] || `Level ${n.level}`).trim();
+            const rawLevelName = (n.template[n.level] ?? `Level ${n.level}`).trim();
             const match = rawLevelName.match(/^(\w+)(?:\s+\d+)?$/);
-            const levelName = (match?.[1] ? match[1] : rawLevelName).trim();
+            const levelName = (match?.[1] ?? rawLevelName).trim();
             const cleanTitle = (n.title || '').trim();
             return `${levelName}: ${cleanTitle}`;
         });

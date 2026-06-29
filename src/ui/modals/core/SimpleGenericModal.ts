@@ -73,7 +73,7 @@ export class SimpleGenericModal extends SimpleModal {
                     content: action.label,
                     attributes: {
                         type: 'button',
-                        style: this.getButtonStyle(action.type || 'secondary')
+                        style: this.getButtonStyle(action.type ?? 'secondary')
                     }
                 });
 

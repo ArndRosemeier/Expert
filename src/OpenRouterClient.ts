@@ -275,9 +275,7 @@ export class OpenRouterClient {
    * Get the singleton instance of OpenRouterClient
    */
   public static getInstance(): OpenRouterClient {
-    if (!OpenRouterClient.instance) {
-      OpenRouterClient.instance = new OpenRouterClient();
-    }
+    OpenRouterClient.instance ??= new OpenRouterClient();
     return OpenRouterClient.instance;
   }
 
@@ -289,7 +287,7 @@ export class OpenRouterClient {
     try {
       const storage = await StorageService.getInstance();
       const key = await storage.get<string>('openrouter_api_key');
-      return key || '';
+      return key ?? '';
     } catch (error) {
       console.error('Failed to load API key from storage:', error);
       return '';
@@ -379,7 +377,7 @@ export class OpenRouterClient {
       const modelInfo = allModels.find(m => m.id === model);
       const hasNativeWebSearch = modelInfo ? OpenRouterClient.hasNativeWebSearch(modelInfo) : false;
       
-      const webSearchEnabled = hasNativeWebSearch || (webSearchPrefs[purpose] || false);
+      const webSearchEnabled = hasNativeWebSearch || ((webSearchPrefs[purpose] ?? false));
       
       const result: {model: string, webSearchEnabled: boolean, hasNativeWebSearch: boolean, provider?: string} = {
         model,
@@ -411,7 +409,7 @@ export class OpenRouterClient {
     try {
       const allModels = await this.fetchModels();
       const modelInfo = allModels.find(m => m.id === modelId);
-      const supported = new Set<string>(modelInfo?.supported_parameters || []);
+      const supported = new Set<string>(modelInfo?.supported_parameters ?? []);
       if (supported.has('max_output_tokens')) return 'max_output_tokens';
       if (supported.has('max_tokens')) return 'max_tokens';
       // Check provider endpoints for additional hints
@@ -419,7 +417,7 @@ export class OpenRouterClient {
         try {
           const endpoints = await this.fetchModelEndpoints(modelId);
           for (const ep of endpoints) {
-            const epParams = new Set<string>(ep.supported_parameters || []);
+            const epParams = new Set<string>(ep.supported_parameters ?? []);
             if (epParams.has('max_output_tokens')) return 'max_output_tokens';
             if (epParams.has('max_tokens')) return 'max_tokens';
           }
@@ -539,7 +537,7 @@ export class OpenRouterClient {
     }
 
     const words = providerName.split(/[\s\/\-_]+/);
-    const firstWord = words[0] || 'unknown';
+    const firstWord = words[0] ?? 'unknown';
     const normalized = firstWord.toLowerCase().replace(/[^a-z0-9]/g, '');
     
     if (normalized.length > 2 && normalized.length < 20) {
@@ -716,7 +714,7 @@ export class OpenRouterClient {
    * ```
    */
   async chat(purpose: string, message: string, _operationId?: string, externalAbortSignal?: AbortSignal): Promise<string> {
-    const opId = _operationId || this.generateOperationId(purpose);
+    const opId = _operationId ?? this.generateOperationId(purpose);
     const abortController = new AbortController();
     this.activeOperations.set(opId, abortController);
 
@@ -994,7 +992,7 @@ export class OpenRouterClient {
    * Calls onContent for each chunk and onComplete when finished.
    */
   async streamingChat(purpose: string, messages: OpenRouterMessage[], callbacks: StreamingCallbacks, operationId?: string, externalAbortSignal?: AbortSignal, options?: StreamingChatOptions): Promise<void> {
-    const opId = operationId || this.generateOperationId(purpose);
+    const opId = operationId ?? this.generateOperationId(purpose);
     const abortController = new AbortController();
     this.activeOperations.set(opId, abortController);
 

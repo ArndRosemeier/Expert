@@ -14,9 +14,7 @@ export class ContextIDGenerator {
      * Get singleton instance
      */
     public static getInstance(): ContextIDGenerator {
-        if (!this.instance) {
-            this.instance = new ContextIDGenerator();
-        }
+        this.instance ??= new ContextIDGenerator();
         return this.instance;
     }
     
@@ -53,7 +51,7 @@ export class ContextIDGenerator {
             allIds.add(node.id);
             
             // Add version IDs
-            const versions = (node as any).versions || [];
+            const versions = (node as any).versions ?? [];
             versions.forEach((version: any) => {
                 if (version.id) {
                     allIds.add(version.id);
@@ -61,7 +59,7 @@ export class ContextIDGenerator {
             });
             
             // Add conditional context item IDs
-            const conditionalItems = (node as any).conditionalContextItems || [];
+            const conditionalItems = (node as any).conditionalContextItems ?? [];
             conditionalItems.forEach((item: any) => {
                 if (item.id) {
                     allIds.add(item.id);
@@ -180,7 +178,7 @@ export class ContextIDGenerator {
         
         // Only normalize conditional context item IDs - leave node IDs unchanged
         for (const node of allNodes) {
-            const conditionalItems = (node as any).conditionalContextItems || [];
+            const conditionalItems = (node as any).conditionalContextItems ?? [];
             conditionalItems.forEach((item: any) => {
                 if (item.id) {
                     const normalizedItemId = this.normalizeContextID(item.id, rootNode);

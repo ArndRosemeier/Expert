@@ -100,7 +100,7 @@ async function executeProfileOperation<T = void>(
     // Pre-validate the operation
     const validation = validateProfileOperation(context);
     if (!validation.isValid) {
-        return createServiceResponse(false, validation.errors[0] || 'Validation failed');
+        return createServiceResponse(false, validation.errors[0] ?? 'Validation failed');
     }
     
     const result = await executeWithErrorHandling(

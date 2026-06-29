@@ -15,9 +15,7 @@ export class AIInteractionsService {
     }
 
     public static getInstance(): AIInteractionsService {
-        if (!AIInteractionsService.instance) {
-            AIInteractionsService.instance = new AIInteractionsService();
-        }
+        AIInteractionsService.instance ??= new AIInteractionsService();
         return AIInteractionsService.instance;
     }
 

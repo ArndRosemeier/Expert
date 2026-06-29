@@ -425,10 +425,10 @@ export class ProjectManager extends EventEmitter<ProjectManagerEvents> {
         let nodeTemplate: string[];
         if (plainNode.level === 0) {
             // Root node gets a deep copy
-            nodeTemplate = [...(plainNode.template || [])];
+            nodeTemplate = [...(plainNode.template ?? [])];
         } else {
             // Child nodes share the root template reference
-            nodeTemplate = rootTemplate || plainNode.template || [];
+            nodeTemplate = (rootTemplate ?? plainNode.template) ?? [];
         }
         
         // Update the node data with the correct template before conversion

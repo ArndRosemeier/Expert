@@ -93,7 +93,7 @@ export const XMLStoryValidation = {
      */
     extractTags: (text: string): string[] => {
         const xmlTagRegex = /<(?:outline|context|refresh|edit|delete|rename)(?:\s+[^>]*)?(?:\/>|>[^<]*<\/(?:outline|context|refresh|edit|delete|rename)>)/g;
-        return text.match(xmlTagRegex) || [];
+        return text.match(xmlTagRegex) ?? [];
     }
 };
 

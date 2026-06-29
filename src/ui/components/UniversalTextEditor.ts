@@ -762,7 +762,7 @@ export class UniversalTextEditor {
         
         while (walker.nextNode()) {
             const node = walker.currentNode as Text;
-            const nodeLength = node.textContent?.length || 0;
+            const nodeLength = node.textContent?.length ?? 0;
             
             if (currentPos + nodeLength >= regions[0].start) {
                 targetNode = node;
@@ -963,7 +963,7 @@ export class UniversalTextEditor {
         const merged = new Array(Math.max(array1.length, array2.length)).fill(false);
         
         for (let i = 0; i < merged.length; i++) {
-            merged[i] = (array1[i] || false) || (array2[i] || false);
+            merged[i] = ((array1[i] ?? false)) || ((array2[i] ?? false));
         }
         
         return merged;
@@ -1086,7 +1086,7 @@ export class UniversalTextEditor {
         client.setSettingsManager(settingsManager);
         
         // Use the specified model purpose or default to 'editor'
-        const modelPurpose = request.modelPurpose || 'editor';
+        const modelPurpose = request.modelPurpose ?? 'editor';
         const generatedContent = await client.chat(modelPurpose, prompt);
 
         // Parse the transformation from the response
@@ -1153,7 +1153,7 @@ export class UniversalTextEditor {
         // Replace each region with its corresponding transformed part
         sortedRegions.forEach((region, index) => {
             const partIndex = originalRegions.length - 1 - index; // Reverse index for sorted regions
-            const transformedPart = transformedParts[partIndex] || transformedText;
+            const transformedPart = transformedParts[partIndex] ?? transformedText;
             
             const before = newText.substring(0, region.start);
             const after = newText.substring(region.end);
@@ -1176,7 +1176,7 @@ export class UniversalTextEditor {
         let cumulativeOffset = 0;
 
         originalRegions.forEach((region, index) => {
-            const transformedPart = transformedParts[index] || transformedText;
+            const transformedPart = transformedParts[index] ?? transformedText;
             const newStart = region.start + cumulativeOffset;
             const newEnd = newStart + transformedPart.length;
             
@@ -2240,7 +2240,7 @@ export class UniversalTextEditor {
         }
         
         const replacement = this.replaceInput.value;
-        const searchTerm = this.searchInput?.value || '';
+        const searchTerm = this.searchInput?.value ?? '';
         
         try {
             if (this.currentMode === 'enhanced' && this.enhancedEditor) {

@@ -293,7 +293,7 @@ export class KeyStorage {
                     // Check for duplicates
                     const duplicate = existingKeys.find(existing => existing.key === importedKey.key);
                     if (duplicate) {
-                        errors.push(`Duplicate key skipped: ${importedKey.nickname || importedKey.id}`);
+                        errors.push(`Duplicate key skipped: ${importedKey.nickname ?? importedKey.id}`);
                         continue;
                     }
 

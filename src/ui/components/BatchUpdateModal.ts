@@ -60,7 +60,7 @@ export class BatchUpdateModal {
     constructor(rootNode: DocumentNode, container: HTMLElement, options?: BatchUpdateModalOptions) {
         this.rootNode = rootNode;
         this.container = container;
-        this.options = options || {};
+        this.options = options ?? {};
         this.openRouterClient = OpenRouterClient.getInstance();
         this.tree = new SelectableNodeTree(rootNode, document.createElement('div'));
         this.leftPanel = document.createElement('div');
@@ -530,7 +530,7 @@ export class BatchUpdateModal {
                     (fu.field === 'title' && n.title === originalString) ||
                     (fu.field === 'content' && n.content === originalString) ||
                     false // Context field removed - using conditional context system
-                )?.title || 'Unknown';
+                )?.title ?? 'Unknown';
                 console.log(`    - ${fu.field} from "${nodeTitle}"`);
             });
         });
@@ -645,8 +645,8 @@ export class BatchUpdateModal {
                     
                     // Create new version with updates
                     const versionId = node.addVersion(tags, {
-                        title: nodeUpdates['title'] || node.title,
-                        content: nodeUpdates['content'] || node.content
+                        title: nodeUpdates['title'] ?? node.title,
+                        content: nodeUpdates['content'] ?? node.content
                     });
                     
                     console.log(`🔧 Created version for "${node.title}": ${versionId ? 'SUCCESS' : 'FAILED'} (versionId: ${versionId})`);

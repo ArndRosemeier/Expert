@@ -296,7 +296,7 @@ export class ReaderEditManager {
         // Get criteria from settings manager
         const settingsManager = this.projectManager.getSettingsManager();
         const profile = settingsManager.getLastUsedProfile();
-        const allCriteria = profile?.criteria || [];
+        const allCriteria = profile?.criteria ?? [];
         
         // Filter criteria for leaf nodes (most editing actions are on leaf content)
         const isLeafNode = node.isLeaf;
@@ -310,7 +310,7 @@ export class ReaderEditManager {
             'project_title': this.projectManager.projectTitle,
             'parent_content': node.parentId ? 
                 this.projectManager.findNodeById(node.parentId)?.content ?? '' : '',
-            'child_level_name': node.childLevelName || '',
+            'child_level_name': node.childLevelName ?? '',
             'criteria': formatCriteriaAsJson(criteria)
         };
     }
@@ -383,8 +383,8 @@ export class ReaderEditManager {
         }
         
         // Check for unmatched braces
-        const openBraces = (promptTemplate.match(/\{\{/g) || []).length;
-        const closeBraces = (promptTemplate.match(/\}\}/g) || []).length;
+        const openBraces = (promptTemplate.match(/\{\{/g) ?? []).length;
+        const closeBraces = (promptTemplate.match(/\}\}/g) ?? []).length;
         
         if (openBraces !== closeBraces) {
             errors.push('Unmatched placeholder braces - ensure all {{placeholder}} tags are properly closed');

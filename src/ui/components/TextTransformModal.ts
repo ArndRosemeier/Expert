@@ -415,7 +415,7 @@ export class TextTransformModal extends BaseModal {
               id="text-to-change-textarea" 
               class="text-textarea"
               placeholder="Enter the text you want to transform..."
-            >${this.escapeHtml(config.defaultText || '')}</textarea>
+            >${this.escapeHtml(config.defaultText ?? '')}</textarea>
           </div>
           
           <div class="context-area">
@@ -426,7 +426,7 @@ export class TextTransformModal extends BaseModal {
               id="context-textarea" 
               class="context-textarea"
               placeholder="Provide additional context about the text, its purpose, audience, etc..."
-            >${this.escapeHtml(config.defaultContext || '')}</textarea>
+            >${this.escapeHtml(config.defaultContext ?? '')}</textarea>
           </div>
           
           <div class="format-area">
@@ -437,7 +437,7 @@ export class TextTransformModal extends BaseModal {
               id="format-instructions-textarea" 
               class="format-textarea"
               placeholder="Specify format requirements: bullet points, paragraphs, word count, tone, etc..."
-            >${this.escapeHtml(config.defaultFormatInstructions || '')}</textarea>
+            >${this.escapeHtml(config.defaultFormatInstructions ?? '')}</textarea>
           </div>
         </div>
         
@@ -450,7 +450,7 @@ export class TextTransformModal extends BaseModal {
               id="instruction-textarea" 
               class="instruction-textarea"
               placeholder="Describe how you want to transform the text...&#10;&#10;Examples:&#10;• Make it more formal and professional&#10;• Simplify for a younger audience&#10;• Add more detail and examples&#10;• Convert to a list format&#10;• Fix grammar and spelling&#10;• Change tone to be more engaging"
-            >${this.escapeHtml(config.defaultInstruction || '')}</textarea>
+            >${this.escapeHtml(config.defaultInstruction ?? '')}</textarea>
           </div>
           
           <div class="model-selection-area">
@@ -550,7 +550,7 @@ export class TextTransformModal extends BaseModal {
         if (deleteButton) {
           // Handle delete button click
           event.stopPropagation(); // Prevent triggering the history item click
-          const deleteIndex = parseInt(deleteButton.getAttribute('data-delete-index') || '0');
+          const deleteIndex = parseInt(deleteButton.getAttribute('data-delete-index') ?? '0');
           void this.deleteHistoryItem(deleteIndex);
           return;
         }
@@ -593,8 +593,8 @@ export class TextTransformModal extends BaseModal {
     if (!this.textToChangeTextarea || !this.instructionTextarea) return;
     
     const textToChange = this.textToChangeTextarea.value.trim();
-    const context = this.contextTextarea?.value.trim() || undefined;
-    const formatInstructions = this.formatInstructionsTextarea?.value.trim() || undefined;
+    const context = this.contextTextarea?.value.trim() ?? undefined;
+    const formatInstructions = this.formatInstructionsTextarea?.value.trim() ?? undefined;
     const transformInstruction = this.instructionTextarea.value.trim();
     
     if (!textToChange) {
@@ -639,7 +639,7 @@ export class TextTransformModal extends BaseModal {
     try {
       const storage = await this.storageService;
       const history = await storage.get<string[]>(STORAGE_KEY_TEXT_TRANSFORM_HISTORY);
-      this.transformHistory = history || [];
+      this.transformHistory = history ?? [];
     } catch (error) {
       console.warn('Failed to load transform history:', error);
       this.transformHistory = [];
@@ -694,7 +694,7 @@ export class TextTransformModal extends BaseModal {
     try {
       const storage = await this.storageService;
       const savedPurpose = await storage.get<string>(STORAGE_KEY_TEXT_TRANSFORM_MODEL_PURPOSE);
-      this.selectedModelPurpose = savedPurpose || 'editor'; // Default to editor
+      this.selectedModelPurpose = savedPurpose ?? 'editor'; // Default to editor
     } catch (error) {
       console.warn('Failed to load model purpose:', error);
       this.selectedModelPurpose = 'editor'; // Default to editor on error

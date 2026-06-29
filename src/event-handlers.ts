@@ -466,7 +466,7 @@ function handleImportProject(title: string, template: ProjectTemplate, importDat
             // Replace the root node with a fully restored version
             const nodeDataForCreation = {
                 id: rootNode.id, // Keep the same ID for root
-                title: importData.title || 'Imported Project',
+                title: importData.title ?? 'Imported Project',
                 level: 0, // Root level
                 parentId: null,
                 template: template.hierarchyLevels, // Use the project template's hierarchy levels
@@ -574,7 +574,7 @@ function importChildNodeForProject(project: ProjectManager, parentId: string, ch
         newNode = project.addNode(childData.title, parentId);
         
         // Now restore the version data and other properties
-        newNode.id = `imported_${Date.now()}_${childData.id || 'unknown'}`; // New ID to avoid conflicts
+        newNode.id = `imported_${Date.now()}_${childData.id ?? 'unknown'}`; // New ID to avoid conflicts
         
         // Clear the default master version and restore all versions from import
         (newNode as any).versions = []; // Clear default versions
@@ -764,7 +764,7 @@ export async function initialize() {
     state.setOpenRouterClient(client);
     
     // Create a minimal orchestrator just for loading projects
-    const minimalOrchestrator = new LoopOrchestrator(settingsManager, client, state.getOrchestratorPrompts() || undefined);
+    const minimalOrchestrator = new LoopOrchestrator(settingsManager, client, state.getOrchestratorPrompts() ?? undefined);
     state.setOrchestrator(minimalOrchestrator);
     
     await loadPersistedProjects();
@@ -798,9 +798,9 @@ export async function initialize() {
             if (!event.ctrlKey) return; // Must hold Ctrl
             
             // Store last escape press time
-            const lastEscape = (window as any)._lastEscapePress || 0;
+            const lastEscape = (window as any)._lastEscapePress ?? 0;
             if (now - lastEscape < 1000) { // Within 1 second
-                const escapeCount = ((window as any)._escapeCount || 0) + 1;
+                const escapeCount = ((window as any)._escapeCount ?? 0) + 1;
                 (window as any)._escapeCount = escapeCount;
                 
                 if (escapeCount >= 3) {
@@ -1002,7 +1002,7 @@ export async function initialize() {
                         // Check if root node has template as array (node export format)
                         if (importData.template && Array.isArray(importData.template)) {
                             templateData = {
-                                name: `Imported Template (${importData.title || 'Unknown'})`,
+                                name: `Imported Template (${importData.title ?? 'Unknown'})`,
                                 hierarchyLevels: importData.template,
                                 
                             };
@@ -1018,7 +1018,7 @@ export async function initialize() {
                             
                             if (foundTemplate) {
                                 templateData = {
-                                    name: `Imported Template (${importData.title || 'Unknown'})`,
+                                    name: `Imported Template (${importData.title ?? 'Unknown'})`,
                                     hierarchyLevels: foundTemplate,
                                     
                                 };
@@ -1037,7 +1037,7 @@ export async function initialize() {
                     );
                     
                     // Import project data
-                    handleImportProject(importData.title || 'Imported Project', bestTemplate, importData);
+                    handleImportProject(importData.title ?? 'Imported Project', bestTemplate, importData);
                     
                 } catch (error) {
                     console.error('JSON import failed:', error);

@@ -23,7 +23,7 @@ export class NodeSearchModal extends BaseModal {
   private searchScope: 'current-project' | 'all-projects';
 
   constructor(config: NodeSearchModalConfig, hooks: ModalHooks = {}) {
-    const searchScope = config.searchScope || 'current-project';
+    const searchScope = config.searchScope ?? 'current-project';
     const title = searchScope === 'all-projects' 
       ? '🔍 Select Node Content (All Projects)'
       : '🔍 Select Node Content';

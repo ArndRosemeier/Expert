@@ -33,7 +33,7 @@ export function registerRPGPlaceholders(expansionService: ReturnType<typeof crea
     expansionService.registerContextPlaceholder('rpg_current_location', (context: PlaceholderContext) => {
         const rpgContext = context.custom as RPGPlaceholderContext | undefined;
         return {
-            value: rpgContext?.rpg_current_location || '[No location data]',
+            value: rpgContext?.rpg_current_location ?? '[No location data]',
             description: 'Current location name, description, and state'
         };
     });
@@ -41,7 +41,7 @@ export function registerRPGPlaceholders(expansionService: ReturnType<typeof crea
     expansionService.registerContextPlaceholder('rpg_present_characters', (context: PlaceholderContext) => {
         const rpgContext = context.custom as RPGPlaceholderContext | undefined;
         return {
-            value: rpgContext?.rpg_present_characters || '[No characters present]',
+            value: rpgContext?.rpg_present_characters ?? '[No characters present]',
             description: 'Characters present at current location'
         };
     });
@@ -49,7 +49,7 @@ export function registerRPGPlaceholders(expansionService: ReturnType<typeof crea
     expansionService.registerContextPlaceholder('rpg_player_character', (context: PlaceholderContext) => {
         const rpgContext = context.custom as RPGPlaceholderContext | undefined;
         return {
-            value: rpgContext?.rpg_player_character || '[No player character data]',
+            value: rpgContext?.rpg_player_character ?? '[No player character data]',
             description: 'Player character name, description, and state'
         };
     });
@@ -57,7 +57,7 @@ export function registerRPGPlaceholders(expansionService: ReturnType<typeof crea
     expansionService.registerContextPlaceholder('rpg_relevant_lore', (context: PlaceholderContext) => {
         const rpgContext = context.custom as RPGPlaceholderContext | undefined;
         return {
-            value: rpgContext?.rpg_relevant_lore || '[No relevant lore]',
+            value: rpgContext?.rpg_relevant_lore ?? '[No relevant lore]',
             description: 'Lore connected to current location or present characters'
         };
     });
@@ -65,7 +65,7 @@ export function registerRPGPlaceholders(expansionService: ReturnType<typeof crea
     expansionService.registerContextPlaceholder('rpg_recent_events', (context: PlaceholderContext) => {
         const rpgContext = context.custom as RPGPlaceholderContext | undefined;
         return {
-            value: rpgContext?.rpg_recent_events || '[No recent events]',
+            value: rpgContext?.rpg_recent_events ?? '[No recent events]',
             description: 'Recent events summary for continuity'
         };
     });
@@ -73,7 +73,7 @@ export function registerRPGPlaceholders(expansionService: ReturnType<typeof crea
     expansionService.registerContextPlaceholder('rpg_known_distances', (context: PlaceholderContext) => {
         const rpgContext = context.custom as RPGPlaceholderContext | undefined;
         return {
-            value: rpgContext?.rpg_known_distances || '[No known distances]',
+            value: rpgContext?.rpg_known_distances ?? '[No known distances]',
             description: 'Distances from current location to other locations'
         };
     });
@@ -81,7 +81,7 @@ export function registerRPGPlaceholders(expansionService: ReturnType<typeof crea
     expansionService.registerContextPlaceholder('rpg_player_action', (context: PlaceholderContext) => {
         const rpgContext = context.custom as RPGPlaceholderContext | undefined;
         return {
-            value: rpgContext?.rpg_player_action || '[No player action]',
+            value: rpgContext?.rpg_player_action ?? '[No player action]',
             description: 'The last player message/action'
         };
     });
@@ -89,7 +89,7 @@ export function registerRPGPlaceholders(expansionService: ReturnType<typeof crea
     expansionService.registerContextPlaceholder('rpg_gm_response', (context: PlaceholderContext) => {
         const rpgContext = context.custom as RPGPlaceholderContext | undefined;
         return {
-            value: rpgContext?.rpg_gm_response || '[No GM response]',
+            value: rpgContext?.rpg_gm_response ?? '[No GM response]',
             description: 'The last Game Master response'
         };
     });
@@ -97,7 +97,7 @@ export function registerRPGPlaceholders(expansionService: ReturnType<typeof crea
     expansionService.registerContextPlaceholder('world_state_xml', (context: PlaceholderContext) => {
         const rpgContext = context.custom as RPGPlaceholderContext | undefined;
         return {
-            value: rpgContext?.world_state_xml || '<current_world_state></current_world_state>',
+            value: rpgContext?.world_state_xml ?? '<current_world_state></current_world_state>',
             description: 'Complete world state in XML format (locations, characters, lore with IDs)'
         };
     });

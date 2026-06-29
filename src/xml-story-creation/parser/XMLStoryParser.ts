@@ -69,7 +69,7 @@ export class XMLStoryParser {
 
         
         // Extract story elements (use the text with markers to preserve command positions)
-        const { elements, errors, cleanedText } = this.extractStoryElements(textWithMarkers, existingElements || new Map());
+        const { elements, errors, cleanedText } = this.extractStoryElements(textWithMarkers, existingElements ?? new Map());
         result.extractedElements = elements;
         result.errors = errors;
         result.cleanedText = cleanedText;
@@ -130,8 +130,8 @@ export class XMLStoryParser {
             const markerId = `__XML_CMD_${markerIndex++}__`;
             // Extract inner content regardless of which variant matched
             const innerMatch = /<\/outline_replace>\s*([\s\S]*?)\s*<\/outline_replace>/i.exec(full)
-                || /<outline_replace>\s*([\s\S]*?)\s*<\/outline_replace>/i.exec(full);
-            const content = (innerMatch?.[1] || '').trim();
+                ?? /<outline_replace>\s*([\s\S]*?)\s*<\/outline_replace>/i.exec(full);
+            const content = (innerMatch?.[1] ?? '').trim();
             commands.push({
                 type: 'outline_replace',
                 content,
@@ -195,7 +195,7 @@ export class XMLStoryParser {
             
             commands.push({
                 type: 'append',
-                content: (contentMatch?.[1] || '').trim(),
+                content: (contentMatch?.[1] ?? '').trim(),
                 timestamp: new Date(),
                 markerId,
                 rawXml: full
@@ -232,7 +232,7 @@ export class XMLStoryParser {
                 markerId,
                 rawXml: full
             };
-            const paramsText = (parametersText || '').toString();
+            const paramsText = (parametersText ?? '').toString();
             if (paramsText.trim()) {
                 command.parameters = this.parseCommandParameters(paramsText);
             }
@@ -250,7 +250,7 @@ export class XMLStoryParser {
                 markerId,
                 rawXml: full
             };
-            if ((parametersText || '').trim()) {
+            if ((parametersText ?? '').trim()) {
                 command.parameters = this.parseCommandParameters(parametersText);
             }
             commands.push(command);
@@ -315,10 +315,10 @@ export class XMLStoryParser {
         if (includeContextCommands) {
         const contextAddRegex = new RegExp(`<context\\s+(${TAG_ATTRS})\\s*\\/>`, 'gi');
         textWithMarkers = textWithMarkers.replace(contextAddRegex, (full, parametersText) => {
-            const params = this.parseCommandParameters(parametersText || '');
+            const params = this.parseCommandParameters(parametersText ?? '');
             const markerId = `__XML_CMD_${markerIndex++}__`;
             // Support boolean-style flags like "remove" without a value
-            const hasRemoveFlag = /(?:^|\s)remove(?:\s|=|$)/i.test(parametersText || '');
+            const hasRemoveFlag = /(?:^|\s)remove(?:\s|=|$)/i.test(parametersText ?? '');
             const hasId = Boolean(params['id']);
             const hasText = params['text'] !== undefined || params['description'] !== undefined;
             const hasRemove = params['remove'] === 'true' || hasRemoveFlag;
@@ -338,7 +338,7 @@ export class XMLStoryParser {
         // Handle context add/edit commands with content between tags
         const contextContentRegex = new RegExp(`<context\\s+(add|edit)(\\s+${TAG_ATTRS})?\\s*>\\s*([\\s\\S]*?)\\s*<\\/context>`, 'gi');
         textWithMarkers = textWithMarkers.replace(contextContentRegex, (full, commandType, parametersText, content) => {
-            const params = this.parseCommandParameters(parametersText || '');
+            const params = this.parseCommandParameters(parametersText ?? '');
             const markerId = `__XML_CMD_${markerIndex++}__`;
             const built = this.buildContextCommandParameters(params, commandType === 'edit');
             built['text'] = content.trim();

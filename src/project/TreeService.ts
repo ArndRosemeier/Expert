@@ -68,7 +68,7 @@ export class TreeService {
             // Set creator model in the master version's metadata
             const masterVersion = newNode.getMasterVersion();
             if (masterVersion) {
-                masterVersion.metadata = masterVersion.metadata || {};
+                masterVersion.metadata = masterVersion.metadata ?? {};
                 masterVersion.metadata['creatorModel'] = creatorModel;
             }
         }
@@ -371,7 +371,7 @@ export class TreeService {
             return null;
         }
         
-        return siblingsAtLevel[currentIndex - 1] || null;
+        return siblingsAtLevel[currentIndex - 1] ?? null;
     }
 
     /**
@@ -398,7 +398,7 @@ export class TreeService {
             return null;
         }
         
-        return siblingsAtLevel[currentIndex + 1] || null;
+        return siblingsAtLevel[currentIndex + 1] ?? null;
     }
 
 // REMOVED: getNodesAtLevel - replaced with getNodesAtTemplateLevel

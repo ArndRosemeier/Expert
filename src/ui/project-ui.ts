@@ -258,7 +258,7 @@ function countStatusTypes(rootNode: DocumentNode): Map<string, number> {
             const { statusIcon } = getNodeStatusIcons(node);
             const icon = statusIcon;
             if (icon) {
-                const current = counts.get(icon) || 0;
+                const current = counts.get(icon) ?? 0;
                 counts.set(icon, current + 1);
             }
         }
@@ -422,7 +422,7 @@ const handleExpandButtonClick = async (e: Event) => {
     e.stopPropagation();
     e.preventDefault();
     
-    const nodeId = target.dataset['nodeId'] || target.getAttribute('data-node-id');
+    const nodeId = target.dataset['nodeId'] ?? target.getAttribute('data-node-id');
     if (!nodeId) {
         console.error('❌ No nodeId found on expand button', target);
         return;
@@ -615,7 +615,7 @@ function getCurrentLevelName(node: DocumentNode): string {
     // Extract just the base name (remove numbers)
     // Pattern: "Book 1" -> "Book", "Act 1" -> "Act", "Chapter 10" -> "Chapter"
     const match = rawLevelName.match(/^(\w+)(?:\s+\d+)?$/);
-    return match?.[1] ? match[1] : rawLevelName;
+    return match?.[1] ?? rawLevelName;
 }
 
 /**
@@ -623,7 +623,7 @@ function getCurrentLevelName(node: DocumentNode): string {
  */
 function cleanLevelName(rawLevelName: string): string {
     const match = rawLevelName.match(/^(\w+)(?:\s+\d+)?$/);
-    return match?.[1] ? match[1] : rawLevelName;
+    return match?.[1] ?? rawLevelName;
 }
 
 /**
@@ -768,7 +768,7 @@ function getAvailableLayersForDeletion(node: DocumentNode): Array<{relativeLevel
             if (rawLevelName) {
                 // Extract base name from template (e.g., "Chapter 3" -> "Chapter")
                 const match = rawLevelName.match(/^(\w+)(?:\s+\d+)?$/);
-                const levelName = match?.[1] ? match[1] : rawLevelName;
+                const levelName = match?.[1] ?? rawLevelName;
                 const pluralName = levelName + 's'; // Simple pluralization
                 
                 layers.push({
@@ -957,7 +957,7 @@ async function handleNewTopLayer(oldRootNode: DocumentNode): Promise<void> {
         );
 
         // Create new root node with the extended template
-        const oldTitle: string = (oldRootNode.title !== undefined && oldRootNode.title !== null) ? oldRootNode.title : 'Root';
+        const oldTitle: string = oldRootNode.title ?? 'Root';
         const newRoot = new DocumentNode(
             0,
             oldTitle,
@@ -1082,7 +1082,7 @@ async function handleCopyToNewProject(sourceNode: DocumentNode): Promise<void> {
 
         // Copy language from source project (fallback to global language if project-specific not set)
         try {
-            const sourceLanguage = projectManager!.getLanguage() || projectManager!.getSettingsManager().getLanguage();
+            const sourceLanguage = projectManager!.getLanguage() ?? projectManager!.getSettingsManager().getLanguage();
             if (sourceLanguage) {
                 newProjectManager.setLanguage(sourceLanguage);
             }
@@ -1139,7 +1139,7 @@ function deepCopyNodeWithLevelAdjustment(sourceNode: DocumentNode, levelAdjustme
 
     // Rebuild versions and tags from source node
     const sourceVersions = sourceNode.getAllVersions();
-    const masterVersion = sourceVersions.find(v => v.tags.has('master')) || null;
+    const masterVersion = sourceVersions.find(v => v.tags.has('master')) ?? null;
     let newMasterId: string | null = null;
     if (masterVersion) {
         const masterTags = Array.from(masterVersion.tags).filter(t => t !== 'master');
@@ -1382,7 +1382,7 @@ function createActionsDropdownContent(node: DocumentNode): string {
                     ` : ''}
                     ${!node.isLeaf ? `
                         <button class="action-btn" data-action="add-child">
-                            ➕ Add ${node.childLevelName || 'Child'}
+                            ➕ Add ${node.childLevelName ?? 'Child'}
                         </button>
                     ` : ''}
                     <button class="action-btn action-btn-danger" data-action="delete-node">
@@ -1758,7 +1758,7 @@ function setupProjectManagerListeners(manager: ProjectManager) {
             // Map phase to step number: create=1, rate=2, edit=3
             const phaseToStep: Record<string, number> = { 'create': 1, 'rate': 2, 'edit': 3 };
             progressData.stages = {
-                current: phaseToStep[progress.phase] || 1,
+                current: phaseToStep[progress.phase] ?? 1,
                 total: 3,
                 message: `${progress.phase} phase`
             };
@@ -2012,7 +2012,7 @@ export async function refreshGlobalProfileSelector() {
     const profileManager = getProfileManagerService();
     
     const profileNames = profileManager.getAvailableProfiles();
-    const activeProfileName = profileManager.getCurrentActiveProfile() || 'default';
+    const activeProfileName = profileManager.getCurrentActiveProfile() ?? 'default';
     
     selector.innerHTML = profileNames.map(name => 
         `<option value="${name}" ${activeProfileName === name ? 'selected' : ''}>${name}</option>`
@@ -2055,7 +2055,7 @@ export async function renderNodeDetails(retryOptions?: { _isRetry?: boolean }) {
     }
     
     const settingsManager = state.getSettingsManager();
-    settingsManager?.getProfileNames() || [];
+    settingsManager?.getProfileNames() ?? [];
 
     const detailsContainer = document.createElement('div');
     detailsContainer.className = 'node-details-container';
@@ -2773,7 +2773,7 @@ export async function renderNodeDetails(retryOptions?: { _isRetry?: boolean }) {
                                 <select id="draft-level-selector" class="level-dropdown">
                                     ${node.template.slice(node.level).map((levelName, index) => {
                                         const actualLevel = node.level + index;
-                                        const cleanLevelName = levelName.match(/^(\w+)(?:\s+\d+)?$/)?.[1] || levelName;
+                                        const cleanLevelName = levelName.match(/^(\w+)(?:\s+\d+)?$/)?.[1] ?? levelName;
                                         return `<option value="${actualLevel}" ${draftLevelState === actualLevel ? 'selected' : ''}>${cleanLevelName}</option>`;
                                     }).join('')}
                                 </select>
@@ -2789,7 +2789,7 @@ export async function renderNodeDetails(retryOptions?: { _isRetry?: boolean }) {
                                     <option value="-1" ${contentLevelState === -1 ? 'selected' : ''}>None</option>
                                     ${node.template.slice(node.level).map((levelName, index) => {
                                         const actualLevel = node.level + index;
-                                        const cleanLevelName = levelName.match(/^(\w+)(?:\s+\d+)?$/)?.[1] || levelName;
+                                        const cleanLevelName = levelName.match(/^(\w+)(?:\s+\d+)?$/)?.[1] ?? levelName;
                                         return `<option value="${actualLevel}" ${contentLevelState === actualLevel ? 'selected' : ''}>${cleanLevelName}</option>`;
                                     }).join('')}
                                 </select>
@@ -2810,7 +2810,7 @@ export async function renderNodeDetails(retryOptions?: { _isRetry?: boolean }) {
                                         const childLevelIndex = node.level + index + 1;
                                         const childLevelName = childLevelIndex < node.template.length ? node.template[childLevelIndex] : null;
                                         if (childLevelName) {
-                                            const cleanChildLevelName = childLevelName.match(/^(\w+)(?:\s+\d+)?$/)?.[1] || childLevelName;
+                                            const cleanChildLevelName = childLevelName.match(/^(\w+)(?:\s+\d+)?$/)?.[1] ?? childLevelName;
                                             return `<option value="${actualLevel}" ${coherenceLevelState === actualLevel ? 'selected' : ''}>${cleanChildLevelName}</option>`;
                                         }
                                         return ''; // Skip if no child level exists
@@ -2856,7 +2856,7 @@ export async function renderNodeDetails(retryOptions?: { _isRetry?: boolean }) {
                             
                     ${node.isLeaf ? `
                         <div class="leaf-node-info" style="font-size: 0.8rem; color: #6c757d; font-style: italic; text-align: center; margin-top: 0.5rem;">
-                            Leaf node (${node.template[node.level] || 'final level'}) - no children
+                            Leaf node (${node.template[node.level] ?? 'final level'}) - no children
                                 </div>
                     ` : ''}
                     
@@ -2879,7 +2879,7 @@ export async function renderNodeDetails(retryOptions?: { _isRetry?: boolean }) {
                 <div style="display: flex; align-items: baseline; gap: 0.5rem;">
                     <span class="toggle-icon" id="content-toggle-icon">▼</span>
                     <label for="node-content" style="cursor: pointer;">Content</label>
-                    <span style="font-size: 0.75rem; color: #6c757d; font-style: italic; line-height: 1;">${node.creatorModel ? node.creatorModel : 'user text, not generated'}</span>
+                    <span style="font-size: 0.75rem; color: #6c757d; font-style: italic; line-height: 1;">${node.creatorModel ?? 'user text, not generated'}</span>
                 </div>
                 <div style="display: flex; align-items: center; gap: 1rem;">
                     <div id="version-navigation" style="display: none; align-items: center; gap: 0.5rem; font-size: 0.9rem;">
@@ -3367,7 +3367,7 @@ export async function renderNodeDetails(retryOptions?: { _isRetry?: boolean }) {
                 const node = projectManager.findNodeById(selectedNodeId);
                 if (node) {
                     // Use version management system to update title with "edited" and "title_edited" tags
-                    node.setTitleWithTags(nodeTitleDisplay.textContent || '', ['edited', 'title_edited']);
+                    node.setTitleWithTags(nodeTitleDisplay.textContent ?? '', ['edited', 'title_edited']);
                     // Save to storage with debounced approach
                     clearTimeout((nodeTitleDisplay as any)._saveTimeout);
                     (nodeTitleDisplay as any)._saveTimeout = void void setTimeout(() => {
@@ -3398,7 +3398,7 @@ function initializeVersionNavigation(node: DocumentNode) {
     const currentChosenIteration = node.getChosenIteration();
     availableVersions.push({
         content: node.content,
-        ratings: currentChosenIteration?.ratings || null,
+        ratings: currentChosenIteration?.ratings ?? null,
         isCurrent: true,
         label: 'Current',
         totalScore: currentChosenIteration?.ratings ? calculateTotalScore(currentChosenIteration.ratings) : 0
@@ -3970,7 +3970,7 @@ This action cannot be undone.`;
                 if (!node) return;
 
                 if (node.isLeaf) {
-                    alert(`This node is a leaf node (${node.template[node.level] || 'final level'}) and cannot have children.\n\nLeaf nodes are the final level in your project structure and are meant to contain the actual content rather than generate child nodes.`);
+                    alert(`This node is a leaf node (${node.template[node.level] ?? 'final level'}) and cannot have children.\n\nLeaf nodes are the final level in your project structure and are meant to contain the actual content rather than generate child nodes.`);
                     return;
                 }
 
@@ -4068,7 +4068,7 @@ This action cannot be undone.`;
                 if (!node) return;
 
                 if (node.isLeaf) {
-                    const nodeLevelName = node.template[node.level] || 'final level';
+                    const nodeLevelName = node.template[node.level] ?? 'final level';
                     alert(`This node is a leaf node (${nodeLevelName}) and cannot have children.\n\nLeaf nodes are the final level in your project structure and are meant to contain the actual content rather than generate child nodes.`);
                     return;
                 }
@@ -4763,7 +4763,7 @@ export async function setupEventListeners() {
 }
 
 export async function initializeProjectUI(manager?: ProjectManager) {
-    const activeProject = manager || state.getActiveProject();
+    const activeProject = manager ?? state.getActiveProject();
     projectManager = activeProject;
     
     // Initialize centralized profile management
@@ -4794,7 +4794,7 @@ export async function initializeProjectUI(manager?: ProjectManager) {
     if (draftLevelState === -1 && contentLevelState === -1 && coherenceLevelState === -1) {
         // First time - set some sensible defaults
         if (activeProject) {
-            const currentNode = activeProject.findNodeById(selectedNodeId || activeProject.rootNode.id);
+            const currentNode = activeProject.findNodeById(selectedNodeId ?? activeProject.rootNode.id);
             if (currentNode) {
                 draftLevelState = currentNode.level; // Create children at current level
                 contentLevelState = currentNode.level; // Generate content at current level
@@ -4814,8 +4814,8 @@ export async function initializeProjectUI(manager?: ProjectManager) {
         await settingsManager.waitForInitialization();
     }
     
-    const profileNames = settingsManager?.getProfileNames() || [];
-    const activeProfileName = settingsManager?.getLastUsedProfileName() || 'default';
+    const profileNames = settingsManager?.getProfileNames() ?? [];
+    const activeProfileName = settingsManager?.getLastUsedProfileName() ?? 'default';
     
     const profileOptions = profileNames.map(name => 
         `<option value="${name}" ${activeProfileName === name ? 'selected' : ''}>${name}</option>`
@@ -5634,7 +5634,7 @@ function importNodeData(projectManager: ProjectManager, targetNodeId: string, im
         importedNode = projectManager.addNode(importData.title, targetNode.id);
         
         // Now restore the version data and other properties
-        importedNode.id = `imported_${Date.now()}_${importData.id || 'unknown'}`; // New ID to avoid conflicts
+        importedNode.id = `imported_${Date.now()}_${importData.id ?? 'unknown'}`; // New ID to avoid conflicts
         
         // Clear the default master version and restore all versions from import
         (importedNode as any).versions = []; // Clear default versions
@@ -5696,7 +5696,7 @@ function importNodeData(projectManager: ProjectManager, targetNodeId: string, im
         if (importData.creatorModel !== undefined) {
             const masterVersion = importedNode.getMasterVersion();
             if (masterVersion) {
-                masterVersion.metadata = masterVersion.metadata || {};
+                masterVersion.metadata = masterVersion.metadata ?? {};
                 masterVersion.metadata['creatorModel'] = importData.creatorModel;
             }
         }
@@ -5754,7 +5754,7 @@ function importChildNode(projectManager: ProjectManager, parentId: string, child
         newNode = projectManager.addNode(childData.title, parentId);
         
         // Now restore the version data and other properties
-        newNode.id = `imported_${Date.now()}_${childData.id || 'unknown'}`; // New ID to avoid conflicts
+        newNode.id = `imported_${Date.now()}_${childData.id ?? 'unknown'}`; // New ID to avoid conflicts
         
         // Clear the default master version and restore all versions from import
         (newNode as any).versions = []; // Clear default versions
@@ -5816,7 +5816,7 @@ function importChildNode(projectManager: ProjectManager, parentId: string, child
         if (childData.creatorModel !== undefined) {
             const masterVersion = newNode.getMasterVersion();
             if (masterVersion) {
-                masterVersion.metadata = masterVersion.metadata || {};
+                masterVersion.metadata = masterVersion.metadata ?? {};
                 masterVersion.metadata['creatorModel'] = childData.creatorModel;
             }
         }
@@ -6218,8 +6218,8 @@ function findFreeSpaceOnCanvas(ideaBoard: any): { x: number; y: number; width: n
             const hasOverlap = existingElements.some((element: any) => {
                 if (!element.position) return false;
                 
-                const elementRight = element.position.x + (element.size?.width || 225);
-                const elementBottom = element.position.y + (element.size?.height || 150);
+                const elementRight = element.position.x + (element.size?.width ?? 225);
+                const elementBottom = element.position.y + (element.size?.height ?? 150);
                 const testRight = x + neededWidth;
                 const testBottom = y + neededHeight;
                 

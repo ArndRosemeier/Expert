@@ -37,7 +37,7 @@ export class GenerationController {
         this.abortRequested = true;
         
         // Get the list of aborted node IDs before clearing context
-        const abortedNodeIds = this.currentGenerationContext?.nodeIds || [];
+        const abortedNodeIds = this.currentGenerationContext?.nodeIds ?? [];
         console.log('🛑 GenerationController: Aborting nodes:', abortedNodeIds);
         
         // Execute abort operations in parallel for faster response

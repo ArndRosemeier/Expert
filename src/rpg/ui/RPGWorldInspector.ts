@@ -343,8 +343,8 @@ export class RPGWorldInspector {
             html += '<div class="rpg-tree-category-header" data-category="distances">🧭 Distances (' + distances.length + ')</div>';
             html += '<div class="rpg-tree-category-content" data-category="distances">';
             for (const d of distances) {
-                const fromName = this.worldStateService.getLocation(worldState, d.fromLocationId)?.name || d.fromLocationId;
-                const toName = this.worldStateService.getLocation(worldState, d.toLocationId)?.name || d.toLocationId;
+                const fromName = this.worldStateService.getLocation(worldState, d.fromLocationId)?.name ?? d.fromLocationId;
+                const toName = this.worldStateService.getLocation(worldState, d.toLocationId)?.name ?? d.toLocationId;
                 const ageClass = this.getAgeClass(d.lastUsedTurn);
                 html += '<div class="rpg-entity-tree-item">';
                 html += `<div class="rpg-entity-header expanded ${ageClass}">`;
@@ -390,12 +390,12 @@ export class RPGWorldInspector {
             html += `<br><small class="rpg-muted">Last used turn: ${rel.lastUsedTurn}</small>`;
             html += `<br><small class="rpg-muted">From: <a class="rpg-relationship-link" data-target-id="${rel.fromId}">${this.escapeHtml(fromName)}</a></small>`;
             html += `<br><small class="rpg-muted">To: <a class="rpg-relationship-link" data-target-id="${rel.toId}">${this.escapeHtml(toName)}</a></small>`;
-            html += `<label>Note</label><input class="rpg-edit-input" data-rel-field="note" value="${this.escapeHtml(rel.note || '')}" />`;
+            html += `<label>Note</label><input class="rpg-edit-input" data-rel-field="note" value="${this.escapeHtml(rel.note ?? '')}" />`;
 
             if (rel.kind === 'attitude_towards') {
                 html += `<label>Stance</label>${this.renderStanceSelect(rel.stance)}`;
                 html += `<label>Intensity</label>${this.renderIntensitySelect(rel.intensity)}`;
-                html += `<label>Reason</label><input class="rpg-edit-input" data-rel-field="reason" value="${this.escapeHtml(rel.reason || '')}" />`;
+                html += `<label>Reason</label><input class="rpg-edit-input" data-rel-field="reason" value="${this.escapeHtml(rel.reason ?? '')}" />`;
             }
             html += `</div>`;
 
@@ -633,12 +633,12 @@ export class RPGWorldInspector {
 
             html += `<div class="rpg-relationship-fields">`;
             html += `<small class="rpg-muted">Created turn: ${rel.createdTurn}</small>`;
-            html += `<label>Note</label><input class="rpg-edit-input" data-rel-field="note" value="${this.escapeHtml(rel.note || '')}" />`;
+            html += `<label>Note</label><input class="rpg-edit-input" data-rel-field="note" value="${this.escapeHtml(rel.note ?? '')}" />`;
 
             if (rel.kind === 'attitude_towards') {
                 html += `<label>Stance</label>${this.renderStanceSelect(rel.stance)}`;
                 html += `<label>Intensity</label>${this.renderIntensitySelect(rel.intensity)}`;
-                html += `<label>Reason</label><input class="rpg-edit-input" data-rel-field="reason" value="${this.escapeHtml(rel.reason || '')}" />`;
+                html += `<label>Reason</label><input class="rpg-edit-input" data-rel-field="reason" value="${this.escapeHtml(rel.reason ?? '')}" />`;
             }
             html += `</div>`;
 

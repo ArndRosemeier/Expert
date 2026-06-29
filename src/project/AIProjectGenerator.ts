@@ -30,7 +30,7 @@ export class AIProjectGenerator {
     private settingsManager: SettingsManager;
 
     constructor(client?: OpenRouterClient, settingsManager?: SettingsManager) {
-        this.openRouterClient = client || OpenRouterClient.getInstance();
+        this.openRouterClient = client ?? OpenRouterClient.getInstance();
         this.settingsManager = settingsManager!; // Will be provided by ProjectGenerationService
     }
 
@@ -84,7 +84,7 @@ export class AIProjectGenerator {
         
         // Get quality criteria from current profile
         const profile = this.settingsManager.getLastUsedProfile();
-        const allCriteria = profile?.criteria || [];
+        const allCriteria = profile?.criteria ?? [];
         
         // Filter criteria for outline/structure generation (not leaf content)
         const criteria = this.filterCriteriaForOutlineGeneration(allCriteria);
@@ -130,7 +130,7 @@ export class AIProjectGenerator {
             console.log('✅ Successfully parsed AI response with method:', parsedContent.metadata['parseMethod']);
             console.log('✅ Extracted title:', parsedContent.metadata['title']);
             return {
-                Title: parsedContent.metadata['title'] || undefined,
+                Title: parsedContent.metadata['title'] ?? undefined,
                 Content: parsedContent.content,
                 Template: parsedContent.template,
                 Context: parsedContent.context

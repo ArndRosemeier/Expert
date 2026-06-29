@@ -10,9 +10,7 @@ export class AILogService {
     private constructor() {}
 
     public static getInstance(): AILogService {
-        if (!AILogService.instance) {
-            AILogService.instance = new AILogService();
-        }
+        AILogService.instance ??= new AILogService();
         return AILogService.instance;
     }
 

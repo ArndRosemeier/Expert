@@ -56,7 +56,7 @@ export function formatCriteriaForCreator(criteria: QualityCriterion[]): string {
         const shortName = criterion.name.indexOf('.') > 0
             ? criterion.name.substring(0, criterion.name.indexOf('.'))
             : criterion.name;
-        const baseDescription = criterion.description || shortName;
+        const baseDescription = criterion.description ?? shortName;
         const description = criterion.binary === true
             ? `MANDATORY (binary pass/fail): ${baseDescription}`
             : baseDescription;

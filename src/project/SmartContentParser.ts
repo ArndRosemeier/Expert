@@ -273,7 +273,7 @@ export class SmartContentParser {
         // Try alternative structures
         if (jsonData.content || jsonData.template || jsonData.context) {
             let contextString = '';
-            const contextData = jsonData.context || jsonData.Context;
+            const contextData = jsonData.context ?? jsonData.Context;
             if (typeof contextData === 'string') {
                 contextString = contextData;
             } else if (typeof contextData === 'object') {
@@ -282,9 +282,9 @@ export class SmartContentParser {
 
             return {
                 hasStructuredData: true,
-                content: jsonData.content || jsonData.Content || originalResponse,
+                content: (jsonData.content ?? jsonData.Content) ?? originalResponse,
                 context: contextString,
-                template: jsonData.template || jsonData.Template,
+                template: jsonData.template ?? jsonData.Template,
                 metadata: {
                     parseMethod: 'alternative_project',
                     originalLength: originalResponse.length,
@@ -302,8 +302,8 @@ export class SmartContentParser {
     private static parseContentStructure(jsonData: any, originalResponse: string): ParsedContent {
         return {
             hasStructuredData: true,
-            content: jsonData.content || jsonData.text || jsonData.Content || originalResponse,
-            context: jsonData.context || jsonData.Context || '',
+            content: (jsonData.content ?? jsonData.text) ?? jsonData.Content ?? originalResponse,
+            context: (jsonData.context ?? jsonData.Context) ?? '',
             metadata: {
                 parseMethod: 'content_structure',
                 originalLength: originalResponse.length,
@@ -586,8 +586,8 @@ export class SmartContentParser {
         analysis.jsonBlocks = jsonMatches ? jsonMatches.length : 0;
 
         // Check for brace pairs
-        const openBraces = (response.match(/\{/g) || []).length;
-        const closeBraces = (response.match(/\}/g) || []).length;
+        const openBraces = (response.match(/\{/g) ?? []).length;
+        const closeBraces = (response.match(/\}/g) ?? []).length;
         
         if (openBraces > 0 && closeBraces > 0) {
             analysis.hasJson = true;

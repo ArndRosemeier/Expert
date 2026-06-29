@@ -20,7 +20,7 @@ export class CoherenceModal extends BaseModal {
             closable: true,
             backdrop: false
         });
-        this.generationProject = generationProject || null;
+        this.generationProject = generationProject ?? null;
     }
 
     /**
@@ -44,8 +44,8 @@ export class CoherenceModal extends BaseModal {
         this.isLoading = false;
         
         // Find the modal content container - try multiple selectors
-        const modalContent = document.querySelector(`[data-modal-id="${this.id}"] .modal-content`) ||
-                           document.querySelector('.modal-content') ||
+        const modalContent = (document.querySelector(`[data-modal-id="${this.id}"] .modal-content`) ??
+                           document.querySelector('.modal-content')) ??
                            document.querySelector(`#${this.id} .modal-content`);
         
         console.log('CoherenceModal: Found modal content element:', modalContent);
@@ -653,7 +653,7 @@ export class CoherenceModal extends BaseModal {
             btn.addEventListener('click', async (e) => {
                 const button = e.target as HTMLButtonElement;
                 const childId = button.dataset['childId'];
-                const contradictionIndex = parseInt(button.dataset['contradictionIndex'] || '0');
+                const contradictionIndex = parseInt(button.dataset['contradictionIndex'] ?? '0');
                 
                 if (childId && this.analysisResult) {
                     await this.handleFixContradiction(childId, contradictionIndex, button);
@@ -754,7 +754,7 @@ export class CoherenceModal extends BaseModal {
             
             newBtn.addEventListener('click', async (e) => {
                 const button = e.target as HTMLButtonElement;
-                const contradictionIndex = parseInt(button.dataset['contradictionIndex'] || '0');
+                const contradictionIndex = parseInt(button.dataset['contradictionIndex'] ?? '0');
                 await this.applyFix(contradictionIndex, button);
             });
         });
@@ -768,7 +768,7 @@ export class CoherenceModal extends BaseModal {
             
             newBtn.addEventListener('click', (e) => {
                 const button = e.target as HTMLButtonElement;
-                const contradictionIndex = parseInt(button.dataset['contradictionIndex'] || '0');
+                const contradictionIndex = parseInt(button.dataset['contradictionIndex'] ?? '0');
                 this.rejectFix(contradictionIndex);
             });
         });
@@ -791,14 +791,14 @@ export class CoherenceModal extends BaseModal {
         // Determine which project root to use for searching
         if (this.generationProject) {
             // Use the generation project (passed from generation loop)
-            childNode = this.generationProject.findDescendantById(contradiction.offending_child_id) || undefined;
+            childNode = this.generationProject.findDescendantById(contradiction.offending_child_id) ?? undefined;
         } else {
             // Fallback to active project (for direct action button calls)
             const { getActiveProject } = await import('../../state');
             const activeProject = getActiveProject();
             const projectRoot = activeProject?.rootNode;
             if (projectRoot) {
-                childNode = projectRoot.findDescendantById(contradiction.offending_child_id) || undefined;
+                childNode = projectRoot.findDescendantById(contradiction.offending_child_id) ?? undefined;
             } else {
                 // Final fallback to old logic
                 childNode = this.parentNode?.children.find(child => child.id === contradiction.offending_child_id);
@@ -932,21 +932,21 @@ export class CoherenceModal extends BaseModal {
             // Fallback to active project (for direct action button calls)
             const { getActiveProject } = await import('../../state');
             const activeProject = getActiveProject();
-            projectRoot = activeProject?.rootNode || null;
+            projectRoot = activeProject?.rootNode ?? null;
         }
         
         if (projectRoot) {
             // Use the centralized findDescendantById method
-            childNode = projectRoot.findDescendantById(childId) || undefined;
+            childNode = projectRoot.findDescendantById(childId) ?? undefined;
             
             // Find the actual parent node for this contradiction
             if (contradiction.parentNodeId) {
                 // Multi-parent comprehensive mode: find the specific parent for this contradiction
-                actualParentNode = projectRoot.findDescendantById(contradiction.parentNodeId) || undefined;
+                actualParentNode = projectRoot.findDescendantById(contradiction.parentNodeId) ?? undefined;
             } else {
                 // Single-parent mode: use the modal's parent node (but validate it exists in project)
                 if (this.parentNode?.id) {
-                    actualParentNode = projectRoot.findDescendantById(this.parentNode.id) || this.parentNode;
+                    actualParentNode = projectRoot.findDescendantById(this.parentNode.id) ?? this.parentNode;
                 } else {
                     actualParentNode = this.parentNode || undefined;
                 }

@@ -271,7 +271,7 @@ export class KeysUI {
                 resultDiv.innerHTML = `
                     <div class="validation-error">
                         <h3>❌ Invalid Key</h3>
-                        <p>${result.reason || 'Key validation failed'}</p>
+                        <p>${result.reason ?? 'Key validation failed'}</p>
                     </div>
                 `;
             }
@@ -463,7 +463,7 @@ export class KeysUI {
             } else if (downloadResult.cancelled) {
                 this.showError('Export cancelled by user');
             } else {
-                const errorMessage = downloadResult.error || 'Unknown export error';
+                const errorMessage = downloadResult.error ?? 'Unknown export error';
                 this.showError(`Failed to save export file: ${errorMessage}`);
             }
         } catch (error) {

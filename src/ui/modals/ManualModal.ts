@@ -566,7 +566,7 @@ export class ManualModal extends BaseModal {
             const li = document.createElement('li');
             const a = document.createElement('a');
             a.href = `#${id}`;
-            a.textContent = text || '';
+            a.textContent = text ?? '';
             a.className = `toc-${level}`;
             a.onclick = (e) => {
                 e.preventDefault();

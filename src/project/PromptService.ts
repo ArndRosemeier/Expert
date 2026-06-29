@@ -98,7 +98,7 @@ Please expand it into the full ${artifact}.`;
         } = {
             context: context,
             draftOrFresh: draftOrFresh,
-            childLevelName: node.childLevelName || '',
+            childLevelName: node.childLevelName ?? '',
             generateCount: this.getGenerateCountInstruction(node)
         };
         

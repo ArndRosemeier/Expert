@@ -672,7 +672,7 @@ export class SettingsModal extends BaseModal {
             this.debugGenerationCheckbox.checked = this.settingsService.isDebugGenerationEnabled();
         }
 
-        this.updateCurrentProfileDisplay(this.settingsService.getLastUsedProfileName() || '');
+        this.updateCurrentProfileDisplay(this.settingsService.getLastUsedProfileName() ?? '');
         this.updateUnsavedIndicator(false);
     }
 
@@ -698,7 +698,7 @@ export class SettingsModal extends BaseModal {
 
         // Apply max iterations
         if (this.maxIterationsInput) {
-            this.maxIterationsInput.value = String(profile.maxIterations || DEFAULT_MAX_ITERATIONS);
+            this.maxIterationsInput.value = String(profile.maxIterations ?? DEFAULT_MAX_ITERATIONS);
         }
 
         // Refresh task model editor
@@ -840,8 +840,8 @@ export class SettingsModal extends BaseModal {
         const activeProfileName = this.settingsService.getLastUsedProfileName();
         if (!activeProfileName) return;
 
-        const criteria = this.criteriaEditor?.getCriteria() || [];
-        const maxIterations = parseInt(this.maxIterationsInput?.value || String(DEFAULT_MAX_ITERATIONS), 10);
+        const criteria = this.criteriaEditor?.getCriteria() ?? [];
+        const maxIterations = parseInt(this.maxIterationsInput?.value ?? String(DEFAULT_MAX_ITERATIONS), 10);
 
         await this.settingsService.saveCurrentSettingsToProfile(
             activeProfileName,
