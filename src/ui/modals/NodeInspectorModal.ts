@@ -5,6 +5,7 @@ import { Rating } from '../../types/RatingTypes';
 import { findProjectByNode } from '../../state';
 import { UniversalTextEditor } from '../components/UniversalTextEditor';
 import { ConditionalContextEditor } from '../components/ConditionalContextEditor';
+import { DiffTool } from '../../DiffTool';
 
 
 // ============================================================================
@@ -520,9 +521,20 @@ export class NodeInspectorModal extends BaseModal {
                 .map(tag => `<span class="version-tag ${tag} clickable-tag" data-tag="${tag}" data-version-id="${version.id}">${tag}</span>`)
                 .join('');
             
+            // Compare-to-master is only meaningful for a non-master, non-draft
+            // version while a master version actually exists to compare against.
+            const canCompareToMaster = !version.tags.has('master')
+                && !version.tags.has('draft')
+                && versions.some(v => v.tags.has('master'));
+
             // Generate action buttons for selected version
             const actionButtons = version.id === this.selectedVersionId ? `
                 <div class="version-action-buttons-inline">
+                    ${canCompareToMaster ? `
+                    <button class="version-action-btn compare-btn" data-version-id="${version.id}">
+                        🔍 Compare to Master
+                    </button>
+                    ` : ''}
                     <button class="version-action-btn tag-btn" data-version-id="${version.id}">
                         🏷️ Tag
                     </button>
@@ -548,7 +560,15 @@ export class NodeInspectorModal extends BaseModal {
             if (version.id === this.selectedVersionId) {
                 const tagBtn = item.querySelector('.tag-btn') as HTMLButtonElement;
                 const removeBtn = item.querySelector('.remove-btn') as HTMLButtonElement;
-                
+                const compareBtn = item.querySelector<HTMLButtonElement>('.compare-btn');
+
+                if (compareBtn) {
+                    compareBtn.addEventListener('click', (e) => {
+                        e.stopPropagation(); // Prevent triggering version selection
+                        void this.handleCompareToMaster(version.id);
+                    });
+                }
+
                 if (tagBtn) {
                     tagBtn.addEventListener('click', async (e) => {
                         e.stopPropagation(); // Prevent triggering version selection
@@ -913,6 +933,64 @@ export class NodeInspectorModal extends BaseModal {
         const div = document.createElement('div');
         div.textContent = text;
         return div.innerHTML;
+    }
+
+    /**
+     * Show a highlighted side-by-side diff of the given (non-master) version
+     * against the node's master version. Master is the "original" (left), the
+     * selected version is the "modified" (right), so highlights read as what this
+     * version changed relative to master. Reuses the shared DiffTool.
+     */
+    private async handleCompareToMaster(versionId: string): Promise<void> {
+        if (!this.node) return;
+
+        const versions = this.node.getAllVersions();
+        const master = versions.find(v => v.tags.has('master'));
+        const selected = versions.find(v => v.id === versionId);
+        if (!master || !selected) {
+            console.error('Compare to master: master or selected version not found');
+            return;
+        }
+
+        const diff = DiffTool.compare(master.content, selected.content);
+        const summary = DiffTool.getSummary(diff);
+        const selectedLabel = this.getVersionLabel(selected);
+
+        const columnStyle = 'flex:1 1 0; min-width:0; border:1px solid #e5e7eb; border-radius:8px; overflow:hidden; display:flex; flex-direction:column;';
+        const headStyle = 'padding:6px 10px; font-weight:700; background:#f3f4f6; border-bottom:1px solid #e5e7eb;';
+        const bodyStyle = 'padding:10px; white-space:pre-wrap; overflow:auto; max-height:62vh; line-height:1.5;';
+
+        const titleNote = master.title !== selected.title
+            ? `<div style="margin-bottom:10px; padding:8px 10px; background:#fffbeb; border:1px solid #fde68a; border-radius:6px;">
+                   <strong>Title changed:</strong>
+                   <span style="color:#b91c1c;">${this.escapeHtml(master.title || '(empty)')}</span>
+                   →
+                   <span style="color:#166534;">${this.escapeHtml(selected.title || '(empty)')}</span>
+               </div>`
+            : '';
+
+        const content = `
+            <div style="display:flex; flex-direction:column; gap:10px;">
+                <div style="font-weight:600;">${this.escapeHtml(summary)}</div>
+                ${titleNote}
+                <div style="display:flex; gap:12px;">
+                    <div style="${columnStyle}">
+                        <div style="${headStyle}">Master</div>
+                        <div style="${bodyStyle}">${diff.originalHtml}</div>
+                    </div>
+                    <div style="${columnStyle}">
+                        <div style="${headStyle}">${this.escapeHtml(selectedLabel)}</div>
+                        <div style="${bodyStyle}">${diff.modifiedHtml}</div>
+                    </div>
+                </div>
+            </div>
+        `;
+
+        const { showGenericModal } = await import('./index');
+        showGenericModal(
+            { content },
+            { title: 'Compare to Master', maxWidth: '80vw' }
+        );
     }
 
     private async handleTagVersion(versionId: string): Promise<void> {
