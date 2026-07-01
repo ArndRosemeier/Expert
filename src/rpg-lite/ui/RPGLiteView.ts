@@ -1426,11 +1426,18 @@ export class RPGLiteView {
     `;
 
     (this.container.querySelector('#rpg-lite-close') as HTMLButtonElement).addEventListener('click', () => {
+      // Abort any in-progress stream first: tearing down the modal removes the
+      // messages container, and an orphaned stream would keep firing DOM updates
+      // (throwing "container not found") and consuming the API in the background.
+      this.abortStreamingIfActive();
       this.modalEl?.remove();
       this.modalEl = null;
     });
 
     (this.container.querySelector('#rpg-lite-home') as HTMLButtonElement).addEventListener('click', () => {
+      // Same reason as Close: navigating back to the selector replaces the
+      // session screen (and its messages container), so the stream must stop.
+      this.abortStreamingIfActive();
       void this.loadAll().then(() => { this.renderSelector(); });
     });
 
