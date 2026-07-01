@@ -1071,9 +1071,6 @@ Your goal is to be very critical. If in doubt, report the contradiction. Better 
 PARENT OUTLINE:
 {{parent_content}}
 
-PARENT CONTEXT (background information):
-{{parent_context}}
-
 EXPANDED CONTENT (from child sections):
 {{children_content}}
 
@@ -1082,7 +1079,6 @@ TASK: Identify contradictions between the outline and the expanded content.
 IMPORTANT INSTRUCTIONS:
 - Focus on factual contradictions, not minor style differences
 - Look for conflicts in: facts, dates, names, events, causation, logic, timelines
-- Use the parent context to better understand the intended meaning
 - Rate each contradiction's severity based on how much it undermines the content's coherence
 
 SEVERITY SCALE:
@@ -1091,30 +1087,35 @@ SEVERITY SCALE:
 - 7-9: Major contradictions that significantly undermine coherence
 - 10: Critical contradictions that completely invalidate the content
 
-RESPONSE FORMAT:
-Return a JSON array where each contradiction has exactly these fields:
-- "fact_in_outline": The specific fact or claim from the outline
-- "fact_in_expansion": The contradictory fact or claim from the expanded content  
+OUTPUT CONTRACT (your output is parsed directly by a machine - follow it exactly):
+- Output ONLY a JSON array. No markdown, no code fences, no text before or after it.
+- Do NOT wrap the array in an object; the top-level value MUST be the array itself.
+- If no contradictions are found, output exactly: []
+- Every string value MUST be valid JSON: escape each double quote as \\" and never put a raw line break inside a value. Keep each value on a single line.
+- Do NOT paste long passages verbatim. Paraphrase each fact in one short sentence - this is what keeps the JSON valid.
+- Do NOT use trailing commas or comments.
+
+Each contradiction object has exactly these fields:
+- "fact_in_outline": Short paraphrase of the fact or claim from the outline
+- "fact_in_expansion": Short paraphrase of the contradictory fact or claim from the expanded content
 - "justification": Brief explanation of why this is a contradiction
 - "offending_child_title": Title of the child node that contains the contradictory content
 - "severity": A number from 1-10 based on how severely this contradiction undermines coherence
 
-If no contradictions found, return an empty array: []
-
-EXAMPLE:
+EXAMPLE (values are single-line; note the escaped quotes inside a value):
 [
   {
     "fact_in_outline": "The meeting was scheduled for Tuesday",
-    "fact_in_expansion": "The meeting occurred on Wednesday morning",
+    "fact_in_expansion": "The narrator says \\"we met on Wednesday morning\\"",
     "justification": "Timeline contradiction - different days specified for the same event",
     "offending_child_title": "Meeting Summary",
     "severity": 7
   }
 ]
-Write your text in {{language}}. All JSON field names must always remain in English.
+Write the text of the values in {{language}}. All JSON field names must always remain in English.
 
-JSON Response:`.trim(),
-        placeholders: ['parent_content', 'parent_context', 'children_content', 'language'],
+JSON array:`.trim(),
+        placeholders: ['parent_content', 'children_content', 'language'],
         description: "System prompt for analyzing coherence between parent node outlines and expanded child content. Identifies factual contradictions with severity ratings and returns them in structured JSON format."
     },
 
@@ -1298,43 +1299,59 @@ Your JSON response:`.trim(),
 
     fix_contradiction: {
         text: `
-            Generate corrected content in {{language}}. Any structural elements (such as section headers) must always remain in English.
-            
-            You are an expert editor. Your job is to fix a contradiction in text content.
+            You are a precise line editor fixing a specific contradiction. Work in {{language}}. Structural elements (===Section=== headers and the XML command tags themselves) must always remain in English.
 
-PARENT OUTLINE REFERENCE:
-{{parent_content}}
+            A coherence check found that the section "{{child_title}}" contradicts its parent outline.
 
-PARENT CONTEXT (for reference):
-{{parent_context}}
+            PARENT OUTLINE (the source of truth):
+            ---
+            {{parent_content}}
+            ---
 
-CHILD NODE: "{{child_title}}"
+            CURRENT CONTENT OF "{{child_title}}":
+            ---
+            {{child_content}}
+            ---
 
-CURRENT CONTENT:
-{{child_content}}
+            CONTRADICTION TO FIX:
+            - Parent says: "{{fact_in_outline}}"
+            - Child says: "{{fact_in_expansion}}"
+            - Problem: {{justification}}
 
-CONTRADICTION TO FIX:
-- Parent says: "{{fact_in_outline}}"
-- Child says: "{{fact_in_expansion}}"
-- Problem: {{justification}}
+            Your job is to make the SMALLEST set of changes to the current content that removes this contradiction, bringing it into line with the parent outline. Do not change anything the contradiction does not require.
 
-INSTRUCTIONS:
-1. Take the current content above
-2. Change only the parts that contradict the parent outline
-3. Keep everything else exactly the same
-4. Make sure the fixed content flows naturally
-5. Return the complete corrected content
+            HOW TO RESPOND — OUTPUT COMMANDS ONLY:
+            Return ONLY edit commands and nothing else: no prose, no commentary, no explanations, no preamble.
 
-EXAMPLE:
-If the current content is "The meeting happened on Wednesday and was very productive" but the parent says it was on Tuesday, you would return: "The meeting happened on Tuesday and was very productive"
+            Prefer small, targeted edits. Available commands:
+            - Replace a specific passage:
+              <replace_command><search>EXACT TEXT FROM THE CURRENT CONTENT</search><replace>NEW TEXT</replace></replace_command>
+            - Add new material at the end:
+              <append>TEXT TO ADD</append>
 
-YOUR RESPONSE:
-Provide the complete corrected content for this child node, no abbreviations. The corrected text will REPLACE the original text, so the FULL TEXT MUST BE PRESENT.
-This is for an automated workflow, so do not add any additional text or comments or questions.
-Corrected text:
+            When the current content is a structured outline with ===Section=== headers, you may also:
+            - Replace one whole section (optionally begin the new content with ===New Title=== to rename it):
+              <replace_section section="SECTION TITLE">NEW SECTION CONTENT</replace_section>
+            - Remove one whole section:
+              <remove_section section="SECTION TITLE" />
+
+            Full rewrite — LAST RESORT ONLY:
+            - <outline_replace>THE ENTIRE NEW CONTENT</outline_replace>
+            Use <outline_replace> only when the contradiction is so pervasive that targeted edits would be impractical. Never use it for a localized fix — needless full rewrites churn the text and are not wanted.
+
+            Rules for <replace_command>:
+            - Copy the <search> text VERBATIM from the current content above (same words, in the same order). Capitalization, punctuation, and whitespace need not match exactly, but the words must.
+            - Each <search> must identify EXACTLY ONE place in the content. If a phrase repeats, include enough surrounding words to make it unique.
+            - Change only what the contradiction requires. Do not rephrase, reorder, or re-punctuate text you are not fixing.
+
+            General rules:
+            - Preserve the substance, voice, characters, plot, and structure. Keep all ===Section=== headers intact unless you are explicitly changing a section.
+            - Do NOT use any context commands; context items are out of scope here.
+
+            {{priorFailures}}
         `.trim(),
-        placeholders: ['parent_content', 'parent_context', 'child_title', 'child_content', 'fact_in_outline', 'fact_in_expansion', 'justification', 'language'],
-        description: "System prompt for fixing contradictions in child node content. Takes the contradiction details and rewrites the child content to resolve the issue while maintaining style and structure."
+        placeholders: ['parent_content', 'child_title', 'child_content', 'fact_in_outline', 'fact_in_expansion', 'justification', 'priorFailures', 'language'],
+        description: "System prompt for the coherence contradiction fixer. It emits targeted edit commands (replace_command/append, plus section commands for outlines) to remove a specific contradiction with minimal change, reserving full-body outline_replace for pervasive fixes. {{priorFailures}} carries feedback about commands that could not be applied on a prior attempt."
     },
 
     text_polishing: {

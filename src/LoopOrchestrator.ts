@@ -13,26 +13,13 @@ import {
     splitCriteria
 } from './quality/MetricEvaluator';
 import * as state from './state';
-import { XMLStoryParser } from './xml-story-creation/parser/XMLStoryParser';
-import type { SystemCommand } from './xml-story-creation/types/XMLStoryTypes';
-import { TargetedTextEditor } from './text-edit/TargetedTextEditor';
+import { runTargetedEdits, TargetedEditFailure } from './text-edit/TargetedEditRunner';
 
-/** A targeted edit the editor could not apply (surfaced to the caller). */
-export interface LoopFailedEdit {
-    /** The search text or section the failed command targeted. */
-    search: string;
-    /** Why it could not be applied. */
-    reason: string;
-}
-
-/** Body-edit command types the generation editor is allowed to emit. */
-const SUPPORTED_EDIT_COMMANDS: ReadonlySet<SystemCommand['type']> = new Set([
-    'replace_command',
-    'append',
-    'replace_section',
-    'remove_section',
-    'outline_replace'
-]);
+/**
+ * A targeted edit the editor could not apply (surfaced to the caller). Alias of
+ * the shared {@link TargetedEditFailure} so existing importers keep working.
+ */
+export type LoopFailedEdit = TargetedEditFailure;
 
 export interface LoopInput {
     prompt: string;
@@ -72,6 +59,12 @@ interface LoopResult {
     generationModelName: string;
     /** Targeted edits the editor could not apply across the whole loop. */
     failedEdits: LoopFailedEdit[];
+    /**
+     * When the loop failed with an exception (e.g. the model call errored), the
+     * underlying reason. Undefined when the loop ran without an exception. This
+     * lets callers surface the real cause instead of a generic failure message.
+     */
+    error?: string;
 }
 
 // New interface to track each iteration's performance
@@ -580,7 +573,8 @@ export class LoopOrchestrator extends EventEmitter<OrchestratorEvents> {
                 success: false,
                 aborted: false,
                 generationModelName: generationModelName,
-                failedEdits: failedEdits
+                failedEdits: failedEdits,
+                error: errorMessage
             };
         } finally {
             this.isRunning = false;
@@ -763,88 +757,28 @@ export class LoopOrchestrator extends EventEmitter<OrchestratorEvents> {
         maxIterations: number,
         editorModelName: string
     ): Promise<{ text: string; dropped: LoopFailedEdit[] }> {
-        const parser = new XMLStoryParser();
-        let text = currentText;
-        let priorFailures = '';
-        let dropped: LoopFailedEdit[] = [];
-
-        for (let attempt = 1; attempt <= LoopOrchestrator.EDITOR_MAX_ATTEMPTS; attempt++) {
-            const editorPrompt = this.createEditorPrompt(originalPrompt, text, ratings, criteria, isLeafNode, priorFailures);
-
-            this.emit('progress', {
-                iteration: iteration,
-                maxIterations: maxIterations,
-                phase: 'edit',
-                payload: { prompt: editorPrompt, revisedText: `${editorModelName} is editing...` },
-                progress: 0,
-                failureScore: 0
-            });
-
-            let editorOutput: string;
-            try {
-                editorOutput = await this.client.chat('editor', editorPrompt, undefined, this.abortController!.signal);
-            } catch (e: unknown) {
-                const errorMessage = e instanceof Error ? e.message : 'Unknown error during editing';
-                console.error('Editing failed:', errorMessage);
-                throw new Error(`Content editing failed: ${errorMessage}`);
+        const result = await runTargetedEdits({
+            client: this.client,
+            purpose: 'editor',
+            text: currentText,
+            maxAttempts: LoopOrchestrator.EDITOR_MAX_ATTEMPTS,
+            signal: this.abortController!.signal,
+            shouldStop: () => this.stopRequested,
+            buildPrompt: ({ priorFailures, text }) =>
+                this.createEditorPrompt(originalPrompt, text, ratings, criteria, isLeafNode, priorFailures),
+            onAttempt: ({ prompt }) => {
+                this.emit('progress', {
+                    iteration: iteration,
+                    maxIterations: maxIterations,
+                    phase: 'edit',
+                    payload: { prompt, revisedText: `${editorModelName} is editing...` },
+                    progress: 0,
+                    failureScore: 0
+                });
             }
+        });
 
-            if (this.stopRequested) {
-                break;
-            }
-
-            // Context commands are out of scope for the generation editor.
-            const parsed = parser.parseResponse(editorOutput, undefined, { includeContextCommands: false });
-            const commands = parsed.systemCommands.filter(c => SUPPORTED_EDIT_COMMANDS.has(c.type));
-
-            if (commands.length === 0) {
-                // Editor produced no actionable commands: nothing to apply. Either it
-                // judged the text fine or it replied off-spec. Stop; rating re-runs.
-                dropped = [];
-                break;
-            }
-
-            const { newText, results } = TargetedTextEditor.apply(text, commands);
-            text = newText;
-
-            const failures = results.filter(r => !r.ok);
-            if (failures.length === 0) {
-                dropped = [];
-                break;
-            }
-
-            // Carry the still-failing edits forward: feed them back on the next
-            // attempt, and record them as dropped if the budget runs out.
-            dropped = failures.map(f => ({
-                search: this.describeCommandTarget(f.command),
-                reason: f.message
-            }));
-            priorFailures = this.formatPriorFailures(failures);
-        }
-
-        return { text, dropped };
-    }
-
-    /** Short identifier for a command's target, for failure reporting. */
-    private describeCommandTarget(command: SystemCommand): string {
-        if (command.type === 'replace_command') {
-            return command.searchText ?? '(missing search text)';
-        }
-        if (command.type === 'replace_section' || command.type === 'remove_section') {
-            return `section "${command.sectionTitle ?? '(missing title)'}"`;
-        }
-        return command.type;
-    }
-
-    /**
-     * Build the feedback block injected into the next editor attempt, listing the
-     * commands that could not be applied and why.
-     */
-    private formatPriorFailures(failures: Array<{ command: SystemCommand; message: string }>): string {
-        const lines = failures
-            .map(f => `- ${this.describeCommandTarget(f.command)}: ${f.message}`)
-            .join('\n');
-        return `Your previous edit commands below could NOT be applied and were skipped. Re-express ONLY these against the CURRENT text shown above (copy the search text verbatim and make it unique), or use <outline_replace> if a fix genuinely cannot be localized:\n${lines}`;
+        return { text: result.text, dropped: result.dropped };
     }
 
     /**

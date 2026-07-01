@@ -4,8 +4,12 @@ import { DocumentNode } from '../../../DocumentNode';
 import { TaskModelService } from '../../../services/TaskModelService';
 import { CoherenceAnalysisRequest, CoherenceAnalysisResult, CoherenceContradiction } from '../../../types/CoherenceTypes';
 import { CoherenceLog } from '../../../CoherenceLog';
+import { runTargetedEdits } from '../../../text-edit/TargetedEditRunner';
 
 export class CoherenceService {
+    /** Max fixer calls per contradiction (initial attempt plus retries). */
+    private static readonly FIX_MAX_ATTEMPTS = 3;
+
     private openRouterClient: OpenRouterClient;
     private taskModelService: TaskModelService;
 
@@ -367,51 +371,69 @@ If the problem persists, try rephrasing explicit content in your project to be l
         console.log(`   ⚖️ Severity: ${contradiction.severity}/10`);
         console.log(`   📄 Parent says: "${contradiction.fact_in_outline}"`);
         console.log(`   📝 Child says: "${contradiction.fact_in_expansion}"`);
-        
-        // Emit progress feedback
-        if (onProgress) {
-            onProgress(`Analyzing contradiction in "${childNode.title}"...`);
+
+        onProgress?.(`Analyzing contradiction in "${childNode.title}"...`);
+
+        // Use frozen task model configuration - no fallbacks
+        const isLeaf = childNode.isLeaf;
+        const taskConfig = frozenSettings.taskModelConfigs.fix_contradiction;
+        const modelPurpose = isLeaf ? taskConfig.prose : taskConfig.outline;
+        const originalContent = childNode.content || '';
+
+        console.log(`🤖 Using ${modelPurpose} model for fixing contradiction in ${isLeaf ? 'template-leaf' : 'template-branch'} node "${childNode.title}"`);
+
+        // Apply the fix as TARGETED edit commands against the current content
+        // (no unconditional full rewrite). Misses are fed back for a bounded
+        // number of retries; the model may choose <outline_replace> when a fix
+        // genuinely cannot be localized.
+        const result = await runTargetedEdits({
+            client: this.openRouterClient,
+            purpose: modelPurpose,
+            text: originalContent,
+            maxAttempts: CoherenceService.FIX_MAX_ATTEMPTS,
+            buildPrompt: ({ priorFailures, text }) =>
+                this.buildFixPrompt(parentNode, childNode.title || 'Untitled', text, contradiction, frozenSettings, priorFailures),
+            onAttempt: ({ attempt }) => onProgress?.(`Generating targeted fix (attempt ${attempt})...`)
+        });
+
+        // A fix that produced no usable commands, or whose edits all failed to
+        // apply (content unchanged), is a failed fix - surface it loudly so the
+        // caller's existing failure handling can record it.
+        if (!result.producedCommands || result.text === originalContent) {
+            const detail = result.dropped.length > 0
+                ? result.dropped.map(d => `${d.search} (${d.reason})`).join('; ')
+                : 'the model returned no usable edit commands';
+            throw new Error(`Could not apply a targeted fix for the contradiction in "${childNode.title}": ${detail}`);
         }
-        
-        // Use frozen settings - no fallbacks, errors fly if missing
-        const fixPrompt = frozenSettings.fixContradictionPrompt
+
+        console.log(`✅ Applied targeted fix for "${childNode.title}" (${result.appliedCount} edit(s) applied, ${result.dropped.length} dropped)`);
+        onProgress?.(`Fix generated successfully for "${childNode.title}"`);
+        return result.text;
+    }
+
+    /**
+     * Fill the contradiction-fix prompt template for one attempt. The child
+     * content passed in is the current (evolving) text so retries re-anchor
+     * against the latest version; priorFailures carries feedback about edit
+     * commands that could not be applied on the previous attempt.
+     */
+    private buildFixPrompt(
+        parentNode: DocumentNode,
+        childTitle: string,
+        childContent: string,
+        contradiction: CoherenceContradiction,
+        frozenSettings: { fixContradictionPrompt: string; language: string },
+        priorFailures: string
+    ): string {
+        return frozenSettings.fixContradictionPrompt
             .replace(/\{\{parent_content\}\}/g, parentNode.content || '')
-            .replace(/\{\{parent_context\}\}/g, '') // Traditional context removed
-            .replace(/\{\{child_title\}\}/g, childNode.title || 'Untitled')
-            .replace(/\{\{child_content\}\}/g, childNode.content || '')
+            .replace(/\{\{child_title\}\}/g, childTitle)
+            .replace(/\{\{child_content\}\}/g, childContent)
             .replace(/\{\{fact_in_outline\}\}/g, contradiction.fact_in_outline)
             .replace(/\{\{fact_in_expansion\}\}/g, contradiction.fact_in_expansion)
             .replace(/\{\{justification\}\}/g, contradiction.justification)
+            .replace(/\{\{priorFailures\}\}/g, priorFailures)
             .replace(/\{\{language\}\}/g, frozenSettings.language);
-
-        try {
-            // Use frozen task model configuration - no fallbacks
-            const isLeaf = childNode.isLeaf;
-            const taskConfig = frozenSettings.taskModelConfigs.fix_contradiction;
-            const modelPurpose = isLeaf ? taskConfig.prose : taskConfig.outline;
-            
-            console.log(`🤖 Using ${modelPurpose} model for fixing contradiction in ${isLeaf ? 'template-leaf' : 'template-branch'} node "${childNode.title}"`);
-            
-            if (onProgress) {
-                onProgress(`Generating fix using ${modelPurpose} model...`);
-            }
-            
-            const response = await this.openRouterClient.chat(modelPurpose as any, fixPrompt);
-            
-            console.log(`✅ Generated fix for "${childNode.title}" (${response.length} characters)`);
-            
-            if (onProgress) {
-                onProgress(`Fix generated successfully for "${childNode.title}"`);
-            }
-            
-            return response.trim();
-        } catch (error) {
-            console.error('Failed to fix contradiction:', error);
-            if (onProgress) {
-                onProgress(`Failed to generate fix: ${error}`);
-            }
-            throw new Error('Failed to fix contradiction. Please try again.');
-        }
     }
 
     /**

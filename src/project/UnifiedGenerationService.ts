@@ -1830,8 +1830,11 @@ export class UnifiedGenerationService {
                 console.log(`📢 EMITTING tree-update-needed event for node ${nodeId}: content-generation-failed`);
                 this.deps.eventEmitter.emit('tree-update-needed', { nodeId, reason: 'content-generation-failed' });
                 // Note: Individual content generation does not emit completion events
-                // The error will be caught and handled by the main unified generation process
-                throw new Error(`Content generation failed for node: ${node.title}`);
+                // The error will be caught and handled by the main unified generation process.
+                // Surface the underlying reason (e.g. the OpenRouter/model error) that
+                // the loop captured, so the failure is never reported without a cause.
+                const reason = result.error ?? 'the model returned no content';
+                throw new Error(`Content generation failed for node "${node.title}": ${reason}`);
             }
         } catch (error) {
             // If we were aborted, suppress error UI and exit quietly
