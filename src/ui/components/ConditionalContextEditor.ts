@@ -70,6 +70,13 @@ export class ConditionalContextEditor {
     private selectedItemId: string | null = null;
     private selectedIds: Set<string> = new Set();
 
+    // Display-only sorting. 'natural' preserves the stored item order; 'id' and
+    // 'text' sort a render-time copy without mutating the node's item array, so
+    // persisted order and scope semantics are untouched.
+    private sortKey: 'natural' | 'id' | 'text' = 'natural';
+    private sortDir: 'asc' | 'desc' = 'asc';
+    private sortDirBtn: HTMLButtonElement | null = null;
+
     constructor(config: ConditionalContextEditorConfig) {
         this.node = config.node;
         this.projectManager = config.projectManager;
@@ -116,6 +123,42 @@ export class ConditionalContextEditor {
         buttonsRow.appendChild(toggleAllBtn);
         buttonsRow.appendChild(removeBtn);
 
+        const sortRow = createElement('div');
+        sortRow.style.cssText = 'display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap; font-size: 0.85rem; color: #374151;';
+        sortRow.appendChild(createElement('span', { content: 'Sort:' }));
+
+        const sortSelect = createElement('select');
+        sortSelect.style.cssText = 'padding: 0.35rem; border: 1px solid #d1d5db; border-radius: 0.4rem;';
+        const sortOptions: Array<['natural' | 'id' | 'text', string]> = [
+            ['natural', 'Natural order'],
+            ['id', 'By id'],
+            ['text', 'By text']
+        ];
+        for (const [val, label] of sortOptions) {
+            const opt = createElement('option', { content: label });
+            opt.value = val;
+            sortSelect.appendChild(opt);
+        }
+        sortSelect.value = this.sortKey;
+        addEventListenerWithCleanup(sortSelect, 'change', () => {
+            this.sortKey = sortSelect.value as 'natural' | 'id' | 'text';
+            this.updateSortDirVisibility();
+            this.renderItemsList();
+        }, this.cleanupHandlers);
+
+        const sortDirBtn = createElement('button', { content: this.sortDirLabel() });
+        sortDirBtn.title = 'Toggle sort direction';
+        sortDirBtn.style.cssText = this.buttonStyle('#e5e7eb', '#111827', '#9ca3af');
+        addEventListenerWithCleanup(sortDirBtn, 'click', () => {
+            this.sortDir = this.sortDir === 'asc' ? 'desc' : 'asc';
+            sortDirBtn.textContent = this.sortDirLabel();
+            this.renderItemsList();
+        }, this.cleanupHandlers);
+        this.sortDirBtn = sortDirBtn;
+
+        sortRow.appendChild(sortSelect);
+        sortRow.appendChild(sortDirBtn);
+
         this.itemsList = createElement('div');
         this.itemsList.style.cssText = `
             display: flex;
@@ -147,10 +190,12 @@ export class ConditionalContextEditor {
 
         container.appendChild(header);
         container.appendChild(buttonsRow);
+        container.appendChild(sortRow);
         container.appendChild(this.itemsList);
         container.appendChild(inheritedRow);
         container.appendChild(this.inheritedSection);
 
+        this.updateSortDirVisibility();
         this.refresh();
     }
 
@@ -201,7 +246,7 @@ export class ConditionalContextEditor {
         this.rowSummaryRefs.clear();
         let selectedWrapper: HTMLElement | null = null;
 
-        const items = this.node.getConditionalContextItems();
+        const items = this.getSortedItems();
         const applicableIds = new Set(this.node.getApplicableConditionalContextItems(this.projectManager.rootNode).map(i => i.id));
 
         if (items.length === 0) {
@@ -251,6 +296,22 @@ export class ConditionalContextEditor {
                 background: ${applies ? '#10b981' : '#d1d5db'};
             `;
 
+            // Show the item's id so it can be matched to the ids the AI references
+            // in chat. Not a click target, so the text stays selectable for copying.
+            const idBadge = createElement('span', { content: item.id });
+            idBadge.title = `Context id: ${item.id}`;
+            idBadge.style.cssText = `
+                flex: 0 0 auto;
+                align-self: center;
+                font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', 'Courier New', monospace;
+                font-size: 0.72rem;
+                color: #3730a3;
+                background: #e0e7ff;
+                border: 1px solid #c7d2fe;
+                border-radius: 0.3rem;
+                padding: 0.05rem 0.35rem;
+            `;
+
             const textCol = createElement('div');
             textCol.style.cssText = 'display: flex; flex-direction: column; gap: 0.1rem; min-width: 0; flex: 1 1 auto;';
             const title = createElement('div', { content: this.itemTitle(item.text) });
@@ -289,6 +350,7 @@ export class ConditionalContextEditor {
 
             headerLine.appendChild(checkbox);
             headerLine.appendChild(dot);
+            headerLine.appendChild(idBadge);
             headerLine.appendChild(textCol);
             headerLine.appendChild(deleteBtn);
             wrapper.appendChild(headerLine);
@@ -483,11 +545,15 @@ export class ConditionalContextEditor {
                 const dot = createElement('span');
                 const applies = applicableIds.has(item.id);
                 dot.style.cssText = `flex: 0 0 auto; width: 0.5rem; height: 0.5rem; border-radius: 50%; background: ${applies ? '#10b981' : '#d1d5db'};`;
+                const idBadge = createElement('span', { content: item.id });
+                idBadge.title = `Context id: ${item.id}`;
+                idBadge.style.cssText = `flex: 0 0 auto; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', 'Courier New', monospace; font-size: 0.68rem; color: #4b5563; background: #eef2f7; border: 1px solid #e5e7eb; border-radius: 0.3rem; padding: 0.02rem 0.3rem;`;
                 const label = createElement('span', { content: this.itemTitle(item.text, 60) });
                 const src = createElement('a', { content: ` — ${truncateText(ancestor.title, 24)}` });
                 src.style.cssText = 'color: #2563eb; cursor: pointer; text-decoration: underline;';
                 addEventListenerWithCleanup(src, 'click', () => { this.navigateTo(ancestor.id); }, this.cleanupHandlers);
                 row.appendChild(dot);
+                row.appendChild(idBadge);
                 row.appendChild(label);
                 row.appendChild(src);
                 inheritedSection.appendChild(row);
@@ -696,6 +762,45 @@ export class ConditionalContextEditor {
         this.childChecklist = null;
         this.scopeModeSelect = null;
         this.previewBox = null;
+    }
+
+    /**
+     * Return the node's items in the current display order. 'natural' keeps the
+     * stored order; 'id'/'text' return a sorted COPY so the node's underlying
+     * array (and thus persistence/scope semantics) is never mutated. Ids of the
+     * form "id_<n>" are compared numerically so id_2 precedes id_10.
+     */
+    private getSortedItems(): ReturnType<DocumentNode['getConditionalContextItems']> {
+        const items = this.node.getConditionalContextItems();
+        if (this.sortKey === 'natural') return items;
+        const dir = this.sortDir === 'asc' ? 1 : -1;
+        if (this.sortKey === 'id') {
+            items.sort((a, b) => {
+                const byNum = this.idNumber(a.id) - this.idNumber(b.id);
+                return (byNum !== 0 ? byNum : a.id.localeCompare(b.id)) * dir;
+            });
+        } else {
+            items.sort((a, b) =>
+                this.itemTitle(a.text, 200).localeCompare(this.itemTitle(b.text, 200), undefined, { sensitivity: 'base' }) * dir
+            );
+        }
+        return items;
+    }
+
+    /** Numeric value of an "id_<n>" id; ids without a number sort last. */
+    private idNumber(id: string): number {
+        const match = /(\d+)/.exec(id);
+        return match ? parseInt(match[1]!, 10) : Number.MAX_SAFE_INTEGER;
+    }
+
+    private sortDirLabel(): string {
+        return this.sortDir === 'asc' ? '▲ Asc' : '▼ Desc';
+    }
+
+    /** The direction toggle only matters when a real sort key is active. */
+    private updateSortDirVisibility(): void {
+        if (!this.sortDirBtn) return;
+        this.sortDirBtn.style.display = this.sortKey === 'natural' ? 'none' : '';
     }
 
     private itemTitle(text: string, max = 80): string {
