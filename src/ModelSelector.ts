@@ -717,8 +717,9 @@ export class ModelSelector {
       
       section.appendChild(select);
 
-      // Provider selection (if model has multiple providers)
-      if (validModel && this.hasMultipleProviders(validModel.id)) {
+      // Provider selection (always show when the model has at least one provider,
+      // so per-provider pricing is visible even for single-provider models)
+      if (validModel && this.hasProviders(validModel.id)) {
         const providerLabel = document.createElement('div');
         providerLabel.textContent = 'Provider';
         providerLabel.style.cssText = `
@@ -942,43 +943,47 @@ export class ModelSelector {
           ));
         }
 
-        // Verbosity (always show for experimentation)
-        addHeadingIfNeeded();
-        const wrap = document.createElement('label');
-        wrap.style.cssText = 'display: flex; flex-direction: column; gap: 0.25rem;';
-        const lab = document.createElement('span');
-        lab.textContent = 'Verbosity';
-        lab.style.cssText = 'font-size: 0.85rem; color: #374151;';
-        const select = document.createElement('select');
-        select.style.cssText = 'padding: 0.5rem 0.75rem; border: 1.5px solid #d1d5db; border-radius: 0.5rem; font-size: 0.95rem; background: #fff;';
-        const options: Array<{ value: ''; label: string } | { value: 'low' | 'medium' | 'high'; label: string }> = [
-          { value: '', label: 'Default' },
-          { value: 'low', label: 'Low (brief)' },
-          { value: 'medium', label: 'Medium' },
-          { value: 'high', label: 'High (detailed)' }
-        ];
-        options.forEach(opt => {
-          const o = document.createElement('option');
-          o.value = String(opt.value);
-          o.textContent = opt.label;
-          const currentVerbosity = (params.verbosity ?? '') as string | number;
-          if (String(opt.value) === String(currentVerbosity)) o.selected = true;
-          select.appendChild(o);
-        });
-        select.addEventListener('focus', () => { select.style.borderColor = '#3b82f6'; });
-        select.addEventListener('blur', () => { select.style.borderColor = '#d1d5db'; });
-        select.addEventListener('change', async () => {
-          const v = (select.value || '') as '' | 'low' | 'medium' | 'high';
-          if (v === '') {
-            delete params.verbosity;
-          } else {
-            params.verbosity = v;
-          }
-          await this.setSelectedParams(purpose.key, params);
-        });
-        wrap.appendChild(lab);
-        wrap.appendChild(select);
-        paramsContainer.appendChild(wrap);
+        // Verbosity: gated on supported_parameters, like temperature/top_p/max tokens above.
+        const verbositySupported = supported.size === 0 || supported.has('verbosity') ||
+                                   !validModel.supported_parameters || validModel.supported_parameters.length === 0;
+        if (verbositySupported) {
+          addHeadingIfNeeded();
+          const wrap = document.createElement('label');
+          wrap.style.cssText = 'display: flex; flex-direction: column; gap: 0.25rem;';
+          const lab = document.createElement('span');
+          lab.textContent = 'Verbosity';
+          lab.style.cssText = 'font-size: 0.85rem; color: #374151;';
+          const select = document.createElement('select');
+          select.style.cssText = 'padding: 0.5rem 0.75rem; border: 1.5px solid #d1d5db; border-radius: 0.5rem; font-size: 0.95rem; background: #fff;';
+          const options: Array<{ value: ''; label: string } | { value: 'low' | 'medium' | 'high'; label: string }> = [
+            { value: '', label: 'Default' },
+            { value: 'low', label: 'Low (brief)' },
+            { value: 'medium', label: 'Medium' },
+            { value: 'high', label: 'High (detailed)' }
+          ];
+          options.forEach(opt => {
+            const o = document.createElement('option');
+            o.value = String(opt.value);
+            o.textContent = opt.label;
+            const currentVerbosity = (params.verbosity ?? '') as string | number;
+            if (String(opt.value) === String(currentVerbosity)) o.selected = true;
+            select.appendChild(o);
+          });
+          select.addEventListener('focus', () => { select.style.borderColor = '#3b82f6'; });
+          select.addEventListener('blur', () => { select.style.borderColor = '#d1d5db'; });
+          select.addEventListener('change', async () => {
+            const v = (select.value || '') as '' | 'low' | 'medium' | 'high';
+            if (v === '') {
+              delete params.verbosity;
+            } else {
+              params.verbosity = v;
+            }
+            await this.setSelectedParams(purpose.key, params);
+          });
+          wrap.appendChild(lab);
+          wrap.appendChild(select);
+          paramsContainer.appendChild(wrap);
+        }
 
         // Unified reasoning/thinking controls (model-agnostic and future-proof)
         const reasoningSupport = this.getReasoningSupport(validModel.id, this.selectedProviders[purpose.key]);
@@ -1765,6 +1770,14 @@ export class ModelSelector {
   private hasMultipleProviders(modelId: string): boolean {
     const endpoints = this.modelEndpoints[modelId]!; // Crash if not loaded!
     return endpoints.length > 1;
+  }
+
+  /**
+   * Check if a model has at least one provider endpoint available
+   */
+  private hasProviders(modelId: string): boolean {
+    const endpoints = this.modelEndpoints[modelId]!; // Crash if not loaded!
+    return endpoints.length > 0;
   }
 
   /**
