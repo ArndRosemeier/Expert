@@ -2544,6 +2544,8 @@ export class RPGLiteView {
         this.currentStreamingAbortRequested = false;
         this.setComposerButtonsIdle();
         msgEl.classList.remove('rpg-lite-message-streaming');
+        // Clear the "thinking" animation so it does not stay stuck after an error/abort.
+        this.removeWaitingIndicator(msgEl);
         if (wasAbort) return;
         console.error('RPG Lite narrator error:', error);
         alert(`Narrator error: ${error.message}`);
@@ -2731,6 +2733,8 @@ export class RPGLiteView {
         this.currentStreamingAbortRequested = false;
         this.setComposerButtonsIdle();
         msgEl.classList.remove('rpg-lite-message-streaming');
+        // Clear the "thinking" animation so it does not stay stuck after an error/abort.
+        this.removeWaitingIndicator(msgEl);
         if (wasAbort) return;
         console.error('RPG Lite narrator error:', error);
         alert(`Narrator error: ${error.message}`);
