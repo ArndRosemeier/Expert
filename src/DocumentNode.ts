@@ -101,6 +101,12 @@ export interface ContentVersion {
     ratings?: Rating[];
     creatorModel?: string;
     metadata?: { [key: string]: any };
+    /**
+     * Optional user-provided name for an explicit snapshot version. When set, it
+     * is used as the version's display label in the inspector. Round-trips via
+     * the spread-based (de)serialization in toJSON/fromJSON.
+     */
+    label?: string;
 }
 
 /**
@@ -826,6 +832,41 @@ export class DocumentNode {
         
         this.versions.push(newVersion);
         return newVersion.id;
+    }
+
+    /**
+     * Creates an explicit, user-named snapshot version that freezes the given
+     * title/content. Unlike a generation or chat edit, the snapshot is NOT
+     * promoted to master - it is a labelled, frozen copy kept purely for history.
+     * @param name Non-empty display name for the snapshot.
+     * @param fields Title/content to freeze (typically the current master's).
+     * @returns The id of the created snapshot version.
+     */
+    createNamedVersion(name: string, fields: { title: string; content: string }): string {
+        const trimmedName = name.trim();
+        if (trimmedName.length === 0) {
+            throw new Error(`DocumentNode ${this.id}: cannot create a named version with an empty name`);
+        }
+        const snapshot: ContentVersion = {
+            id: uuidv4(),
+            content: fields.content,
+            title: fields.title,
+            tags: new Set(['snapshot']),
+            timestamp: new Date(),
+            metadata: {},
+            label: trimmedName
+        };
+        this.versions.push(snapshot);
+        return snapshot.id;
+    }
+
+    /**
+     * Suggests a sensible default name for the next explicit snapshot version,
+     * based on how many snapshots already exist on this node.
+     */
+    suggestNextVersionName(): string {
+        const snapshotCount = this.versions.filter(v => v.tags.has('snapshot')).length;
+        return `Version ${snapshotCount + 1}`;
     }
 
     /**

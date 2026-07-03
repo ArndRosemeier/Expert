@@ -6,6 +6,7 @@ import { findProjectByNode } from '../../state';
 import { UniversalTextEditor } from '../components/UniversalTextEditor';
 import { ConditionalContextEditor } from '../components/ConditionalContextEditor';
 import { DiffTool } from '../../DiffTool';
+import { promptForVersionName } from './VersionNameModal';
 
 
 // ============================================================================
@@ -461,6 +462,12 @@ export class NodeInspectorModal extends BaseModal {
             todoList.classList.remove('scrollable-content');
             scrollableWrapper.appendChild(todoList);
         }
+
+        // Otherwise, explain the small tree marker when only descendants have todos
+        const descendantTodoNotice = this.renderDescendantTodoNotice();
+        if (descendantTodoNotice) {
+            scrollableWrapper.appendChild(descendantTodoNotice);
+        }
         
         // Add versions list content (extract content from existing wrapper)
         const versionsListWithWrapper = this.renderVersionsList();
@@ -498,6 +505,14 @@ export class NodeInspectorModal extends BaseModal {
         const wrapper = document.createElement('div');
         wrapper.className = 'scrollable-content';
         if (!this.node) return wrapper;
+
+        // Explicit "freeze current master as a named version" action.
+        const snapshotBtn = document.createElement('button');
+        snapshotBtn.className = 'snapshot-current-btn';
+        snapshotBtn.textContent = '➕ Save current as version';
+        snapshotBtn.onclick = () => { void this.handleSaveCurrentAsVersion(); };
+        wrapper.appendChild(snapshotBtn);
+
         const versions = this.node.getAllVersions();
         // Sort: master first, then by timestamp desc
         versions.sort((a, b) => {
@@ -705,6 +720,62 @@ export class NodeInspectorModal extends BaseModal {
         return wrapper;
     }
 
+    /**
+     * Collects descendant nodes (children, grandchildren, ...) that have at least
+     * one incomplete todo. The node itself is not included.
+     */
+    private collectDescendantsWithTodos(node: DocumentNode): DocumentNode[] {
+        const result: DocumentNode[] = [];
+        for (const child of node.children) {
+            if (child.getIncompleteTodos().length > 0) {
+                result.push(child);
+            }
+            result.push(...this.collectDescendantsWithTodos(child));
+        }
+        return result;
+    }
+
+    /**
+     * Renders an informational notice when the inspected node has no todos of its
+     * own but one or more of its descendants do. This explains the small, faded
+     * todo icon that appears on ancestor nodes in the tree, which is otherwise
+     * unintuitive (opening the node shows no todo).
+     */
+    private renderDescendantTodoNotice(): HTMLElement | null {
+        if (!this.node) return null;
+        // The node's own todos are already surfaced by renderTodoList().
+        if (this.node.getIncompleteTodos().length > 0) return null;
+
+        const descendantsWithTodos = this.collectDescendantsWithTodos(this.node);
+        if (descendantsWithTodos.length === 0) return null;
+
+        const totalTodos = descendantsWithTodos.reduce(
+            (sum, n) => sum + n.getIncompleteTodos().length,
+            0
+        );
+
+        const wrapper = document.createElement('div');
+        wrapper.className = 'descendant-todo-notice';
+
+        const listItems = descendantsWithTodos
+            .map(n => `<li>${this.escapeHtml(n.title)} <span class="descendant-todo-count">${n.getIncompleteTodos().length}</span></li>`)
+            .join('');
+
+        const summary = totalTodos === 1
+            ? 'a descendant node has a todo entry'
+            : `${totalTodos} todo entries exist in descendant nodes`;
+
+        wrapper.innerHTML = `
+            <div class="descendant-todo-notice-header">⚠️ Descendant todo items</div>
+            <div class="descendant-todo-notice-body">
+                This node has no todos of its own, but ${summary}. That is why it shows the small todo marker in the tree.
+            </div>
+            <ul class="descendant-todo-notice-list">${listItems}</ul>
+        `;
+
+        return wrapper;
+    }
+
     private async completeTodo(todoId: string): Promise<void> {
         if (!this.node) return;
         
@@ -905,6 +976,7 @@ export class NodeInspectorModal extends BaseModal {
 
     private getVersionLabel(version: ContentVersion): string {
         if (version.tags.has('master')) return 'Current (Master)';
+        if (version.label && version.label.trim().length > 0) return version.label;
         if (version.tags.has('generatedWinner')) return 'Generated Winner';
         if (version.tags.has('polished')) return 'Polished';
         if (version.tags.has('coherenceFix')) return 'Coherence Fix';
@@ -1076,6 +1148,22 @@ export class NodeInspectorModal extends BaseModal {
             const errorMessage = error instanceof Error ? error.message : String(error);
             alert(`Failed to remove version: ${errorMessage}`);
         }
+    }
+
+    /**
+     * Freezes the node's current master content as a new, user-named snapshot
+     * version. Shared naming modal with the node chat editor.
+     */
+    private async handleSaveCurrentAsVersion(): Promise<void> {
+        if (!this.node) return;
+
+        const defaultName = this.node.suggestNextVersionName();
+        const name = await promptForVersionName(defaultName);
+        if (name === null) return; // cancelled
+
+        this.node.createNamedVersion(name, { title: this.node.title, content: this.node.content });
+        await this.persistNodeChanges();
+        this.rerender();
     }
 
     private async handleRemoveTagFromVersion(versionId: string, tagName: string): Promise<void> {
@@ -1434,6 +1522,22 @@ export class NodeInspectorModal extends BaseModal {
                 overflow-y: auto;
                 padding: 1rem;
             }
+            .snapshot-current-btn {
+                width: 100%;
+                margin-bottom: 0.75rem;
+                padding: 0.5rem 0.75rem;
+                border: 1px dashed #3b82f6;
+                border-radius: 6px;
+                background: #eff6ff;
+                color: #1d4ed8;
+                font-size: 0.85rem;
+                font-weight: 600;
+                cursor: pointer;
+                transition: background 0.15s ease;
+            }
+            .snapshot-current-btn:hover {
+                background: #dbeafe;
+            }
             .version-list-item {
                 border-radius: 6px;
                 border: 1px solid #e5e7eb;
@@ -1773,6 +1877,55 @@ export class NodeInspectorModal extends BaseModal {
                 margin: 0;
             }
             
+            /* Descendant Todo Notice */
+            .descendant-todo-notice {
+                border: 1px solid #fde68a;
+                background: #fffbeb;
+                border-radius: 6px;
+                padding: 0.75rem;
+                margin-bottom: 1rem;
+            }
+
+            .descendant-todo-notice-header {
+                display: flex;
+                align-items: center;
+                gap: 0.5rem;
+                font-weight: 600;
+                font-size: 0.9em;
+                color: #92400e;
+                margin-bottom: 0.4rem;
+            }
+
+            .descendant-todo-notice-body {
+                font-size: 0.85em;
+                color: #78350f;
+                line-height: 1.35;
+            }
+
+            .descendant-todo-notice-list {
+                margin: 0.5rem 0 0 0;
+                padding-left: 1.1rem;
+                font-size: 0.85em;
+                color: #78350f;
+            }
+
+            .descendant-todo-notice-list li {
+                margin-bottom: 0.2rem;
+            }
+
+            .descendant-todo-count {
+                display: inline-block;
+                min-width: 1.1rem;
+                text-align: center;
+                background: #f59e0b;
+                color: #fff;
+                border-radius: 999px;
+                font-size: 0.75em;
+                font-weight: 700;
+                padding: 0 0.35rem;
+                margin-left: 0.25rem;
+            }
+
             /* Todo List Styles */
             .todo-list-section {
                 border-bottom: 1px solid #e5e7eb;

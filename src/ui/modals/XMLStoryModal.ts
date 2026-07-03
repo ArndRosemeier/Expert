@@ -24,6 +24,7 @@ import { createPromptExpansionService } from '../../services/PromptExpansionServ
 import { ModelSelector } from '../../ModelSelector';
 import { StorageService } from '../../StorageService';
 import { UniversalTextEditor } from '../components/UniversalTextEditor';
+import { promptForVersionName } from './VersionNameModal';
 import { DocumentNode, ChildScope, ChildScopeMode } from '../../DocumentNode';
 import { ConditionalContextEditor } from '../components/ConditionalContextEditor';
 import { parseSectionTitles } from '../../ContextFormat';
@@ -1267,6 +1268,10 @@ export class XMLStoryModal extends SimpleModal {
                                                 <button id="create-project-btn" class="sidebar-button primary">
                                 🚀 Update Node
                     </button>
+
+                    <button id="save-as-version-btn" class="sidebar-button">
+                        💾 Save as Version
+                    </button>
                     
                     <button id="close-modal-btn" class="sidebar-button">
                         ❌ Close
@@ -1417,6 +1422,12 @@ export class XMLStoryModal extends SimpleModal {
         const updateNodeBtn = container.querySelector('#create-project-btn');
         updateNodeBtn?.addEventListener('click', () => {
             void this.updateSourceNode();
+        });
+
+        // Save-as-named-version button
+        const saveAsVersionBtn = container.querySelector('#save-as-version-btn');
+        saveAsVersionBtn?.addEventListener('click', () => {
+            void this.saveAsNewVersion();
         });
 
         // Gap Analysis button
@@ -2278,38 +2289,51 @@ export class XMLStoryModal extends SimpleModal {
             // Edits are live; the embedded editor is refreshed afterwards.
             let contextChanged = false;
             for (const command of parseResult.systemCommands) {
-                if (command.type === 'context_add') {
-                    const text = command.parameters?.['text'] ?? '';
-                    if (text.trim().length === 0) continue;
-                    const newId = this.sourceNode!.addConditionalContextItem(text);
-                    // Apply trigger words / structural scope / leaves-only when provided.
-                    this.applyContextCommandFields(newId, command.parameters ?? {}, false);
-                    contextChanged = true;
-                    (command as any).executedRaw = (command as any).rawXml ?? '';
-                } else if (command.type === 'context_edit') {
-                    if (!command.parameters) {
-                        throw new Error(`context_edit command missing parameters. Command: ${JSON.stringify(command)}`);
+                // Each command is isolated: a single failing edit (e.g. an id that
+                // no longer exists) must be recorded and surfaced as a failure, NOT
+                // allowed to throw and abort the whole batch — which would silently
+                // drop every following command in the same response.
+                try {
+                    if (command.type === 'context_add') {
+                        const text = command.parameters?.['text'] ?? '';
+                        if (text.trim().length === 0) continue;
+                        const newId = this.sourceNode!.addConditionalContextItem(text);
+                        // Apply trigger words / structural scope / leaves-only when provided.
+                        this.applyContextCommandFields(newId, command.parameters ?? {}, false);
+                        contextChanged = true;
+                        (command as any).executedRaw = (command as any).rawXml ?? '';
+                    } else if (command.type === 'context_edit') {
+                        if (!command.parameters) {
+                            throw new Error(`context_edit command missing parameters. Command: ${JSON.stringify(command)}`);
+                        }
+                        const id = command.parameters['id'];
+                        if (!id) {
+                            throw new Error(`context_edit command missing required id parameter. Available parameters: ${Object.keys(command.parameters).join(', ')}`);
+                        }
+                        // Only the supplied facets are updated, leaving the rest intact.
+                        this.applyContextCommandFields(id, command.parameters, true);
+                        contextChanged = true;
+                        (command as any).executedRaw = (command as any).rawXml ?? '';
+                    } else if (command.type === 'context_remove') {
+                        const id = command.parameters?.['id'];
+                        if (!id) continue;
+                        this.sourceNode!.removeConditionalContextItem(id);
+                        contextChanged = true;
+                        (command as any).executedRaw = (command as any).rawXml ?? '';
+                    } else if (command.type === 'request_node') {
+                        const path = command.parameters?.['path'] ?? '';
+                        (command as any).executedRaw = (command as any).rawXml ?? '';
+                        if (path.trim().length > 0) {
+                            requestedPaths.push(path);
+                        }
                     }
-                    const id = command.parameters['id'];
-                    if (!id) {
-                        throw new Error(`context_edit command missing required id parameter. Available parameters: ${Object.keys(command.parameters).join(', ')}`);
-                    }
-                    // Only the supplied facets are updated, leaving the rest intact.
-                    this.applyContextCommandFields(id, command.parameters, true);
-                    contextChanged = true;
-                    (command as any).executedRaw = (command as any).rawXml ?? '';
-                } else if (command.type === 'context_remove') {
-                    const id = command.parameters?.['id'];
-                    if (!id) continue;
-                    this.sourceNode!.removeConditionalContextItem(id);
-                    contextChanged = true;
-                    (command as any).executedRaw = (command as any).rawXml ?? '';
-                } else if (command.type === 'request_node') {
-                    const path = command.parameters?.['path'] ?? '';
-                    (command as any).executedRaw = (command as any).rawXml ?? '';
-                    if (path.trim().length > 0) {
-                        requestedPaths.push(path);
-                    }
+                } catch (error) {
+                    // Record the failure loudly (console + user-facing failure notice
+                    // via showCommandFailureNotice below) and keep applying the rest.
+                    const message = error instanceof Error ? error.message : String(error);
+                    const rawXml = command.rawXml ?? this.reconstructCommandXML(command as unknown as XMLStoryCommand);
+                    this.failedCommands.push({ command: command as unknown as XMLStoryCommand, error: message, rawXml });
+                    console.error('Context command failed (batch continues):', message, command);
                 }
             }
 
@@ -3491,6 +3515,45 @@ export class XMLStoryModal extends SimpleModal {
             console.error('Error updating source node:', error);
             this.setUpdateButtonState('error', 'Failed to update node');
         }
+    }
+
+    /**
+     * Saves the current outline as a new, explicitly named snapshot version.
+     * Also persists the current edits to master (same as the Update Node button)
+     * so the snapshot and master reflect the same content at save time.
+     */
+    private async saveAsNewVersion(): Promise<void> {
+        if (!this.sourceNode) {
+            alert('No source node available to version.');
+            return;
+        }
+
+        const defaultName = this.sourceNode.suggestNextVersionName();
+        const name = await promptForVersionName(defaultName);
+        if (name === null) return; // cancelled
+
+        // Persist current edits to master first (same behavior as Update Node).
+        await this.updateSourceNode();
+
+        // Freeze the current outline content under the chosen name.
+        const content = this.getCurrentOutlineSafe();
+        this.sourceNode.createNamedVersion(name, { title: this.sourceNode.title, content });
+
+        const project = findProjectByNode(this.sourceNode);
+        if (project) {
+            await project.saveToStorage();
+            project.emit('tree-update-needed', { nodeId: this.sourceNode.id, reason: 'named-version' });
+        }
+
+        const btn = document.getElementById('save-as-version-btn') as HTMLButtonElement | null;
+        if (!btn) return;
+        const originalHtml = btn.innerHTML;
+        btn.innerHTML = '✅ Saved!';
+        btn.disabled = true;
+        setTimeout(() => {
+            btn.innerHTML = originalHtml;
+            btn.disabled = false;
+        }, 1500);
     }
 
     private async splitSourceNodeIntoParts(buttonEl?: HTMLButtonElement): Promise<void> {
