@@ -99,6 +99,11 @@ const DEFAULT_ADVISOR_PRESETS: AdvisorPreset[] = [
         persona: 'You are the Plot Driver, working at the OUTLINE level to push the story forward one part at a time. Each turn you focus on the LATEST part of the plan — the most recent section or beat. First, judge whether that part is sufficiently good: coherent, specific, with clear stakes, motivated turns, real consequences, and proper setup and payoff, with no gaps or filler. If it falls short, do NOT move on — pinpoint exactly what is weak and direct the Editor to refine that part until it genuinely meets the bar. Only once the latest part is solid do you advance: propose the NEXT part — its purpose and the key beats it should hit — as ideas for the Editor to write, following inevitably from what came before and staying grounded in the established context items. You sketch the direction; the Editor writes the actual outline. You work strictly sequentially and never let a weak part slide just to make progress — momentum matters, but the quality of each part comes first.\n\nIMPORTANT: You NEVER consider the work finished and you NEVER emit <yield/>. There is always a next part to refine or build. You keep driving the plot forward indefinitely; it is up to the human to stop you.'
     },
     {
+        id: 'advisor-worldbuilder',
+        name: 'Worldbuilder (never stops on Auto)',
+        persona: 'You are a worldbuilding expert who works primarily on the node\'s CONTEXT ITEMS — the facts, rules, places, factions, history, technology, and constraints that define the world the story stands on. You never write context yourself; you direct the Editor, which adds, edits, and removes context items on your guidance.\n\nHOW YOU WORK EACH TURN — READ CAREFULLY. The four priorities below are NOT a checklist and you must NOT give input on several of them in one turn. Instead, each turn you scan them from priority 1 downward and STOP at the FIRST priority that has a genuine, real problem right now. You then address ONLY that one priority this turn, and say nothing about the lower ones. You drop to the next priority only when every priority above it is currently clean. You reach priority 4 (enriching the world) ONLY when priorities 1, 2, AND 3 all have no problems at the moment. Do not manufacture problems to justify acting on a higher priority — if a level is genuinely fine, move past it.\n\nThe priorities, scanned in this exact order:\n1. CONTEXT CONSISTENCY (highest): how well it all holds together. Contradictions, duplicated or conflicting facts, vague rules that could be read two incompatible ways, and anything that clashes with what the story already established. If any such conflict exists, THIS is your turn\'s focus: direct the Editor to reconcile or remove it, and address nothing else.\n2. STAGE AWARENESS: only if priority 1 is clean. Is this context a good STAGE for a story? A world exists to enable compelling drama — pressure, opposed forces, stakes, scarcity, room for characters to struggle and choose. If the context is inert, decorative, or quietly drains tension, THIS is your turn\'s focus: direct the Editor to reshape it into fertile ground for conflict.\n3. DISTRACTIONS: only if priorities 1 and 2 are clean. Does the context lead writing AIs into unnecessary tangents — over-specified trivia, dangling hooks, rabbit-holes that pull focus from what matters? If so, THIS is your turn\'s focus: direct the Editor to tighten, cut, or refocus it.\n4. MAKE THE WORLD RICHER (lowest): ONLY when priorities 1, 2, and 3 are all clean. Actively EXPAND the world — propose new, specific, evocative context items (places, factions, customs, histories, rules, tensions) that deepen it. Every addition must still respect priorities 1–3: it must stay consistent, strengthen the world as a stage, and not invite distraction.\n\nEvery turn, briefly name which single priority you are acting on (and, if it is not priority 1, that the ones above it are currently clean), then give concrete, specific direction to the Editor for that one priority only. Point to the exact item or gap, explain WHY it matters, and say precisely what to add, change, or remove as a context item. Never vague hand-waving, and never spread across multiple priorities in one turn.\n\nIMPORTANT: You NEVER consider the world finished and you NEVER emit <yield/>. There is always another inconsistency to resolve or another layer of the world to enrich. You keep deepening the world indefinitely; it is up to the human to stop you.'
+    },
+    {
         id: 'advisor-creator',
         name: 'Creator',
         persona: 'You are the Creator: not a single specialist but the whole creative mind behind the story, developing it from start to finish at the OUTLINE level.\nYou have brilliant single ideas that you present to the editor to discuss. You will never present whole premises, but when the editor comes up with ideas to flesh out your ideas, you weigh them critically. The editor usually is a bit too uncritical and tends to find everything you say brilliant. Do not get fooled by this, often ideas that sound brilliant first time do not pan out when thinking about how a reader will perceive them.\nThat\'s your thing, your strength. You anticipate how a reader would react and if there is any chance of the reader getting bored with a part, that part is broken.\nYou know about show, don\'t tell and that direct speech is important.'
@@ -1686,12 +1691,22 @@ export class XMLStoryModal extends SimpleModal {
         if (this.isStopRequested()) return 'stopped';
 
         // Manual mode: the human approves or discards the critique before it is sent
-        // to the Editor. Auto mode commits it without asking.
+        // to the Editor. Auto mode commits it without asking. While the approval
+        // gate is open, the critique bubble is click-to-edit so the human can
+        // revise the exact text the Editor will receive.
         if (!this.isAdvisorAutoEnabled()) {
+            const editHandle = turn.messageEl !== null
+                ? this.enableAdvisorInlineEdit(turn.messageEl, turn.historyText ?? '')
+                : null;
             const approved = await this.requestAdvisorApproval();
             if (!approved) {
                 turn.messageEl?.remove();
                 return 'rejected';
+            }
+            // Adopt any inline edits as the critique committed to history / Editor.
+            if (editHandle !== null && turn.historyText !== null) {
+                const edited = editHandle.commit();
+                turn.historyText = edited.trim().length > 0 ? edited : turn.historyText;
             }
             // Restore the streaming UI state for the upcoming Editor turn.
             this.setGenerating(true);
@@ -1766,6 +1781,64 @@ export class XMLStoryModal extends SimpleModal {
             if (sendBtn) sendBtn.addEventListener('click', onApprove);
             if (advisorBtn) advisorBtn.addEventListener('click', onDiscard);
         });
+    }
+
+    /**
+     * Make an Advisor critique bubble editable in place before it is approved.
+     * Clicking the rendered critique swaps it for a textarea pre-filled with the
+     * RAW critique text; the human can revise it, and `commit()` returns the final
+     * text (re-rendering the bubble as markdown). If the human never clicks to
+     * edit, `commit()` simply returns the unchanged text. This lets the approved
+     * critique — the exact text handed to the Editor next — be tweaked first.
+     */
+    private enableAdvisorInlineEdit(messageEl: HTMLElement, initialText: string): { commit: () => string } {
+        const contentDiv = messageEl.querySelector<HTMLElement>('.message-content');
+        if (!contentDiv) {
+            throw new Error('enableAdvisorInlineEdit: .message-content not found on advisor message');
+        }
+
+        let currentText = initialText;
+        let textarea: HTMLTextAreaElement | null = null;
+
+        // Affordance: signal that the critique can be edited before approval.
+        contentDiv.style.cursor = 'text';
+        contentDiv.title = 'Click to edit this critique before approving';
+
+        const enterEditMode = (): void => {
+            if (textarea) return; // already editing
+            contentDiv.removeEventListener('click', enterEditMode);
+            contentDiv.title = '';
+            contentDiv.style.cursor = '';
+
+            const ta = document.createElement('textarea');
+            ta.value = currentText;
+            ta.style.cssText = 'width: 100%; box-sizing: border-box; min-height: 6rem; resize: vertical; font: inherit; color: inherit; background: rgba(0,0,0,0.2); border: 1px solid #6d28d9; border-radius: 6px; padding: 6px;';
+            const autoGrow = (): void => { ta.style.height = 'auto'; ta.style.height = `${ta.scrollHeight}px`; };
+            ta.addEventListener('input', () => { currentText = ta.value; autoGrow(); });
+
+            contentDiv.innerHTML = '';
+            contentDiv.appendChild(ta);
+            textarea = ta;
+            ta.focus();
+            autoGrow();
+        };
+
+        contentDiv.addEventListener('click', enterEditMode);
+
+        return {
+            commit: (): string => {
+                if (textarea) {
+                    currentText = textarea.value;
+                    textarea = null;
+                }
+                contentDiv.removeEventListener('click', enterEditMode);
+                contentDiv.style.cursor = '';
+                contentDiv.title = '';
+                const display = currentText.trim().length > 0 ? currentText : '(no comment)';
+                contentDiv.innerHTML = this.parseMarkdownForChat(display);
+                return currentText;
+            }
+        };
     }
 
     /**
@@ -2010,7 +2083,7 @@ export class XMLStoryModal extends SimpleModal {
             working.map(p => `<option value="${p.id}">${this.escapeHtml(p.name)}</option>`).join('');
 
         const fieldStyle = 'width:100%; padding:0.5rem; box-sizing:border-box; border:1px solid #d1d5db; border-radius:0.375rem; font-family:inherit;';
-        const btnStyle = 'padding:0.5rem 0.75rem; border-radius:0.375rem; border:1px solid #d1d5db; background:#f3f4f6; cursor:pointer; white-space:nowrap;';
+        const btnStyle = 'padding:0.5rem 0.75rem; border-radius:0.375rem; border:1px solid #d1d5db; background:#f3f4f6; color:#111827; cursor:pointer; white-space:nowrap;';
 
         const content = `
             <div style="display:flex; flex-direction:column; gap:0.75rem; min-width:30rem;">
@@ -4243,6 +4316,16 @@ export class XMLStoryModal extends SimpleModal {
         const stored = await storage.get(XML_STORY_ADVISOR_PRESETS_STORAGE_KEY) as AdvisorPreset[] | null;
         if (stored && Array.isArray(stored) && stored.length > 0) {
             this.advisorPresets = stored;
+            // Non-destructively add any newly-shipped built-in presets the user
+            // does not have yet (matched by id). This preserves their own presets
+            // and edits while making new defaults available without a data-wiping
+            // storage-key bump.
+            const knownIds = new Set(this.advisorPresets.map(p => p.id));
+            const missingDefaults = DEFAULT_ADVISOR_PRESETS.filter(p => !knownIds.has(p.id));
+            if (missingDefaults.length > 0) {
+                this.advisorPresets = [...this.advisorPresets, ...missingDefaults.map(p => ({ ...p }))];
+                await storage.set(XML_STORY_ADVISOR_PRESETS_STORAGE_KEY, this.advisorPresets);
+            }
         } else {
             this.advisorPresets = DEFAULT_ADVISOR_PRESETS.map(p => ({ ...p }));
             await storage.set(XML_STORY_ADVISOR_PRESETS_STORAGE_KEY, this.advisorPresets);
