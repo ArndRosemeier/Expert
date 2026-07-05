@@ -3,6 +3,7 @@ import { UniversalTextEditor } from './UniversalTextEditor';
 import { DocumentNode, ChildScopeMode } from '../../DocumentNode';
 import { ProjectManager } from '../../ProjectManager';
 import { showContextHelp } from '../modals/ContextHelpModal';
+import { showContextLibrary } from '../modals/ContextLibraryModal';
 
 export interface ConditionalContextEditorConfig {
     node: DocumentNode;
@@ -112,6 +113,25 @@ export class ConditionalContextEditor {
         helpBtn.style.cssText = 'flex: 0 0 auto; width: 1.4rem; height: 1.4rem; line-height: 1; padding: 0; border-radius: 50%; border: 1px solid #c7d2fe; background: #eef2ff; color: #3730a3; font-weight: 700; cursor: pointer;';
         addEventListenerWithCleanup(helpBtn, 'click', () => { showContextHelp(); }, this.cleanupHandlers);
         header.appendChild(helpBtn);
+
+        const libBtn = createElement('button', { content: '📚' });
+        libBtn.type = 'button';
+        libBtn.title = 'Add from context library';
+        libBtn.style.cssText = 'flex: 0 0 auto; width: 1.4rem; height: 1.4rem; line-height: 1; padding: 0; border-radius: 50%; border: 1px solid #c7d2fe; background: #eef2ff; font-size: 0.85rem; cursor: pointer;';
+        addEventListenerWithCleanup(libBtn, 'click', () => {
+            const existingTexts = this.node.getConditionalContextItems().map(i => i.text);
+            showContextLibrary(existingTexts, (texts) => {
+                // Guard against duplicates: skip any text already present on the node.
+                const present = new Set(this.node.getConditionalContextItems().map(i => i.text.trim()));
+                for (const text of texts) {
+                    if (present.has(text.trim())) continue;
+                    this.node.addConditionalContextItem(text);
+                }
+                this.schedulePersist();
+                this.refresh();
+            });
+        }, this.cleanupHandlers);
+        header.appendChild(libBtn);
 
         const buttonsRow = createElement('div');
         buttonsRow.style.cssText = 'display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap;';
