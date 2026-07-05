@@ -1797,46 +1797,47 @@ export class XMLStoryModal extends SimpleModal {
             throw new Error('enableAdvisorInlineEdit: .message-content not found on advisor message');
         }
 
-        let currentText = initialText;
-        let textarea: HTMLTextAreaElement | null = null;
+        // Edit the rendered bubble IN PLACE via contentEditable rather than
+        // swapping in a textarea. The bubble is a shrink-to-fit, right-aligned
+        // flex item, so a replacement control collapses to a slim column; editing
+        // the element itself leaves its width, padding, and styling untouched.
+        let entered = false;
+        let dirty = false;
 
-        // Affordance: signal that the critique can be edited before approval.
         contentDiv.style.cursor = 'text';
         contentDiv.title = 'Click to edit this critique before approving';
 
+        const onInput = (): void => { dirty = true; };
+
         const enterEditMode = (): void => {
-            if (textarea) return; // already editing
+            if (entered) return;
+            entered = true;
             contentDiv.removeEventListener('click', enterEditMode);
             contentDiv.title = '';
-            contentDiv.style.cursor = '';
-
-            const ta = document.createElement('textarea');
-            ta.value = currentText;
-            ta.style.cssText = 'width: 100%; box-sizing: border-box; min-height: 6rem; resize: vertical; font: inherit; color: inherit; background: rgba(0,0,0,0.2); border: 1px solid #6d28d9; border-radius: 6px; padding: 6px;';
-            const autoGrow = (): void => { ta.style.height = 'auto'; ta.style.height = `${ta.scrollHeight}px`; };
-            ta.addEventListener('input', () => { currentText = ta.value; autoGrow(); });
-
-            contentDiv.innerHTML = '';
-            contentDiv.appendChild(ta);
-            textarea = ta;
-            ta.focus();
-            autoGrow();
+            contentDiv.contentEditable = 'true';
+            contentDiv.style.outline = '2px solid #a78bfa';
+            contentDiv.style.outlineOffset = '2px';
+            contentDiv.addEventListener('input', onInput);
+            contentDiv.focus();
         };
 
         contentDiv.addEventListener('click', enterEditMode);
 
         return {
             commit: (): string => {
-                if (textarea) {
-                    currentText = textarea.value;
-                    textarea = null;
-                }
                 contentDiv.removeEventListener('click', enterEditMode);
+                contentDiv.removeEventListener('input', onInput);
                 contentDiv.style.cursor = '';
                 contentDiv.title = '';
-                const display = currentText.trim().length > 0 ? currentText : '(no comment)';
-                contentDiv.innerHTML = this.parseMarkdownForChat(display);
-                return currentText;
+                if (entered) {
+                    contentDiv.contentEditable = 'false';
+                    contentDiv.style.outline = '';
+                    contentDiv.style.outlineOffset = '';
+                }
+                // Untouched (never edited) → keep the exact raw critique text.
+                if (!dirty) return initialText;
+                const text = contentDiv.innerText.trim();
+                return text.length > 0 ? text : initialText;
             }
         };
     }

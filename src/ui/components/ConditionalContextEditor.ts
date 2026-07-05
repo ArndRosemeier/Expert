@@ -2,6 +2,7 @@ import { createElement, addEventListenerWithCleanup, truncateText } from '../mod
 import { UniversalTextEditor } from './UniversalTextEditor';
 import { DocumentNode, ChildScopeMode } from '../../DocumentNode';
 import { ProjectManager } from '../../ProjectManager';
+import { showContextHelp } from '../modals/ContextHelpModal';
 
 export interface ConditionalContextEditorConfig {
     node: DocumentNode;
@@ -101,8 +102,16 @@ export class ConditionalContextEditor {
             box-sizing: border-box;
         `;
 
-        const header = createElement('div', { content: 'Conditional Context Items' });
-        header.style.cssText = 'font-weight: 600;';
+        const header = createElement('div');
+        header.style.cssText = 'font-weight: 600; display: flex; align-items: center; gap: 0.5rem;';
+        header.appendChild(createElement('span', { content: 'Conditional Context Items' }));
+
+        const helpBtn = createElement('button', { content: '?' });
+        helpBtn.type = 'button';
+        helpBtn.title = 'What is context? (detailed explanation)';
+        helpBtn.style.cssText = 'flex: 0 0 auto; width: 1.4rem; height: 1.4rem; line-height: 1; padding: 0; border-radius: 50%; border: 1px solid #c7d2fe; background: #eef2ff; color: #3730a3; font-weight: 700; cursor: pointer;';
+        addEventListenerWithCleanup(helpBtn, 'click', () => { showContextHelp(); }, this.cleanupHandlers);
+        header.appendChild(helpBtn);
 
         const buttonsRow = createElement('div');
         buttonsRow.style.cssText = 'display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap;';
