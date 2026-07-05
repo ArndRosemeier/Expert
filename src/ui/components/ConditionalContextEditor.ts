@@ -120,12 +120,15 @@ export class ConditionalContextEditor {
         libBtn.style.cssText = 'flex: 0 0 auto; width: 1.4rem; height: 1.4rem; line-height: 1; padding: 0; border-radius: 50%; border: 1px solid #c7d2fe; background: #eef2ff; font-size: 0.85rem; cursor: pointer;';
         addEventListenerWithCleanup(libBtn, 'click', () => {
             const existingTexts = this.node.getConditionalContextItems().map(i => i.text);
-            showContextLibrary(existingTexts, (texts) => {
+            showContextLibrary(existingTexts, (additions) => {
                 // Guard against duplicates: skip any text already present on the node.
                 const present = new Set(this.node.getConditionalContextItems().map(i => i.text.trim()));
-                for (const text of texts) {
-                    if (present.has(text.trim())) continue;
-                    this.node.addConditionalContextItem(text);
+                for (const addition of additions) {
+                    if (present.has(addition.text.trim())) continue;
+                    const id = this.node.addConditionalContextItem(addition.text);
+                    if (addition.leavesOnly) {
+                        this.node.updateConditionalContextItem(id, { leavesOnly: true });
+                    }
                 }
                 this.schedulePersist();
                 this.refresh();
