@@ -1,4 +1,6 @@
-# Expert Application - Complete User Manual
+# Expert Application - User Manual
+
+> **Note:** This manual is **not comprehensive** — it covers the core features to get you started and working productively. Some newer or more specialized tools are documented only inside the app (via their own help buttons and tooltips) or are not yet covered here. When in doubt, the in-app labels, tooltips, and `?` help buttons are the most up-to-date reference.
 
 ---
 
@@ -418,7 +420,6 @@ Automatic cleanup to prevent context overflow:
 - **Context Awareness**: AI knows your project's characters, plot, style, and previous content
 - **Persistent Memory**: Conversations remember earlier discussion points
 - **Model Selection**: Choose which AI model to chat with based on your needs
-- **Export Conversations**: Save important discussions for future reference
 - **Real-time Responses**: Get immediate feedback and suggestions
 
 **Example Node Chat Session:**
@@ -450,7 +451,6 @@ This fits your story's theme of moral choices and gives the hero agency in the d
 - **Ask follow-up questions** to dive deeper into ideas
 - **Use it iteratively** - have multiple short conversations rather than one long one
 - **Reference your project elements** (characters, themes, previous events)
-- **Save important insights** by exporting conversations
 
 **Performance Tips:**
 - **Limit scope depth** for faster responses (use 1-2 levels for most conversations)
@@ -479,15 +479,19 @@ This section explains what the AI can change for you and how to phrase requests 
   - "Add an `===Act II===` section that escalates conflict."
   - "Tighten the ending section and remove redundant parts."
 
-#### Context items with triggers
-- Context items keep facts consistent across your project (e.g., characters, locations, themes).
-- Each item can be:
-  - Global: always active.
-  - Triggered: active only when a specific keyword appears (e.g., a character name).
-- What you can ask:
-  - "Create a global context item for the city history."
+#### Context items (triggers, scope, and reach)
+- Context items keep facts and rules consistent across your project (e.g., characters, locations, themes, world rules). Each item is attached to a node and is **inherited by that node and its whole subtree**, so shared background belongs in a context item rather than in body text (which only travels down one branch as it is expanded).
+- Each item can be narrowed by up to three independent gates; when several are set, they must **all** match for the item to apply:
+  - **Trigger words** (content gate): one or more comma-separated keywords. The item applies only to nodes whose content mentions one of them. Omit to make the item always apply.
+  - **Structural scope** (by direct-child section): apply under *all* children (default), only *these* children, or *all except* these children.
+  - **Leaves only** (reach): restrict the item to the lowest prose layer, e.g. prose-only style guidance that should not reach the outline layers above.
+- The AI can create and edit items and set any of these facets for you. What you can ask:
+  - "Create an always-on context item for the city history."
   - "Update Sarah’s context item to include her new backstory."
-  - "Add a triggered context item for 'Neo-Singapore' that describes the skyline and tech vibe."
+  - "Add a context item for 'Neo-Singapore', triggered on that name, describing the skyline and tech vibe."
+  - "Add a note that only applies under Chapter 1 and Chapter 3."
+  - "Add a prose-only style note to use present tense everywhere except the Prologue."
+- You can inspect, sort, and hand-edit every item — and see its id, scope, triggers, and reach — in the **context editor**. Its **?** button opens a detailed explanation of how context works.
 
 #### Verifiable constraints (`=>`)
 - Start a context item's text with `=>` to turn it into a binary (pass/fail) verifiable constraint instead of passive background information.
@@ -497,14 +501,14 @@ This section explains what the AI can change for you and how to phrase requests 
 - Express graded goals in binary form: state the bar as something that is either met or not (e.g., `=> the chapter must end on a cliffhanger`).
 - Example: `=> the text must be written in a noir style`.
 
-#### Limitations
-- The AI can set or change the single trigger keyword for a context item.
-- More complex activation conditions (beyond a single trigger keyword) must be edited manually.
+#### Good to know
+- The AI can set or change all item facets — trigger words, structural scope (which child sections it covers), and leaves-only reach — directly from your natural-language request; you do not need to edit them by hand.
+- Structural scope targets a node's *direct* child sections by exact title. To scope more deeply, attach the item to the deeper node instead — it is the same operation one level down.
 
 #### Tips for better results
 - Be explicit: "Strengthen the stakes in `===Chapter 2===` without changing the character motivations."
 - Use clear section titles for Acts/Chapters to help the AI target the right part of the outline.
-- Keep triggers short: use names or single keywords, not sentences.
+- Keep trigger words short: use names or single keywords (you can list several), not sentences.
 - Iterate: ask for a small improvement, review, then continue.
 
 ---
@@ -790,9 +794,10 @@ For each AI role, choose from available OpenRouter models:
 **Model Parameters:**
 - **Temperature**: Control creativity vs. consistency
 - **Top-p**: Nucleus sampling for output diversity
-- **Max Tokens**: Output length limits
-- **Frequency Penalty**: Reduce repetition
-- **Presence Penalty**: Encourage topic diversity
+- **Max Output Tokens**: Output length limit
+- **Verbosity** / **Reasoning effort**: Available only for models that support them
+
+Each control appears only when the selected model advertises support for it, so you never see a setting that would have no effect.
 
 **Performance Tuning:**
 - **Timeout Settings**: AI response time limits
@@ -1058,23 +1063,18 @@ Analyze consistency between outline and expanded content using AI.
 
 ### Context Extraction
 
-Automatically extract relevant information from content for use as context.
+Automatically pull relevant information out of existing content and turn it into reusable context.
 
-**Extraction Types:**
-- **Characters**: Names, descriptions, relationships, characteristics
-- **Locations**: Settings, geography, important places
-- **Themes**: Central concepts, motifs, recurring ideas
-- **Events**: Important plot points, chronology, causation
-- **Technical Info**: Procedures, specifications, requirements
-- **Custom**: User-defined extraction criteria
+**What you can extract:**
+You describe what you want in plain language — for example characters, locations, themes, events, or technical facts — and the AI extracts matching information. There is no fixed menu of "types"; the request is free-form, so you can be as broad or specific as you like.
 
 **Extraction Process:**
-1. Select content-containing node
-2. Click "Extract Context" button
-3. Choose extraction type or describe custom needs
-4. AI analyzes content and extracts relevant information
-5. Review and edit extracted context
-6. Add to project context or node context
+1. Select a content-containing node
+2. Open **Extract Context**
+3. Describe what to pull out (e.g. "the main characters and their traits")
+4. Choose how deep to look (scope depth across descendants)
+5. AI analyzes the content and returns the extracted information
+6. Review, edit, and add it as context
 
 ### Batch Operations
 
@@ -1102,7 +1102,6 @@ Interactive chat with AI models using project context.
 - **Context Awareness**: Chat with full project context
 - **Action Shortcuts**: Pre-defined prompts for common tasks
 - **Conversation History**: Maintain chat context across sessions
-- **Export Chat**: Save conversation for reference
 
 **Chat Actions:**
 - **Consistency Check**: Ask AI to review content coherence
@@ -1200,15 +1199,17 @@ Organize and categorize your content with custom tags for better project managem
 - **Tag Filtering**: Find content by tag categories
 - **Tag Hierarchy**: Organize tags in parent-child relationships
 
-**Context Adjuster**
+**Context Editor**
 
-Fine-tune how context flows through your project hierarchy.
+Fine-tune how context flows through your project hierarchy from a node's **Edit Context** action.
 
 **Capabilities:**
-- **Context Scope**: Adjust what context each node receives
-- **Context Priorities**: Weight different context sources
-- **Context Exclusions**: Remove irrelevant context from specific nodes
-- **Context Preview**: See effective context before generation
+- **Structural scope**: Choose which direct child sections an item applies under (all / only some / all except some)
+- **Leaves-only reach**: Restrict an item to the lowest prose layer
+- **Trigger words**: Activate an item only when the content mentions specific keywords
+- **Item ids, sorting, and inline editing**: Inspect and hand-edit every item; a `?` button explains the whole system in detail
+
+See *AI Editing Capabilities → Context items* above for the full explanation.
 
 **Batch Update Tools**
 
@@ -1441,6 +1442,6 @@ Perform operations across multiple nodes efficiently.
 
 ---
 
-*© 2024 Expert Application - Complete User Manual*
+*© 2026 Expert Application - User Manual*
 
-*This manual covers Expert Application features as of the current release. The application is actively developed with regular updates and improvements.* 
+*This manual covers the core Expert Application features and is not exhaustive. The application is actively developed with regular updates and improvements, so some features are documented only in-app.* 
