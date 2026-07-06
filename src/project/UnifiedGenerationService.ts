@@ -1266,8 +1266,9 @@ export class UnifiedGenerationService {
                         throw error;
                     }
                     const msg = error instanceof Error ? error.message : String(error);
-                    const isMalformed = /malformed|Failed to parse analysis results|Empty response/i.test(msg);
-                    if (!isMalformed || attempt === maxAttempts) {
+                    const isCongestion = error instanceof Error && error.name === 'ProviderCongestionError';
+                    const isRetryable = isCongestion || /malformed|Failed to parse analysis results|Empty response|Provider error from/i.test(msg);
+                    if (!isRetryable || attempt === maxAttempts) {
                         // Non-retryable error or out of attempts
                         throw error;
                     }
@@ -1275,7 +1276,7 @@ export class UnifiedGenerationService {
                     this.currentStageProgress = {
                         current: 1,
                         total: levels.autofixSeverity !== -1 ? 2 : 1,
-                        message: `Malformed coherence response, retrying (${attempt + 1}/${maxAttempts})...`
+                        message: `${isCongestion ? 'Provider congestion' : 'Malformed coherence response'}, retrying (${attempt + 1}/${maxAttempts})...`
                     };
                     this.emitUnifiedProgress();
                 }

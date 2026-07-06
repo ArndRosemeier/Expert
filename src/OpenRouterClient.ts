@@ -220,6 +220,131 @@ function readFirstHeader(headers: Headers, names: string[]): string | null {
 }
 
 /**
+ * Typed reason info extracted from an OpenRouter SSE error payload.
+ * OpenRouter emits the real failure reason as a terminal `chat.completion.chunk`
+ * carrying a top-level (or choice-level) `error` object plus `finish_reason: "error"`.
+ */
+interface StreamFailure {
+  code?: string | number;
+  message?: string;
+  errorType?: string;
+  providerCode?: string;
+  providerName?: string;
+  finishReason?: string;
+  nativeFinishReason?: string;
+}
+
+/** `error_type` values that indicate transient provider congestion (safe to retry). */
+const CONGESTION_ERROR_TYPES: ReadonlySet<string> = new Set([
+  'provider_unavailable',
+  'provider_overloaded',
+  'timeout',
+  'rate_limit_exceeded',
+  'server'
+]);
+
+/** HTTP statuses that indicate transient congestion (safe to retry). */
+const RETRYABLE_HTTP_STATUS: ReadonlySet<number> = new Set([429, 502, 503, 504]);
+
+// Idle/stall watchdog for streaming. If no bytes at all arrive within this window
+// (OpenRouter sends periodic ": OPENROUTER PROCESSING" keepalives even while a
+// model is still "thinking", so any healthy request keeps resetting this), the
+// connection is treated as a stalled/congested provider: the request is aborted
+// and surfaced as a retryable ProviderCongestionError instead of hanging forever.
+const STREAM_STALL_TIMEOUT_MS = 120_000;
+const STREAM_STALL_CHECK_MS = 5_000;
+
+/**
+ * Extract typed failure info from a parsed SSE chunk. Returns null for normal
+ * chunks (content deltas, `stop`/`length` completions). Non-null only when the
+ * provider reported an error (top-level/choice-level `error` object or
+ * `finish_reason: "error"`).
+ */
+function extractStreamFailure(parsed: unknown): StreamFailure | null {
+  if (typeof parsed !== 'object' || parsed === null) return null;
+  const root = parsed as Record<string, unknown>;
+
+  const rawChoice = Array.isArray(root['choices']) ? (root['choices'] as unknown[])[0] : undefined;
+  const choice = (typeof rawChoice === 'object' && rawChoice !== null)
+    ? (rawChoice as Record<string, unknown>)
+    : undefined;
+
+  const finishReason = choice && typeof choice['finish_reason'] === 'string'
+    ? choice['finish_reason']
+    : undefined;
+  const nativeFinishReason = choice && typeof choice['native_finish_reason'] === 'string'
+    ? choice['native_finish_reason']
+    : undefined;
+
+  let rawError: Record<string, unknown> | undefined;
+  if (typeof root['error'] === 'object' && root['error'] !== null) {
+    rawError = root['error'] as Record<string, unknown>;
+  } else if (choice && typeof choice['error'] === 'object' && choice['error'] !== null) {
+    rawError = choice['error'] as Record<string, unknown>;
+  }
+
+  if (!rawError && finishReason !== 'error') return null;
+
+  const failure: StreamFailure = {};
+  if (finishReason) failure.finishReason = finishReason;
+  if (nativeFinishReason) failure.nativeFinishReason = nativeFinishReason;
+
+  if (rawError) {
+    const code = rawError['code'];
+    if (typeof code === 'string' || typeof code === 'number') failure.code = code;
+    const message = rawError['message'];
+    if (typeof message === 'string') failure.message = message;
+    const metadata = (typeof rawError['metadata'] === 'object' && rawError['metadata'] !== null)
+      ? (rawError['metadata'] as Record<string, unknown>)
+      : undefined;
+    if (metadata) {
+      if (typeof metadata['error_type'] === 'string') failure.errorType = metadata['error_type'];
+      if (typeof metadata['provider_code'] === 'string') failure.providerCode = metadata['provider_code'];
+      if (typeof metadata['provider_name'] === 'string') failure.providerName = metadata['provider_name'];
+    }
+  }
+  return failure;
+}
+
+/** Whether a captured stream failure is transient congestion that is safe to retry. */
+function isCongestionFailure(f: StreamFailure): boolean {
+  if (f.errorType && CONGESTION_ERROR_TYPES.has(f.errorType)) return true;
+  if (typeof f.code === 'number' && RETRYABLE_HTTP_STATUS.has(f.code)) return true;
+  // An `error` finish with no typed detail is, per OpenRouter, almost always a
+  // transient provider disconnect/overload — treat it as retryable congestion.
+  if (!f.errorType && f.finishReason === 'error') return true;
+  return false;
+}
+
+/** Parse a `Retry-After` header (seconds or HTTP-date) into seconds. */
+function parseRetryAfterSeconds(headers: Headers): number | undefined {
+  const raw = headers.get('retry-after');
+  if (!raw) return undefined;
+  const trimmed = raw.trim();
+  const asNum = Number(trimmed);
+  if (Number.isFinite(asNum)) return Math.max(0, asNum);
+  const asDate = Date.parse(trimmed);
+  if (Number.isFinite(asDate)) {
+    const secs = (asDate - Date.now()) / 1000;
+    return secs > 0 ? secs : 0;
+  }
+  return undefined;
+}
+
+/** Build a human-readable, accurate message from a captured stream failure. */
+function describeStreamFailure(model: string, f: StreamFailure, attempts: number): string {
+  const parts: string[] = [];
+  if (f.errorType) parts.push(`type=${f.errorType}`);
+  if (typeof f.code !== 'undefined') parts.push(`code=${f.code}`);
+  if (f.providerName) parts.push(`provider=${f.providerName}`);
+  if (f.providerCode) parts.push(`provider_code=${f.providerCode}`);
+  if (f.nativeFinishReason) parts.push(`native_finish=${f.nativeFinishReason}`);
+  const detail = parts.length ? ` (${parts.join(', ')})` : '';
+  const providerMsg = f.message ? `: ${f.message}` : '';
+  return `Provider error from ${model}${detail}${providerMsg}. Failed after ${attempts} attempt(s).`;
+}
+
+/**
  * Singleton OpenRouterClient with operation-scoped abort controllers and dynamic key/model loading.
  * This ensures consistent API key usage across the entire application and prevents key synchronization issues.
  */
@@ -988,6 +1113,50 @@ export class OpenRouterClient {
   }
 
   /**
+   * Abortable delay used between retry attempts. Honors a server-provided
+   * Retry-After (seconds) when available, otherwise uses capped exponential
+   * backoff. Rejects with an AbortError if the operation is aborted while waiting.
+   */
+  private async delayBeforeRetry(
+    attempt: number,
+    retryAfterSeconds: number | undefined,
+    signal: AbortSignal,
+    purpose: string,
+    reason: string
+  ): Promise<void> {
+    const backoffMs = Math.min(20000, 800 * Math.pow(2, attempt - 1));
+    const waitMs = typeof retryAfterSeconds === 'number'
+      ? Math.min(20000, Math.max(0, retryAfterSeconds * 1000))
+      : backoffMs;
+
+    const nextAttempt = attempt + 1;
+    void import('./utils/UILogger').then(({ uiLogger }) => {
+      uiLogger.warn('OpenRouter retrying', `Purpose: ${purpose} | Reason: ${reason} | Attempt ${nextAttempt} in ${Math.round(waitMs)}ms`);
+    }).catch(() => {
+      // UI logger not available, that's ok
+    });
+    window.dispatchEvent(new CustomEvent('ai-progress', {
+      detail: { type: 'start', message: `Provider congested (${reason}), retrying…` }
+    }));
+
+    await new Promise<void>((resolve, reject) => {
+      if (signal.aborted) {
+        reject(new DOMException('Aborted', 'AbortError'));
+        return;
+      }
+      const onAbort = () => {
+        clearTimeout(timer);
+        reject(new DOMException('Aborted', 'AbortError'));
+      };
+      const timer = setTimeout(() => {
+        signal.removeEventListener('abort', onAbort);
+        resolve();
+      }, waitMs);
+      signal.addEventListener('abort', onAbort, { once: true });
+    });
+  }
+
+  /**
    * Send a streaming chat message for a given purpose.
    * Calls onContent for each chunk and onComplete when finished.
    */
@@ -1005,6 +1174,17 @@ export class OpenRouterClient {
 
     // CRITICAL FIX: Ensure UI selection matches loaded profile
     await this.ensureProfileConsistency();
+
+    // Stall watchdog state (see STREAM_STALL_TIMEOUT_MS). `stallState.stalled` lets
+    // the catch block distinguish a stall-abort from a genuine user abort.
+    const stallState = { stalled: false };
+    let stallWatchdog: ReturnType<typeof setInterval> | null = null;
+    const clearStallWatchdog = () => {
+      if (stallWatchdog !== null) {
+        clearInterval(stallWatchdog);
+        stallWatchdog = null;
+      }
+    };
 
     try {
       const apiKey = await this.getApiKeyFromStorage();
@@ -1143,6 +1323,53 @@ export class OpenRouterClient {
         detail: { type: 'start', message: 'Waiting for response...' } 
       }));
 
+      // Success-carrying state (populated by the successful attempt).
+      let fullContent = '';
+      let receivedImages = false;
+      let finalUsage: OpenRouterUsage | undefined = undefined;
+      let finalTotalCostUsd: number | undefined = undefined;
+      let generationId: string | undefined = undefined;
+
+      // Bounded retry loop. Transient provider congestion (a retryable HTTP status,
+      // an in-stream `error`, or an empty result with no detail) is retried ONLY
+      // when nothing has been streamed yet, so consumers never see duplicated
+      // partial output. Real content filtering and non-transient errors are thrown
+      // immediately with their true reason.
+      const maxAttempts = 4;
+      let attempt = 0;
+      let attemptStart = startTime;
+
+      for (;;) {
+        attempt++;
+        attemptStart = Date.now();
+
+        // Reset per-attempt accumulators.
+        fullContent = '';
+        receivedImages = false;
+        finalUsage = undefined;
+        finalTotalCostUsd = undefined;
+        generationId = undefined;
+        let wasContentFiltered = false;
+        let contentFilterReason = '';
+        let streamFailure: StreamFailure | null = null;
+        let shouldRetry = false;
+
+      // (Re)arm the idle watchdog for this attempt. It aborts the request if no
+      // bytes arrive for STREAM_STALL_TIMEOUT_MS (covers both a hanging fetch and
+      // a stalled token stream). Bumped on fetch return and on every read below.
+      clearStallWatchdog();
+      let lastActivityAt = Date.now();
+      stallWatchdog = setInterval(() => {
+        if (Date.now() - lastActivityAt > STREAM_STALL_TIMEOUT_MS) {
+          stallState.stalled = true;
+          clearStallWatchdog();
+          window.dispatchEvent(new CustomEvent('ai-progress', {
+            detail: { type: 'start', message: `No response for ${STREAM_STALL_TIMEOUT_MS / 1000}s — connection stalled, retrying…` }
+          }));
+          abortController.abort();
+        }
+      }, STREAM_STALL_CHECK_MS);
+
       const response = await fetch(this.apiUrl, {
         method: 'POST',
         headers: {
@@ -1152,13 +1379,22 @@ export class OpenRouterClient {
         body: JSON.stringify(request),
         signal: abortController.signal
       });
+      lastActivityAt = Date.now();
 
 
 
       if (!response.ok) {
         const errorText = await response.text();
         console.error('❌ OpenRouter API error response:', errorText);
+        if (RETRYABLE_HTTP_STATUS.has(response.status) && attempt < maxAttempts) {
+          const retryAfter = parseRetryAfterSeconds(response.headers);
+          await this.delayBeforeRetry(attempt, retryAfter, abortController.signal, purpose, `HTTP ${response.status}`);
+          continue;
+        }
         const error = new Error(`OpenRouter API error: ${response.status} ${response.statusText} - ${errorText}`);
+        if (RETRYABLE_HTTP_STATUS.has(response.status)) {
+          error.name = 'ProviderCongestionError';
+        }
         throw error;
       }
 
@@ -1169,13 +1405,6 @@ export class OpenRouterClient {
 
       const reader = response.body.getReader();
       const decoder = new TextDecoder();
-      let fullContent = '';
-      let receivedImages = false;
-      let wasContentFiltered = false;
-      let contentFilterReason = '';
-      let finalUsage: OpenRouterUsage | undefined = undefined;
-      let finalTotalCostUsd: number | undefined = undefined;
-      let generationId: string | undefined = undefined;
 
       // Try to capture generation/cost from headers (if exposed by CORS)
       const headerGen = readFirstHeader(response.headers, [
@@ -1213,7 +1442,10 @@ export class OpenRouterClient {
         }
       }
 
-      callbacks.onStart();
+      // Only announce start once; retries are transparent to consumers.
+      if (attempt === 1) {
+        callbacks.onStart();
+      }
 
       try {
         // Line buffer: SSE lines can be arbitrarily large (e.g. base64 images).
@@ -1223,7 +1455,8 @@ export class OpenRouterClient {
 
         while (true) {
           const { done, value } = await reader.read();
-          
+          lastActivityAt = Date.now(); // any byte (including keepalives) resets the stall watchdog
+
           if (done) break;
           
           sseLineBuffer += decoder.decode(value, { stream: true });
@@ -1263,6 +1496,13 @@ export class OpenRouterClient {
                 if (typeof pid === 'string' && pid.length > 0) {
                   generationId = pid;
                 }
+
+                // Capture the real failure reason from any error chunk
+                // (top-level or choice-level `error`, or finish_reason "error").
+                const failure = extractStreamFailure(parsed);
+                if (failure) {
+                  streamFailure = failure;
+                }
                 
                 // Check for content filtering
                 if (finishReason === 'content_filter') {
@@ -1297,31 +1537,57 @@ export class OpenRouterClient {
           }
         }
         
+        // Stream fully consumed — the stall watchdog is no longer relevant for the
+        // post-stream cost/usage lookups below.
+        clearStallWatchdog();
+
         // Check for content filtering after streaming completes
         if (wasContentFiltered) {
-          const error = new Error(`Content filtering detected: ${contentFilterReason}. The AI model refused to generate content due to safety restrictions. Try using a different model or rephrasing your content.`);
+          const nativeInfo = streamFailure?.nativeFinishReason ? ` (native_finish=${streamFailure.nativeFinishReason})` : '';
+          const error = new Error(`Content filtering detected: ${contentFilterReason}${nativeInfo}. The AI model refused to generate content due to safety restrictions. Try using a different model or rephrasing your content.`);
           error.name = 'ContentFilterError';
           throw error;
         }
         
-        // Check for empty response (another form of content filtering)
-        // Exception: image-only models return no text content, so skip this check if images were received.
-        if (fullContent.length === 0 && !receivedImages) {
-          const error = new Error(`Empty response received from ${model}. This often indicates content filtering by the AI safety system. The model may have detected content that violates its usage policies. Try using a different model (like Mistral Large for best unrestricted quality) or rephrasing your content to be less explicit.`);
-          error.name = 'EmptyResponseError';
-          throw error;
+        // Provider reported an error in-stream — this is where congestion lives.
+        if (streamFailure) {
+          if (fullContent.length === 0 && isCongestionFailure(streamFailure) && attempt < maxAttempts) {
+            shouldRetry = true;
+          } else {
+            const truncatedNote = fullContent.length > 0 ? ' Output was truncated before completion.' : '';
+            const error = new Error(`${describeStreamFailure(model, streamFailure, attempt)}${truncatedNote}`);
+            error.name = 'ProviderCongestionError';
+            throw error;
+          }
+        } else if (fullContent.length === 0 && !receivedImages) {
+          // Empty result with no error detail. Per OpenRouter this is almost
+          // always transient provider congestion, NOT content filtering.
+          // (image-only models legitimately return no text, hence the images guard.)
+          if (attempt < maxAttempts) {
+            shouldRetry = true;
+          } else {
+            const error = new Error(`Empty response received from ${model}: no content and no error detail returned (most likely provider congestion), after ${attempt} attempts. This is usually temporary — try again, or switch provider/model.`);
+            error.name = 'ProviderCongestionError';
+            throw error;
+          }
+        }
+
+        if (shouldRetry) {
+          const reason = streamFailure?.errorType ?? (streamFailure ? 'provider error' : 'empty response');
+          await this.delayBeforeRetry(attempt, undefined, abortController.signal, purpose, reason);
+          continue;
         }
         
-        const duration = Date.now() - startTime;
+        const duration = Date.now() - attemptStart;
         
-        let totalCostUsd =
-          typeof finalTotalCostUsd === 'number'
-            ? finalTotalCostUsd
-            : (
-              typeof finalUsage?.total_cost === 'number'
-                ? finalUsage.total_cost
-                : (typeof finalUsage?.cost === 'number' ? finalUsage.cost : undefined)
-            );
+        let totalCostUsd = typeof finalTotalCostUsd === 'number' ? finalTotalCostUsd : undefined;
+        if (typeof totalCostUsd !== 'number') {
+          if (typeof finalUsage?.total_cost === 'number') {
+            totalCostUsd = finalUsage.total_cost;
+          } else if (typeof finalUsage?.cost === 'number') {
+            totalCostUsd = finalUsage.cost;
+          }
+        }
 
         if (typeof totalCostUsd !== 'number' && typeof generationId === 'string') {
           try {
@@ -1382,9 +1648,14 @@ export class OpenRouterClient {
         callbacks.onComplete(fullContent);
         
       } finally {
+        clearStallWatchdog();
         reader.releaseLock();
       }
-      
+
+        // Successful attempt — leave the retry loop.
+        break;
+      }
+
     } catch (error: unknown) {
       console.error(`❌ Streaming chat failed for purpose: ${purpose}, operation: ${opId}`, error);
       
@@ -1401,13 +1672,18 @@ export class OpenRouterClient {
         // UI logger not available, that's ok
       });
       
-      if (error instanceof Error && error.name === 'AbortError') {
-        const abortError = new Error('Request was aborted');
-        callbacks.onError(abortError);
+      // A stall-triggered abort is congestion, not a user abort — surface it as a
+      // retryable ProviderCongestionError so the coherence/run-level retries fire.
+      let reportedError: Error;
+      if (stallState.stalled && error instanceof Error && error.name === 'AbortError') {
+        reportedError = new Error(`No response from the provider for ${STREAM_STALL_TIMEOUT_MS / 1000}s (stalled stream, most likely provider congestion). Retry recommended.`);
+        reportedError.name = 'ProviderCongestionError';
+      } else if (error instanceof Error && error.name === 'AbortError') {
+        reportedError = new Error('Request was aborted');
       } else {
-        const actualError = error instanceof Error ? error : new Error('Unknown streaming error');
-        callbacks.onError(actualError);
+        reportedError = error instanceof Error ? error : new Error('Unknown streaming error');
       }
+      callbacks.onError(reportedError);
       
       // Log failed requests too if logging is enabled
       const settingsManager = this.getSettingsManager();
@@ -1427,9 +1703,9 @@ export class OpenRouterClient {
         }
       }
       
-      const actualError = error instanceof Error ? error : new Error('Unknown streaming error');
-      throw actualError;
+      throw reportedError;
     } finally {
+      clearStallWatchdog();
       this.activeOperations.delete(opId);
     }
   }

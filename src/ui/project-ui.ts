@@ -396,6 +396,11 @@ let coherenceLevelState: number = -1;
 let autofixSeverityState: number = 5; // -1 = none, 1-10 = autofix threshold. Defaults to 5 on first run.
 let deterministicChildCreationState: boolean = true;
 
+// Long-run auto-retry: for unattended multi-hour runs, retry the whole run once
+// per minute up to `autoRetryCountState` times if it fails (e.g. congestion).
+let autoRetryEnabledState: boolean = false;
+let autoRetryCountState: number = 10;
+
 // Export for use by DocumentNode
 (globalThis as any).deterministicChildCreationState = deterministicChildCreationState;
 // pruneScopeState removed - prune scope UI removed
@@ -534,7 +539,9 @@ async function saveLevelStates() {
             contentLevel: contentLevelState,
             coherenceLevel: coherenceLevelState,
             autofixSeverity: autofixSeverityState,
-            deterministicChildCreation: deterministicChildCreationState
+            deterministicChildCreation: deterministicChildCreationState,
+            autoRetryEnabled: autoRetryEnabledState,
+            autoRetryCount: autoRetryCountState
             // pruneScope removed - prune scope UI removed
         });
     } catch (error) {
@@ -546,7 +553,7 @@ async function loadLevelStates() {
     try {
         const { StorageService } = await import('../StorageService');
         const storage = await StorageService.getInstance();
-        const saved = await storage.get<{draftLevel: number, contentLevel: number, contextPruneLevel: number, coherenceLevel: number, autofixSeverity: number, deterministicChildCreation: boolean}>('expert_app_level_states');
+        const saved = await storage.get<{draftLevel: number, contentLevel: number, contextPruneLevel: number, coherenceLevel: number, autofixSeverity: number, deterministicChildCreation: boolean, autoRetryEnabled?: boolean, autoRetryCount?: number}>('expert_app_level_states');
         if (saved) {
             draftLevelState = saved.draftLevel ?? -1;
             contentLevelState = saved.contentLevel ?? -1;
@@ -555,6 +562,8 @@ async function loadLevelStates() {
             autofixSeverityState = saved.autofixSeverity ?? 5;
             deterministicChildCreationState = saved.deterministicChildCreation ?? true;
             (globalThis as any).deterministicChildCreationState = deterministicChildCreationState;
+            autoRetryEnabledState = saved.autoRetryEnabled ?? false;
+            autoRetryCountState = saved.autoRetryCount ?? 10;
             // pruneScopeState removed - prune scope UI removed
         }
     } catch (error) {
@@ -2292,7 +2301,7 @@ export async function renderNodeDetails(retryOptions?: { _isRetry?: boolean }) {
             .gen-plan-actions {
                 flex: 0 0 auto;
                 display: flex;
-                align-items: stretch;
+                align-items: flex-end;
                 gap: 0.5rem;
             }
             
@@ -2300,6 +2309,37 @@ export async function renderNodeDetails(retryOptions?: { _isRetry?: boolean }) {
                 flex: 0 0 auto;
                 min-width: 9rem;
                 max-width: 18rem;
+            }
+
+            .gen-plan-actions-secondary {
+                display: flex;
+                flex-direction: column;
+                align-items: flex-end;
+                gap: 0.4rem;
+            }
+
+            .auto-retry-control {
+                display: flex;
+                align-items: center;
+                gap: 0.35rem;
+                font-size: 0.8rem;
+                color: #495057;
+                white-space: nowrap;
+                cursor: pointer;
+                user-select: none;
+            }
+
+            .auto-retry-control input[type="number"] {
+                width: 3.4rem;
+                padding: 0.15rem 0.3rem;
+                font-size: 0.8rem;
+                border: 1px solid #ced4da;
+                border-radius: 4px;
+            }
+
+            .auto-retry-control input[type="number"]:disabled {
+                opacity: 0.45;
+                cursor: not-allowed;
             }
             
             .gen-plan-actions .generation-advanced-btn {
@@ -2749,9 +2789,16 @@ export async function renderNodeDetails(retryOptions?: { _isRetry?: boolean }) {
                                     <button id="node-generate-btn" class="button button-primary">
                                         ⚡ Generate
                                     </button>
-                                    <button id="generation-advanced-btn" type="button" class="button button-secondary generation-advanced-btn" title="Advanced generation settings">
-                                        ⚙️ Advanced
-                                    </button>
+                                    <div class="gen-plan-actions-secondary">
+                                        <label class="auto-retry-control" title="For long, unattended runs: if the whole generation fails (e.g. provider congestion), automatically retry it once per minute, up to this many times. Click Abort to stop retrying.">
+                                            <input type="checkbox" id="auto-retry-toggle">
+                                            <span>Auto-retry &times;</span>
+                                            <input type="number" id="auto-retry-count" min="1" max="999" step="1" value="10" disabled>
+                                        </label>
+                                        <button id="generation-advanced-btn" type="button" class="button button-secondary generation-advanced-btn" title="Advanced generation settings">
+                                            ⚙️ Advanced
+                                        </button>
+                                    </div>
                                 </div>
                             </div>
                         </div>
@@ -3297,6 +3344,28 @@ export async function renderNodeDetails(retryOptions?: { _isRetry?: boolean }) {
         // Clicking the dimmed backdrop (outside the content) closes the popup.
         advancedPopup.addEventListener('click', (e) => {
             if (e.target === advancedPopup) closeAdvancedPopup();
+        });
+    }
+
+    // Long-run auto-retry control (above the Advanced button).
+    const autoRetryToggle = document.getElementById('auto-retry-toggle') as HTMLInputElement | null;
+    const autoRetryCountInput = document.getElementById('auto-retry-count') as HTMLInputElement | null;
+    if (autoRetryToggle && autoRetryCountInput) {
+        autoRetryToggle.checked = autoRetryEnabledState;
+        autoRetryCountInput.value = String(autoRetryCountState);
+        autoRetryCountInput.disabled = !autoRetryEnabledState;
+
+        autoRetryToggle.addEventListener('change', () => {
+            autoRetryEnabledState = autoRetryToggle.checked;
+            autoRetryCountInput.disabled = !autoRetryEnabledState;
+            void saveLevelStates();
+        });
+        autoRetryCountInput.addEventListener('change', () => {
+            const parsed = parseInt(autoRetryCountInput.value, 10);
+            const clamped = Number.isFinite(parsed) ? Math.max(1, Math.min(999, parsed)) : autoRetryCountState;
+            autoRetryCountState = clamped;
+            autoRetryCountInput.value = String(clamped);
+            void saveLevelStates();
         });
     }
 
@@ -3932,11 +4001,8 @@ This action cannot be undone.`;
                         // Use rich error modal instead of basic alert
                         if (error instanceof Error) {
                             // Check if this is a content filtering error
-                            const isContentFiltering = error.message.includes('Content analysis blocked by AI safety system') || 
-                                                      error.message.includes('Empty response from AI model') ||
-                                                      error.message.includes('likely content filtering') ||
-                                                      error.name === 'ContentFilterError' ||
-                                                      error.name === 'EmptyResponseError';
+                            const isContentFiltering = error.message.includes('Content analysis blocked by AI safety system') ||
+                                                      error.name === 'ContentFilterError';
                             
                             if (isContentFiltering) {
                                 import('./modals').then(({ GenerationErrorService }) => {
@@ -4024,11 +4090,8 @@ This action cannot be undone.`;
                         // Use rich error modal instead of basic alert
                         if (error instanceof Error) {
                             // Check if this is a content filtering error
-                            const isContentFiltering = error.message.includes('Content analysis blocked by AI safety system') || 
-                                                      error.message.includes('Empty response from AI model') ||
-                                                      error.message.includes('likely content filtering') ||
-                                                      error.name === 'ContentFilterError' ||
-                                                      error.name === 'EmptyResponseError';
+                            const isContentFiltering = error.message.includes('Content analysis blocked by AI safety system') ||
+                                                      error.name === 'ContentFilterError';
                             
                             if (isContentFiltering) {
                                 import('./modals').then(({ GenerationErrorService }) => {
@@ -5414,6 +5477,79 @@ function hideGenerationOverlay() {
     }
 }
 
+// === LONG-RUN AUTO-RETRY ===
+
+const AUTO_RETRY_INTERVAL_MS = 60000;
+
+// Set while an auto-retry countdown is in progress so the Abort button can cancel it.
+let autoRetryWaitCancel: (() => void) | null = null;
+
+/** Update the text shown inside the generation overlay (if present). */
+function setGenerationOverlayMessage(title: string, subtitle: string): void {
+    const overlay = document.getElementById('generation-overlay');
+    if (!overlay) return;
+    const titleEl = overlay.querySelector('h3');
+    const subtitleEl = overlay.querySelector('p');
+    if (titleEl) titleEl.textContent = title;
+    if (subtitleEl) subtitleEl.textContent = subtitle;
+}
+
+/**
+ * Whether a failed run should be auto-retried. Genuine content-safety refusals
+ * and user aborts are never retried; everything else is treated as potentially
+ * transient (the common case for long unattended runs is provider congestion).
+ */
+function isRetryableRunError(error: Error): boolean {
+    if (error.name === 'ContentFilterError' || error.name === 'AbortError') return false;
+    if (error.message.includes('Content analysis blocked by AI safety system')) return false;
+    if (error.message.includes('Request was aborted') || error.message.includes('Generation aborted by user')) return false;
+    return true;
+}
+
+/**
+ * Wait one interval before the next auto-retry, showing a live countdown in the
+ * overlay. Resolves false when the wait elapses, or true if it was cancelled
+ * (user pressed Abort).
+ */
+async function waitForAutoRetry(retryNumber: number, totalRetries: number): Promise<boolean> {
+    return new Promise<boolean>((resolve) => {
+        let remaining = Math.ceil(AUTO_RETRY_INTERVAL_MS / 1000);
+        const render = () => {
+            const countdown = `Auto-retry ${retryNumber}/${totalRetries} in ${remaining}s\u2026 (click Abort to stop)`;
+            setGenerationOverlayMessage('Run failed \u2014 waiting to retry', countdown);
+            // Mirror into the top-bar progress info box (where char counts show).
+            window.dispatchEvent(new CustomEvent('ai-progress', {
+                detail: { type: 'start', message: `Run failed \u2014 ${countdown}` }
+            }));
+        };
+        render();
+        const interval = setInterval(() => {
+            remaining -= 1;
+            if (remaining > 0) render();
+        }, 1000);
+        const finish = (cancelled: boolean) => {
+            clearInterval(interval);
+            clearTimeout(timer);
+            autoRetryWaitCancel = null;
+            resolve(cancelled);
+        };
+        const timer = setTimeout(() => { finish(false); }, AUTO_RETRY_INTERVAL_MS);
+        autoRetryWaitCancel = () => { finish(true); };
+    });
+}
+
+/**
+ * Cancel an in-progress auto-retry countdown. Returns true if a wait was active.
+ * Called by the global Abort button so aborting also stops pending retries.
+ */
+export function cancelAutoRetryWait(): boolean {
+    if (autoRetryWaitCancel) {
+        autoRetryWaitCancel();
+        return true;
+    }
+    return false;
+}
+
 export function renderMultiProjectTree() {
     const treeContainer = getElementById('project-tree');
     const projects = state.getProjects();
@@ -5928,87 +6064,108 @@ async function handleUnifiedGeneration(node: DocumentNode): Promise<void> {
     
     // Show generation overlay at start
     showGenerationOverlay();
-    
+
+    const pm = projectManager;
+    const { UnifiedGenerationService } = await import('../project/UnifiedGenerationService');
+    const { GenerationErrorService } = await import('./modals');
+
+    // Define generation levels
+    const levels = {
+        draftLevel,
+        contentLevel,
+        coherenceLevel,
+        autofixSeverity,
+        deterministicChildCreation: deterministicChildCreationState
+        // pruneScope completely removed - was only needed for traditional context adjustment
+    };
+
+    // Store generation parameters in the node for next time
+    node.lastGenerationParameters = { ...levels };
+
+    // Long-run auto-retry: retry the whole run once per minute up to N times when
+    // it fails (e.g. provider congestion). Mid-run error modals are suppressed
+    // while retries may still recover; a single final error is shown at the end.
+    const autoRetry = autoRetryEnabledState && autoRetryCountState > 0;
+    const coordinator = pm.getGenerationCoordinator();
+    let finalError: Error | null = null;
+
     try {
-        // Import UnifiedGenerationService
-        const { UnifiedGenerationService } = await import('../project/UnifiedGenerationService');
-        
-        // Create service dependencies using existing projectManager services
-        const unifiedService = new UnifiedGenerationService({
-            treeService: projectManager.getTreeService(),
-            contextService: projectManager.getContextService(),
-            promptService: projectManager.getPromptService(),
-            generationCoordinator: projectManager.getGenerationCoordinator(),
-            loopOrchestrator: (projectManager as any).loopOrchestrator,
-            settingsManager: projectManager.getSettingsManager(),
-            openRouterClient: (projectManager as any).openRouterClient,
-            eventEmitter: projectManager as any,
-            saveToStorage: () => projectManager!.saveToStorage(),
-            rootNode: projectManager.rootNode
-        });
-        
-        // Define generation levels
-        const levels = {
-            draftLevel,
-            contentLevel,
-            coherenceLevel,
-            autofixSeverity,
-            deterministicChildCreation: deterministicChildCreationState
-            // pruneScope completely removed - was only needed for traditional context adjustment
-        };
-        
-        // Store generation parameters in the node for next time
-        node.lastGenerationParameters = { ...levels };
-        
-        // Start unified generation
-        await unifiedService.generateWithLevels(node.id, levels);
-        
-        // Save to storage
-        await projectManager.saveToStorage();
-        
-                        // Unified generation completed
-        
-    } catch (error) {
-        console.error('Unified generation failed:', error);
-        
-        // Use rich error modal instead of basic alert
-        if (error instanceof Error) {
-            // Check if this is a content filtering error and provide enhanced guidance
-            const isContentFiltering = error.message.includes('Content analysis blocked by AI safety system') || 
-                                      error.message.includes('Empty response from AI model') ||
-                                      error.message.includes('likely content filtering') ||
-                                      error.name === 'ContentFilterError' ||
-                                      error.name === 'EmptyResponseError';
-            
-            if (isContentFiltering) {
-                // Import and show specialized content filtering error modal
-                import('./modals').then(({ GenerationErrorService }) => {
-                    const errorService = GenerationErrorService.getInstance();
-                    void errorService.showContentFilteringError(error, {
-                        purpose: 'Unified Generation',
-                        operation: `Generation for "${node.title}"`,
-                        nodeTitle: node.title
-                    });
-                }).catch(console.error);
-            } else {
-                // Show regular generation error modal
-                import('./modals').then(({ GenerationErrorService }) => {
-                    const errorService = GenerationErrorService.getInstance();
-                    void errorService.showAIError(error, {
-                        title: 'Generation Failed',
-                        purpose: 'Unified Generation',
-                        operation: `Generation for "${node.title}"`
-                    });
-                }).catch(console.error);
+        // Suppress the coordinator's blocking failure alert while auto-retry is active.
+        coordinator.setSuppressFailureAlert(autoRetry);
+        let attempt = 0;
+        for (;;) {
+            attempt++;
+            GenerationErrorService.setSuppressModals(autoRetry);
+
+            let attemptError: Error | null = null;
+            try {
+                const unifiedService = new UnifiedGenerationService({
+                    treeService: pm.getTreeService(),
+                    contextService: pm.getContextService(),
+                    promptService: pm.getPromptService(),
+                    generationCoordinator: pm.getGenerationCoordinator(),
+                    loopOrchestrator: (pm as any).loopOrchestrator,
+                    settingsManager: pm.getSettingsManager(),
+                    openRouterClient: (pm as any).openRouterClient,
+                    eventEmitter: pm as any,
+                    saveToStorage: () => pm.saveToStorage(),
+                    rootNode: pm.rootNode
+                });
+                await unifiedService.generateWithLevels(node.id, levels);
+                await pm.saveToStorage();
+            } catch (error) {
+                attemptError = error instanceof Error ? error : new Error(String(error));
+            } finally {
+                GenerationErrorService.setSuppressModals(false);
             }
-        } else {
-            // Fallback for non-Error objects
-            alert(`Generation failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+
+            if (!attemptError) {
+                finalError = null;
+                break; // success
+            }
+
+            const canRetry = autoRetry && attempt <= autoRetryCountState && isRetryableRunError(attemptError);
+            if (!canRetry) {
+                finalError = attemptError;
+                break;
+            }
+
+            console.warn(`Generation attempt ${attempt} failed (${attemptError.name}: ${attemptError.message}); auto-retrying in ${AUTO_RETRY_INTERVAL_MS / 1000}s (${attempt}/${autoRetryCountState}).`);
+            // The coordinator removes the overlay after a failed op; re-show it for the countdown.
+            showGenerationOverlay();
+            const cancelled = await waitForAutoRetry(attempt, autoRetryCountState);
+            if (cancelled) {
+                finalError = null; // user aborted the wait
+                break;
+            }
+            setGenerationOverlayMessage('Generation in Progress', 'Content is being generated and will appear here');
         }
     } finally {
+        coordinator.setSuppressFailureAlert(false);
         // Clear progress UI and hide overlay
         clearProgressUI();
         hideGenerationOverlay();
+    }
+
+    if (finalError) {
+        console.error('Unified generation failed:', finalError);
+        const error = finalError;
+        const errorService = GenerationErrorService.getInstance();
+        const isContentFiltering = error.message.includes('Content analysis blocked by AI safety system') ||
+                                  error.name === 'ContentFilterError';
+        if (isContentFiltering) {
+            void errorService.showContentFilteringError(error, {
+                purpose: 'Unified Generation',
+                operation: `Generation for "${node.title}"`,
+                nodeTitle: node.title
+            });
+        } else {
+            void errorService.showAIError(error, {
+                title: 'Generation Failed',
+                purpose: 'Unified Generation',
+                operation: `Generation for "${node.title}"`
+            });
+        }
     }
 }
 

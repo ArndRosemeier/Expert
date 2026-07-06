@@ -5,6 +5,17 @@ export class GenerationErrorService {
     private currentErrorModal: GenerationErrorModal | null = null;
     private errorQueue: Array<{ errorDetails: ErrorDetails; resolve: () => void }> = [];
 
+    /**
+     * When true, user-facing error modals/toasts are suppressed. Used by the
+     * long-run auto-retry loop so a single final error is shown instead of one
+     * per failed attempt. Abort notifications are unaffected.
+     */
+    private static suppressModals = false;
+
+    public static setSuppressModals(suppress: boolean): void {
+        GenerationErrorService.suppressModals = suppress;
+    }
+
     private constructor() {
         // Private constructor for singleton
         
@@ -99,6 +110,12 @@ export class GenerationErrorService {
         // Check if this is an abort operation, not a real error
         if (this.isAbortError(error)) {
             this.showAbortNotification(abortMessage);
+            return;
+        }
+
+        // Suppressed during long-run auto-retry: the retry loop shows one final error.
+        if (GenerationErrorService.suppressModals) {
+            console.warn(`[GenerationErrorService] Error suppressed during auto-retry: ${error.message}`);
             return;
         }
 

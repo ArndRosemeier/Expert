@@ -1400,6 +1400,10 @@ export async function initialize() {
     try {
     getElementById('globalAbortBtn').addEventListener('click', async () => {
         const { UnifiedGenerationService } = await import('./project/UnifiedGenerationService');
+        const { cancelAutoRetryWait } = await import('./ui/project-ui');
+
+        // Also stop any in-progress long-run auto-retry countdown.
+        const retryWaitCancelled = cancelAutoRetryWait();
         
         if (UnifiedGenerationService.hasActiveInstances()) {
             const summary = UnifiedGenerationService.getGenerationSummary();
@@ -1428,6 +1432,8 @@ export async function initialize() {
                 console.error('❌ Failed to abort generation:', error);
                 alert('Failed to abort generation. Please try again.');
             }
+        } else if (retryWaitCancelled) {
+            console.log('🛑 Auto-retry countdown cancelled by user');
         } else {
             alert('No generation is currently in progress.');
         }

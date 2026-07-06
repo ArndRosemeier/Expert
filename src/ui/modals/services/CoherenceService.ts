@@ -198,11 +198,9 @@ export class CoherenceService {
             const modelPurpose = this.taskModelService.getModelPurposeForTask('coherence_analysis', isLeafNode);
             const modelName = this.taskModelService.getCurrentModelName(modelPurpose);
             
-            // Check for content filtering errors
-            if (error instanceof Error) {
-                if (error.name === 'ContentFilterError' || error.name === 'EmptyResponseError') {
-                    // Content was filtered by AI safety system
-                    throw new Error(`Content analysis blocked by AI safety system. The model "${modelName}" detected content that violates its usage policies. 
+            // Only a genuine content-safety refusal is treated as filtering.
+            if (error instanceof Error && error.name === 'ContentFilterError') {
+                throw new Error(`Content analysis blocked by AI safety system. The model "${modelName}" detected content that violates its usage policies. 
 
 To fix this:
 1. Go to Settings → Task Models → Coherence Analysis
@@ -213,19 +211,13 @@ To fix this:
 3. Avoid Google Gemini and Claude models for adult/explicit content
 
 Original error: ${error.message}`);
-                }
-                
-                if (error.message.includes('Response body is null') || error.message.includes('response length: 0')) {
-                    // Likely content filtering but not explicitly flagged
-                    throw new Error(`Empty response from AI model "${modelName}" - likely content filtering. The model appears to be refusing to analyze your content due to safety restrictions.
+            }
 
-To fix this:
-1. Go to Settings → Task Models → Coherence Analysis  
-2. Switch to a more permissive model like Mistral Large (best unrestricted quality) or other Mistral models
-3. Google and Claude models are particularly restrictive with adult content
-
-If the problem persists, try rephrasing explicit content in your project to be less detailed.`);
-                }
+            // Provider congestion / transient network errors: preserve the real
+            // reason (do NOT mislabel as content filtering). The retry loop in
+            // UnifiedGenerationService recognizes these and re-attempts.
+            if (error instanceof Error && (error.name === 'ProviderCongestionError' || error.message.includes('Response body is null'))) {
+                throw error;
             }
             
             // Re-throw with message matching retry heuristic in UnifiedGenerationService

@@ -22,9 +22,17 @@ export class GenerationCoordinator {
     private operations = new Map<string, GenerationOperation>();
     private operationCounter = 1;
 
+    // When true, the blocking failure alert is suppressed. Used by the long-run
+    // auto-retry loop so unattended retries are not blocked by a native alert().
+    private suppressFailureAlert = false;
 
     constructor(_eventEmitter: EventEmitter<any>) {
         // eventEmitter parameter accepted but not stored as it's not currently used
+    }
+
+    /** Suppress/restore the blocking failure alert (used during long-run auto-retry). */
+    public setSuppressFailureAlert(suppress: boolean): void {
+        this.suppressFailureAlert = suppress;
     }
 
     /**
@@ -226,7 +234,9 @@ export class GenerationCoordinator {
             if (!success && error) {
                 console.error('Generation operation failed:', error);
                 console.error('Full error details:', error);
-                alert(`Generation failed: ${error.message ?? error}`);
+                if (!this.suppressFailureAlert) {
+                    alert(`Generation failed: ${error.message ?? error}`);
+                }
             }
         }
     }
