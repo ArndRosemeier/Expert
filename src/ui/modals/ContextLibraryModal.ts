@@ -153,6 +153,21 @@ const DEFAULT_CONSTRAINTS: ContextLibraryEntry[] = [
         id: 'ctxlib-no-rule-of-three',
         name: 'No habitual rule of three',
         text: '=> Do not habitually group ideas or images in threes; vary the number of items in lists and descriptions.'
+    },
+    {
+        id: 'ctxlib-emotion-not-only-body',
+        name: 'Vary how emotion is shown',
+        text: '=> Do not convey emotion mainly through bodily sensations (racing heart, tight chest, knot in the stomach, prickling skin); show feeling through choices, actions, dialogue and thought as well.'
+    },
+    {
+        id: 'ctxlib-no-philosophical-dialogue',
+        name: 'Dialogue is not a debate stage',
+        text: '=> Do not use dialogue as a vehicle for abstract philosophical or thematic debate; characters talk to pursue what they want, not to voice the story\'s ideas.'
+    },
+    {
+        id: 'ctxlib-character-intro-in-action',
+        name: 'Introduce characters in action',
+        text: '=> Introduce characters through action, speech and how others treat them, not through an upfront block of external physical description.'
     }
 ];
 
@@ -215,8 +230,12 @@ const KIND_CONFIG: Record<LibraryKind, KindConfig> = {
         defaults: DEFAULT_CONSTRAINTS,
         // Redundant with the rater's standard "No Antithesis Reframing" criterion.
         retiredIds: new Set<string>(['ctxlib-no-antithesis']),
-        leavesOnly: false,
-        hint: 'Check the constraints you want, then "Add checked to context". Items starting with "=>" become enforced (pass/fail) rules the rater must satisfy.',
+        // These are all prose-craft rules; they only make sense on the finished
+        // prose. Adding them leaves-only lets the user drop them once on a
+        // high-level (even the top) node and have them bind only the leaf/prose
+        // nodes beneath it, never the intermediate outline layers.
+        leavesOnly: true,
+        hint: 'Check the constraints you want, then "Add checked to context". Items starting with "=>" become enforced (pass/fail) rules the rater must satisfy. They are added as leaves-only, so you can set them once on a high-level node and they apply only to the finished prose (leaf) nodes beneath it.',
         placeholder: 'Constraint text. Begin with => to make it an enforced (pass/fail) rule.'
     },
     style: {
