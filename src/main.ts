@@ -1,6 +1,8 @@
 import { VersionService } from './VersionService.js';
 import { ErrorLogService } from './ErrorLogService';
 import { ErrorLogEntry, ErrorLogSource } from './types';
+import { pageActivityService } from './lifecycle/PageActivityService';
+import { uiLogger } from './utils/UILogger';
 import './ui/enhanced-layout.css';
 
 // --- Global error capture ---
@@ -89,6 +91,63 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     })();
 });
+
+/**
+ * Wire an honest "generation is still running in the background" indicator.
+ *
+ * When a long-running generation is active and the user switches away from the
+ * tab, the generation keeps progressing (it is network/`fetch`-driven), but the
+ * user has no visual cue. This surfaces that state via a document-title marker,
+ * a log entry, and a note inside the generation overlay, then clears it when the
+ * tab becomes visible again.
+ */
+function setupBackgroundGenerationIndicator(): void {
+    const TITLE_MARKER = '● ';
+    const OVERLAY_NOTE_ID = 'generation-background-note';
+    const NOTE_TEXT = 'Generation continues in the background — keep this tab open.';
+
+    const showIndicator = (): void => {
+        if (!pageActivityService.hasActiveWork()) {
+            return;
+        }
+        if (!document.title.startsWith(TITLE_MARKER)) {
+            document.title = `${TITLE_MARKER}${document.title}`;
+        }
+        uiLogger.info(NOTE_TEXT);
+
+        const overlay = document.getElementById('generation-overlay');
+        if (overlay && !document.getElementById(OVERLAY_NOTE_ID)) {
+            const note = document.createElement('p');
+            note.id = OVERLAY_NOTE_ID;
+            note.textContent = NOTE_TEXT;
+            note.style.margin = '0.75rem 0 0 0';
+            note.style.color = '#856404';
+            note.style.fontSize = '0.85rem';
+            note.style.fontWeight = '600';
+            const content = overlay.firstElementChild;
+            if (content) {
+                content.appendChild(note);
+            } else {
+                overlay.appendChild(note);
+            }
+        }
+    };
+
+    const clearIndicator = (): void => {
+        if (document.title.startsWith(TITLE_MARKER)) {
+            document.title = document.title.slice(TITLE_MARKER.length);
+        }
+        const note = document.getElementById(OVERLAY_NOTE_ID);
+        if (note) {
+            note.remove();
+        }
+    };
+
+    pageActivityService.on('hidden', showIndicator);
+    pageActivityService.on('frozen', showIndicator);
+    pageActivityService.on('visible', clearIndicator);
+    pageActivityService.on('resumed', clearIndicator);
+}
 
 /**
  * Add version and build time info to the header
@@ -190,7 +249,10 @@ async function startApplication(): Promise<void> {
         
         // Add version info to the header
         addVersionInfoToHeader();
-        
+
+        // Surface an honest indicator when generation runs while the tab is hidden
+        setupBackgroundGenerationIndicator();
+
         console.log('✅ Expert application started successfully');
         
         // Setup debug utilities for prompt verification

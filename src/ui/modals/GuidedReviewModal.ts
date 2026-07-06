@@ -27,6 +27,7 @@ import { ReviewCommandParser } from '../../review/ReviewCommandParser';
 import { ReviewStageApplier } from '../../review/ReviewStageApplier';
 import { ReviewStageStore } from '../../review/ReviewStageStore';
 import { ReviewCommitService } from '../../review/ReviewCommitService';
+import { pageActivityService } from '../../lifecycle/PageActivityService';
 import {
     ReviewChatMessage,
     ReviewPurpose,
@@ -401,13 +402,24 @@ export class GuidedReviewModal extends SimpleModal {
         const abortController = new AbortController();
         this.currentAbortController = abortController;
 
+        // Keep the display awake for the duration of this streaming turn.
+        const activeWork = pageActivityService.beginActiveWork('guided-review-stream');
+
         let response = '';
         // Holder object (not a bare `let`) so the flag's type stays `boolean` and
         // the compiler does not narrow it to a constant across the await below.
         const stall = { triggered: false };
         let stallTimer: ReturnType<typeof setTimeout> | null = null;
+        // While the tab is hidden/frozen the stall watchdog is suspended so
+        // background time is never counted as a stall (timers are throttled in
+        // the background, which would otherwise fire the abort late or wrongly).
+        let pageHidden = pageActivityService.isHidden();
         const armStallTimer = (): void => {
             if (stallTimer !== null) clearTimeout(stallTimer);
+            if (pageHidden) {
+                stallTimer = null;
+                return;
+            }
             stallTimer = setTimeout(() => {
                 stall.triggered = true;
                 abortController.abort();
@@ -419,6 +431,18 @@ export class GuidedReviewModal extends SimpleModal {
                 stallTimer = null;
             }
         };
+        const suspendStallTimer = (): void => {
+            pageHidden = true;
+            clearStallTimer();
+        };
+        const resumeStallTimer = (): void => {
+            pageHidden = false;
+            armStallTimer();
+        };
+        pageActivityService.on('hidden', suspendStallTimer);
+        pageActivityService.on('frozen', suspendStallTimer);
+        pageActivityService.on('visible', resumeStallTimer);
+        pageActivityService.on('resumed', resumeStallTimer);
 
         armStallTimer();
         try {
@@ -448,6 +472,11 @@ export class GuidedReviewModal extends SimpleModal {
             throw error instanceof Error ? error : new Error('Streaming failed.');
         } finally {
             clearStallTimer();
+            pageActivityService.off('hidden', suspendStallTimer);
+            pageActivityService.off('frozen', suspendStallTimer);
+            pageActivityService.off('visible', resumeStallTimer);
+            pageActivityService.off('resumed', resumeStallTimer);
+            activeWork.end();
             if (this.currentAbortController === abortController) {
                 this.currentAbortController = null;
             }

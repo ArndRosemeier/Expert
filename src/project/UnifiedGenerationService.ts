@@ -19,6 +19,7 @@ import { TaskModelService } from '../services/TaskModelService';
 import { DEBUG_STATELESS_GENERATION } from '../constants';
 import { findProjectByRootNode } from '../state';
 import { parseContentSections } from '../ContextFormat';
+import { pageActivityService } from '../lifecycle/PageActivityService';
 
 /**
  * STATELESS TARGET-STATE-BASED GENERATION STRATEGY
@@ -361,6 +362,10 @@ export class UnifiedGenerationService {
             throw new Error('Failed to start generation operation - another operation is already running');
         }
 
+        // Keep the display awake and let the app detect background/frozen state
+        // for the duration of this (potentially very long) generation run.
+        const activeWork = pageActivityService.beginActiveWork('unified-generation');
+
         try {
             // Process using stateless target-state approach
             await this.processWithTargetStates(startNodeId, levels);
@@ -378,6 +383,8 @@ export class UnifiedGenerationService {
             
             throw error;
         } finally {
+            // Release the wake lock / active-work reference for this run.
+            activeWork.end();
             // Always cleanup this instance from active registry
             UnifiedGenerationService.activeInstances.delete(this);
             // Clear scope after run
