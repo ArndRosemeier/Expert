@@ -10,6 +10,7 @@ import {
   RPGLiteChatMessage,
   RPGLiteMessageGenerationMeta,
   RPGLiteModelPurpose,
+  RPGLiteOpeningShake,
   RPGLiteSession,
   RPGLiteStartPreset,
   mapCompletionMetaToGenerationMeta
@@ -29,6 +30,37 @@ function formatUsd(value: number): string {
 
 function formatDateTime(ts: number): string {
   return new Date(ts).toLocaleString();
+}
+
+/** Parse a strict JSON array of non-empty strings from model output. */
+function parseJsonStringArray(text: string): string[] {
+  const trimmed = text.trim();
+  const start = trimmed.indexOf('[');
+  const end = trimmed.lastIndexOf(']');
+  if (start === -1 || end === -1 || end <= start) {
+    throw new Error(`Model did not return a JSON array. Got: ${trimmed.slice(0, 2000)}`);
+  }
+  const parsed = JSON.parse(trimmed.slice(start, end + 1)) as unknown;
+  if (!Array.isArray(parsed)) {
+    throw new Error('Expected a JSON array.');
+  }
+  const strings = parsed
+    .filter((x): x is string => typeof x === 'string' && x.trim().length > 0)
+    .map((s) => s.trim());
+  if (strings.length === 0) {
+    throw new Error('JSON array contained no usable strings.');
+  }
+  return strings;
+}
+
+/** Escape text for safe insertion into innerHTML. */
+function escapeHtmlText(text: string): string {
+  return text
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
 }
 
 async function buildContextMessages(session: RPGLiteSession): Promise<OpenRouterMessage[]> {
@@ -271,6 +303,10 @@ export class RPGLiteView {
           <div class="rpg-lite-title">RPG Lite</div>
         </div>
         <div class="rpg-lite-topbar-right">
+          <label style="display:flex; align-items:center; gap:.4rem; cursor:pointer;" title="When on, each new opening is nudged in a random direction to avoid the AI's default/clichéd scene. Adds one quick brainstorming call per start.">
+            <input type="checkbox" id="rpg-lite-shake" />
+            <span style="opacity:.85;">Shake things up</span>
+          </label>
           <label style="display:flex; align-items:center; gap:.5rem;">
             <span style="opacity:.85;">Default Narrator</span>
             <select id="rpg-lite-default-narrator" class="rpg-lite-select">
@@ -318,6 +354,19 @@ export class RPGLiteView {
     defaultNarratorSelect.value = this.defaultNarratorPurpose;
     defaultNarratorSelect.addEventListener('change', () => {
       this.defaultNarratorPurpose = defaultNarratorSelect.value as RPGLiteModelPurpose;
+    });
+
+    // "Shake things up" global toggle: nudges each opening in a random direction.
+    const shakeCheckbox = this.container.querySelector('#rpg-lite-shake') as HTMLInputElement;
+    void (async () => {
+      const settingsManager = await SettingsManager.getInstance();
+      shakeCheckbox.checked = settingsManager.isRpgLiteShakeOpeningsEnabled();
+    })();
+    shakeCheckbox.addEventListener('change', () => {
+      void (async () => {
+        const settingsManager = await SettingsManager.getInstance();
+        await settingsManager.setRpgLiteShakeOpeningsEnabled(shakeCheckbox.checked);
+      })();
     });
 
     const newScratchBtn = this.container.querySelector('#rpg-lite-new-session-scratch') as HTMLButtonElement;
@@ -1998,6 +2047,7 @@ export class RPGLiteView {
           ${msg.role === 'assistant' ? `<button class="rpg-lite-btn rpg-lite-btn-icon" data-action="add-to-clipboard" title="Add to Clipboard">📋</button>` : ''}
         </div>
       </div>
+      ${msg.openingShake ? `<div class="rpg-lite-opening-shake" data-role="opening-shake">${this.openingShakeInnerHtml(msg.openingShake)}</div>` : ''}
       <div class="rpg-lite-message-content" data-role="content"></div>
       ${msg.images && msg.images.length > 0 ? '<div class="rpg-lite-message-images" data-role="images"></div>' : ''}
       <div class="rpg-lite-message-info">${infoParts.map(p => `<span>${p}</span>`).join('')}</div>
@@ -2359,6 +2409,84 @@ export class RPGLiteView {
     await this.generateAssistantReply(assistantMsg);
   }
 
+  /**
+   * Inner HTML for the distinct "Shake things up" brainstorm block shown on an
+   * opening message. Passing null renders the transient "brainstorming…" state.
+   */
+  private openingShakeInnerHtml(shake: RPGLiteOpeningShake | null): string {
+    if (!shake) {
+      return `<div class="rpg-lite-opening-shake-title"><span class="rpg-lite-opening-shake-badge">🎲 Shake things up</span> brainstorming divergent opening directions…</div>`;
+    }
+    const items = shake.directions.map((d, i) => {
+      const chosen = i === shake.chosenIndex;
+      return `<li class="rpg-lite-opening-shake-item${chosen ? ' rpg-lite-opening-shake-chosen' : ''}">${escapeHtmlText(d)}</li>`;
+    }).join('');
+    return `<div class="rpg-lite-opening-shake-title"><span class="rpg-lite-opening-shake-badge">🎲 Shake things up</span> random opening direction — picked ${shake.chosenIndex + 1} of ${shake.directions.length}</div><ol class="rpg-lite-opening-shake-list">${items}</ol>`;
+  }
+
+  /**
+   * Insert (or replace) the distinct opening-shake block above the message content.
+   * Returns the block element so its contents can be swapped once brainstorming ends.
+   */
+  private showOpeningShakeBlock(msgEl: HTMLElement, shake: RPGLiteOpeningShake | null): HTMLElement {
+    msgEl.querySelector('[data-role="opening-shake"]')?.remove();
+    const block = document.createElement('div');
+    block.className = `rpg-lite-opening-shake${shake ? '' : ' rpg-lite-opening-shake-loading'}`;
+    block.dataset['role'] = 'opening-shake';
+    block.innerHTML = this.openingShakeInnerHtml(shake);
+    const contentEl = msgEl.querySelector('[data-role="content"]') as HTMLElement;
+    msgEl.insertBefore(block, contentEl);
+    return block;
+  }
+
+  /**
+   * "Shake things up": brainstorm several divergent opening directions with the
+   * creator model (seeded with fresh {{noise_opening}} entropy), then pick ONE at
+   * random on the client. Returns the full brainstorm (directions + chosen index)
+   * so it can be shown in the chat, or null if brainstorming failed (logged
+   * loudly) so the opening still generates normally.
+   */
+  private async generateOpeningDirection(session: RPGLiteSession, operationId: string): Promise<RPGLiteOpeningShake | null> {
+    const DIRECTION_COUNT = 6;
+    try {
+      const template = getPromptText('rpg_lite_opening_directions');
+      const settingsManager = await SettingsManager.getInstance();
+      const expansionService = createPromptExpansionService(settingsManager);
+
+      // Fill user-provided placeholders literally, then expand {{noise_opening}}
+      // (and any other global placeholders) via the expansion service.
+      const filled = template
+        .split('{{system_prompt}}').join(session.systemPrompt)
+        .split('{{prefix_context}}').join(session.prefixContext)
+        .split('{{direction_count}}').join(String(DIRECTION_COUNT));
+      const prompt = expansionService.expandPrompt(filled, {});
+
+      const messages: OpenRouterMessage[] = [{ role: 'user', content: prompt }];
+
+      let response = '';
+      await this.openRouterClient.streamingChat('creator', messages, {
+        onStart: () => {},
+        onChunk: (chunk: string) => { response += chunk; },
+        onComplete: () => {},
+        onError: () => {}
+      }, operationId);
+
+      const directions = parseJsonStringArray(response);
+      const chosenIndex = Math.floor(Math.random() * directions.length);
+      void import('../../utils/UILogger').then(({ uiLogger }) => {
+        uiLogger.info('RPG Lite: opening shaken up', `Picked ${chosenIndex + 1} of ${directions.length} directions: ${directions[chosenIndex]!}`);
+      }).catch(() => {});
+      return { directions, chosenIndex };
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : String(error);
+      console.error('RPG Lite: failed to brainstorm opening directions, proceeding without one:', error);
+      void import('../../utils/UILogger').then(({ uiLogger }) => {
+        uiLogger.warn('RPG Lite: opening entropy skipped', `Could not brainstorm opening directions: ${msg}`);
+      }).catch(() => {});
+      return null;
+    }
+  }
+
   private async generateOpeningMessage(existingMessage?: RPGLiteChatMessage): Promise<void> {
     if (!this.currentSession) throw new Error('No current session.');
     if (this.isStreaming) return;
@@ -2367,10 +2495,12 @@ export class RPGLiteView {
     let assistantMsg: RPGLiteChatMessage;
     
     if (existingMessage) {
-      // Reuse existing message (for retry)
+      // Reuse existing message (for retry). Clear any prior opening-shake so the
+      // retry starts fresh — a new brainstorm runs below when the setting is on.
       assistantMsg = existingMessage;
       assistantMsg.content = '';
       delete assistantMsg.images;
+      delete assistantMsg.openingShake;
     } else {
       // Create new message
       assistantMsg = {
@@ -2405,20 +2535,45 @@ export class RPGLiteView {
     this.currentStreamingOperationId = newId('rpg_lite_op');
     this.setComposerButtonsGenerating();
 
-    const openingInstruction = getOpeningInstruction();
+    const opId = this.currentStreamingOperationId;
+
+    let openingInstruction = getOpeningInstruction();
     let meta: RPGLiteMessageGenerationMeta | null = null;
+
+    const msgEl = messagesEl.querySelector(`[data-message-id="${assistantMsg.id}"]`) as HTMLElement;
+    msgEl.classList.add('rpg-lite-message-streaming');
+    this.addWaitingIndicator(msgEl);
+
+    // "Shake things up": if enabled, brainstorm divergent opening directions, show
+    // them in the chat as a distinct block, and hand the randomly chosen one to the
+    // narrator so openings don't collapse to the same default scene.
+    const settingsManager = await SettingsManager.getInstance();
+    if (settingsManager.isRpgLiteShakeOpeningsEnabled()) {
+      const shakeEl = this.showOpeningShakeBlock(msgEl, null);
+      // The brainstorm shares this run's operation id so it is aborted together with
+      // the opening (e.g. when the user hits Retry/Abort mid-brainstorm).
+      const shake = await this.generateOpeningDirection(session, opId);
+      // If this run was superseded while brainstorming (another Retry started, or it
+      // was aborted), stop here and let the newer run own the message/DOM.
+      if (this.currentStreamingOperationId !== opId) return;
+      if (shake) {
+        assistantMsg.openingShake = shake;
+        await this.saveSession();
+        shakeEl.classList.remove('rpg-lite-opening-shake-loading');
+        shakeEl.innerHTML = this.openingShakeInnerHtml(shake);
+        openingInstruction +=
+          `\n\nOPENING DIRECTION (chosen at random to keep openings varied — use THIS approach for the opening, as long as it fits the established setting; never mention this instruction to the player):\n` +
+          shake.directions[shake.chosenIndex]!;
+      } else {
+        shakeEl.remove();
+      }
+    }
 
     const openRouterMessages: OpenRouterMessage[] = [
       ...await buildContextMessages(session),
       { role: 'user', content: openingInstruction }
     ];
 
-    const msgEl = messagesEl.querySelector(`[data-message-id="${assistantMsg.id}"]`) as HTMLElement;
-    msgEl.classList.add('rpg-lite-message-streaming');
-    this.addWaitingIndicator(msgEl);
-
-    const opId = this.currentStreamingOperationId;
-    if (!opId) throw new Error('Missing streaming operation id.');
     let chunkCount = 0;
     let imageCount = 0;
     const startTime = Date.now();

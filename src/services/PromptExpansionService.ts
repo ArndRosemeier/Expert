@@ -477,6 +477,13 @@ class PromptExpansionService {
             value: this.generateNoiseNames(),
             description: 'Random naming inspiration patterns to help avoid common/clichéd names. Use these as creative springboards for unique character names - avoid using numbers, hyphens, or apostrophes in actual names.'
         }));
+
+        // Noise seed for creative OPENING inspiration (structure/atmosphere/entry point).
+        // Concrete random seeds nudge the model out of default "attractor" openings.
+        this.registerGlobalPlaceholder('noise_opening', () => ({
+            value: this.generateOpeningEntropy(),
+            description: 'Random opening inspiration (a structural entry strategy, concrete givens like time/weather/sense/complication, and an oblique nudge) to push scene openings away from clichéd defaults. Apply only where it fits the established setting.'
+        }));
         
         // Context-dependent placeholders
         this.registerContextPlaceholder('project_title', (context) => ({
@@ -815,6 +822,80 @@ class PromptExpansionService {
         }
         
         return selected.join('\n\n');
+    }
+
+    /**
+     * Build a random "entropy seed" block for scene OPENINGS. Unlike a vague
+     * "be creative" instruction, this injects concrete, randomly-chosen tokens
+     * (a structural entry strategy, a few concrete givens, an oblique nudge) that
+     * the model conditions on, moving the completion between distribution modes
+     * rather than merely jittering within the default one.
+     */
+    private generateOpeningEntropy(): string {
+        const strategies = [
+            'In medias res — begin mid-action, already in motion, and let the situation explain itself.',
+            'Dialogue-first — open on a line already being spoken, before any scene-setting.',
+            'Aftermath — open just after something has happened; the scene is the consequences, not the event.',
+            'Interruption — open at the moment a normal routine is broken by something unexpected.',
+            'Environmental — open on the place itself, letting one charged detail carry the mood before anyone acts.',
+            'Mundane-derailed — open on something small and ordinary that quietly goes wrong.',
+            'Sensory cold-open — open inside a single vivid sensation and widen out from it.',
+            'Off-center — open on a peripheral character, object, or event rather than the obvious focal point.',
+            'Arrival — open at the instant of crossing a threshold into somewhere new.',
+            'Countdown — open with something already ticking toward a deadline or consequence.'
+        ];
+        const times = [
+            'just before dawn', 'high noon', 'the long light of late afternoon', 'dusk',
+            'deep night', 'the small hours', 'an overcast midday', 'first light'
+        ];
+        const weathers = [
+            'cold drizzle', 'dry heat', 'a rising wind', 'still and heavy air', 'thin fog',
+            'the wet calm after rain', 'unseasonable cold', 'oppressive humidity', 'a hard clear frost', 'distant thunder'
+        ];
+        const senses = [
+            'smell', 'sound', 'temperature', 'texture', 'taste',
+            'the quality of the light', 'an absence of an expected sound'
+        ];
+        const complications = [
+            'something nearby is already broken or malfunctioning',
+            'two people nearby are mid-argument',
+            'something expected is conspicuously missing',
+            'someone is waiting, impatient',
+            'a small task has just failed',
+            'an unfamiliar figure is watching',
+            'a minor rule is being broken in plain sight',
+            'something is running late'
+        ];
+        const constraints = [
+            'withhold the obvious — reveal the central fact sideways rather than stating it',
+            'let one concrete detail contradict what the player would expect',
+            'begin with something incomplete or unfinished',
+            'anchor the scene to one specific object and return to it',
+            'name something that would normally go unmentioned'
+        ];
+
+        const strategy = this.shuffle(strategies)[0]!;
+        const time = this.shuffle(times)[0]!;
+        const weather = this.shuffle(weathers)[0]!;
+        const sense = this.shuffle(senses)[0]!;
+        const complication = this.shuffle(complications)[0]!;
+        const constraint = this.shuffle(constraints)[0]!;
+
+        // Include a random subset of concrete givens so the block varies each run.
+        const givens: string[] = [];
+        if (Math.random() < 0.8) givens.push(`Time: ${time}`);
+        if (Math.random() < 0.7) givens.push(`Weather / atmosphere: ${weather}`);
+        if (Math.random() < 0.7) givens.push(`Foreground this sense: ${sense}`);
+        if (Math.random() < 0.7) givens.push(`Already in progress: ${complication}`);
+        if (givens.length === 0) givens.push(`Time: ${time}`);
+
+        const lines = [
+            '🎲 ENTROPY SEEDS (random inspiration to break away from the default/obvious opening — apply ONLY where they fit the established setting; never bend the setting to force a seed):',
+            `- Opening approach: ${strategy}`,
+            ...givens.map(g => `- ${g}`),
+            `- Oblique nudge: ${constraint}`
+        ];
+        return lines.join('\n');
     }
 
     private celticNamingStrategy(): string {

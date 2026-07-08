@@ -492,6 +492,68 @@
   }
 }
 
+/* "Shake things up" opening brainstorm block — visually distinct from GM prose */
+.rpg-lite-opening-shake {
+  margin: 0 0 0.6rem;
+  padding: 0.55rem 0.7rem;
+  border: 0.0625rem dashed rgba(180, 150, 90, 0.55);
+  border-left: 0.2rem solid rgba(200, 160, 80, 0.85);
+  border-radius: 0.35rem;
+  background: rgba(120, 95, 40, 0.12);
+  font-size: 0.82rem;
+  line-height: 1.4;
+}
+
+.rpg-lite-opening-shake-title {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  font-weight: 600;
+  opacity: 0.92;
+  margin-bottom: 0.35rem;
+}
+
+.rpg-lite-opening-shake-badge {
+  display: inline-block;
+  padding: 0.05rem 0.4rem;
+  border-radius: 0.25rem;
+  background: rgba(200, 160, 80, 0.25);
+  color: rgba(240, 210, 150, 0.98);
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.03rem;
+}
+
+.rpg-lite-opening-shake-list {
+  margin: 0;
+  padding-left: 1.25rem;
+  opacity: 0.78;
+}
+
+.rpg-lite-opening-shake-item {
+  margin: 0.12rem 0;
+}
+
+.rpg-lite-opening-shake-chosen {
+  opacity: 1;
+  font-weight: 600;
+  color: rgba(240, 210, 150, 0.98);
+}
+
+.rpg-lite-opening-shake-chosen::marker {
+  content: '\1F3AF  ';
+}
+
+.rpg-lite-opening-shake-loading .rpg-lite-opening-shake-title {
+  animation: rpg-shake-pulse 1.2s ease-in-out infinite;
+}
+
+@keyframes rpg-shake-pulse {
+  0%, 100% { opacity: 0.55; }
+  50% { opacity: 1; }
+}
+
 .rpg-lite-message-header {
   display: flex;
   align-items: center;

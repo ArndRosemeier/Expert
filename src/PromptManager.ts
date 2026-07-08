@@ -121,6 +121,7 @@ export interface OrchestratorPrompts {
     // For RPG System
     rpg_session_setup: string;
     rpg_lite_prompt_split: string;
+    rpg_lite_opening_directions: string;
     rpg_lite_prefix_refine_more_details_system: string;
     rpg_lite_prefix_refine_variation_system: string;
     rpg_lite_prefix_refine_user: string;
@@ -2376,6 +2377,36 @@ You are an assistant that splits a user-provided "adventure prompt" into:
         `.trim(),
         placeholders: ['adventure_prompt'],
         description: 'Splits an RPG Lite adventure prompt into system prompt vs prefix context (JSON only).'
+    },
+
+    rpg_lite_opening_directions: {
+        text: `
+You are a brainstorming assistant for a TEXT-BASED roleplaying adventure. Your ONLY job is to propose several DIFFERENT ways the very FIRST scene (the opening) could begin — as short directions for the narrator, NOT the scene itself.
+
+## The adventure's rules / style (system prompt)
+{{system_prompt}}
+
+## The adventure's setting / setup (prefix context)
+{{prefix_context}}
+
+## Random inspiration (optional springboard)
+{{noise_opening}}
+
+## Your task
+Propose {{direction_count}} genuinely DIFFERENT opening directions. Each is a single sentence describing an ANGLE for the opening: where/when it starts, what is already happening, the entry strategy, the mood or focal detail. They must be:
+- Maximally DIVERGENT from one another — different entry points, not the same idea reworded. If several feel similar, replace the duplicates.
+- Consistent with the established setting and rules above — never contradict them.
+- Deliberately AWAY from the single most obvious/default opening a generic AI would pick. Avoid clichés (waking up, a mysterious stranger in a tavern, "you find yourself...").
+- Concrete and specific, but still just a direction — do NOT write the actual prose.
+- Use the random inspiration above only where it genuinely fits; ignore any part that would fight the setting.
+
+## Output requirements
+- Respond with ONLY strict JSON (no markdown, no commentary).
+- The JSON must be an array of exactly {{direction_count}} non-empty strings.
+- Each string is one opening direction (one sentence).
+        `.trim(),
+        placeholders: ['system_prompt', 'prefix_context', 'direction_count', 'noise_opening'],
+        description: 'Brainstorms several divergent opening directions for an RPG Lite scenario (JSON array of one-line directions). Used by the "shake things up" opening-entropy feature.'
     },
 
     rpg_lite_prefix_refine_more_details_system: {
