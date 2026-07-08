@@ -1,0 +1,33 @@
+---
+description: Shell environment for running terminal commands in this workspace
+alwaysApply: true
+---
+
+# Shell: Windows PowerShell
+
+Terminal commands in this workspace run in **Windows PowerShell** (not bash/cmd).
+Write every command with PowerShell syntax.
+
+## Command chaining
+- `&&` and `||` are NOT valid statement separators here. They cause a parser error.
+- Sequence commands with `;` (runs regardless of previous exit code).
+- For conditional "run only if the previous succeeded", check `$LASTEXITCODE` or `$?`,
+  or just run the commands as separate tool calls.
+
+```powershell
+# BAD - fails: "&& is not a valid statement separator"
+git add -A && git commit -m "msg" && git push
+
+# GOOD
+git add -A; git commit -F .git/COMMIT_MSG.txt; git push
+```
+
+## Multi-line / here-doc content (e.g. git commit messages)
+- Bash here-docs (`$(cat <<'EOF' ... EOF)`) do NOT work in PowerShell.
+- For multi-line commit messages, write the message to a temp file and use
+  `git commit -F <file>`, then delete the file. Do not rely on `-m` with a here-doc.
+
+## General
+- Quote paths with spaces using double quotes.
+- Prefer the dedicated file tools (Read/StrReplace/Write/Grep/Glob) over shell
+  utilities like cat/sed/awk/grep/find.
