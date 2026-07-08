@@ -303,10 +303,6 @@ export class RPGLiteView {
           <div class="rpg-lite-title">RPG Lite</div>
         </div>
         <div class="rpg-lite-topbar-right">
-          <label style="display:flex; align-items:center; gap:.4rem; cursor:pointer;" title="When on, each new opening is nudged in a random direction to avoid the AI's default/clichéd scene. Adds one quick brainstorming call per start.">
-            <input type="checkbox" id="rpg-lite-shake" />
-            <span style="opacity:.85;">Shake things up</span>
-          </label>
           <label style="display:flex; align-items:center; gap:.5rem;">
             <span style="opacity:.85;">Default Narrator</span>
             <select id="rpg-lite-default-narrator" class="rpg-lite-select">
@@ -354,19 +350,6 @@ export class RPGLiteView {
     defaultNarratorSelect.value = this.defaultNarratorPurpose;
     defaultNarratorSelect.addEventListener('change', () => {
       this.defaultNarratorPurpose = defaultNarratorSelect.value as RPGLiteModelPurpose;
-    });
-
-    // "Shake things up" global toggle: nudges each opening in a random direction.
-    const shakeCheckbox = this.container.querySelector('#rpg-lite-shake') as HTMLInputElement;
-    void (async () => {
-      const settingsManager = await SettingsManager.getInstance();
-      shakeCheckbox.checked = settingsManager.isRpgLiteShakeOpeningsEnabled();
-    })();
-    shakeCheckbox.addEventListener('change', () => {
-      void (async () => {
-        const settingsManager = await SettingsManager.getInstance();
-        await settingsManager.setRpgLiteShakeOpeningsEnabled(shakeCheckbox.checked);
-      })();
     });
 
     const newScratchBtn = this.container.querySelector('#rpg-lite-new-session-scratch') as HTMLButtonElement;
@@ -886,6 +869,13 @@ export class RPGLiteView {
             <span class="rpg-lite-section-title">Max msgs</span>
             <input id="rpg-lite-preset-editor-max-context" class="rpg-lite-input" type="number" min="2" step="1" value="${String(preset.maxContextMessages)}" />
           </label>
+          <label style="display:flex; flex-direction:column; gap:0.35rem; min-width: 12rem;" title="When on, sessions started from this template shake up the opening with a random divergent direction (adds one quick brainstorming call per start).">
+            <span class="rpg-lite-section-title">Shake openings</span>
+            <label style="display:flex; align-items:center; gap:.4rem; cursor:pointer; height: 100%;">
+              <input type="checkbox" id="rpg-lite-preset-editor-shake" ${preset.shakeOpenings ? 'checked' : ''} />
+              <span style="opacity:.85;">Shake things up</span>
+            </label>
+          </label>
         </div>
 
         <label style="display:flex; flex-direction:column; gap:0.35rem;">
@@ -973,6 +963,7 @@ export class RPGLiteView {
     const titleEl = this.container.querySelector('#rpg-lite-preset-editor-title') as HTMLInputElement;
     const purposeEl = this.container.querySelector('#rpg-lite-preset-editor-purpose') as HTMLSelectElement;
     const maxEl = this.container.querySelector('#rpg-lite-preset-editor-max-context') as HTMLInputElement;
+    const shakeEl = this.container.querySelector('#rpg-lite-preset-editor-shake') as HTMLInputElement;
     const systemEl = this.container.querySelector('#rpg-lite-preset-editor-system') as HTMLTextAreaElement;
     const prefixEl = this.container.querySelector('#rpg-lite-preset-editor-prefix') as HTMLTextAreaElement;
 
@@ -989,6 +980,7 @@ export class RPGLiteView {
       preset.narratorPurpose = purposeEl.value as RPGLiteModelPurpose;
     }
     preset.maxContextMessages = Math.max(2, Math.floor(Number(maxEl.value)));
+    preset.shakeOpenings = shakeEl.checked;
     preset.systemPrompt = systemEl.value;
     preset.prefixContext = prefixEl.value;
     preset.updatedAt = now();
@@ -1029,6 +1021,7 @@ export class RPGLiteView {
       prefixContext: preset.prefixContext,
       narratorPurpose: preset.narratorPurpose ?? this.defaultNarratorPurpose,
       maxContextMessages: preset.maxContextMessages,
+      shakeOpenings: preset.shakeOpenings ?? false,
       conversation: []
     };
     const storage = await StorageService.getInstance();
@@ -1082,6 +1075,10 @@ export class RPGLiteView {
                 <label style="display:flex; gap:.5rem; align-items:center;">
                   <span style="opacity:.85;">Context msgs</span>
                   <input id="rpg-lite-max-context" class="rpg-lite-input" type="number" min="2" step="1" value="10000" style="max-width: 8rem;" />
+                </label>
+                <label style="display:flex; gap:.4rem; align-items:center; cursor:pointer;" title="When on, the opening scene is nudged in a random direction to avoid the AI's default/clichéd scene. Adds one quick brainstorming call per start.">
+                  <input type="checkbox" id="rpg-lite-shake-new" />
+                  <span style="opacity:.85;">Shake things up</span>
                 </label>
                 <button id="rpg-lite-analyze" class="rpg-lite-btn rpg-lite-btn-primary">${buttonText}</button>
                 <span id="rpg-lite-status" style="opacity:.85;"></span>
@@ -1287,6 +1284,7 @@ export class RPGLiteView {
     const promptEl = this.container.querySelector('#rpg-lite-adventure-prompt') as HTMLTextAreaElement;
     const purposeEl = this.container.querySelector('#rpg-lite-narrator-purpose') as HTMLSelectElement;
     const maxContextEl = this.container.querySelector('#rpg-lite-max-context') as HTMLInputElement;
+    const shakeEl = this.container.querySelector('#rpg-lite-shake-new') as HTMLInputElement;
     const statusEl = this.container.querySelector('#rpg-lite-status') as HTMLElement;
     const btn = this.container.querySelector('#rpg-lite-analyze') as HTMLButtonElement;
 
@@ -1298,6 +1296,7 @@ export class RPGLiteView {
 
     const maxContext = Math.max(2, Math.floor(Number(maxContextEl.value)));
     const narratorPurpose = purposeEl.value as RPGLiteModelPurpose;
+    const shakeOpenings = shakeEl.checked;
 
     btn.disabled = true;
     statusEl.textContent = 'Analyzing prompt...';
@@ -1321,7 +1320,8 @@ export class RPGLiteView {
         systemPrompt: split.systemPrompt,
         prefixContext: split.prefixContext,
         // New presets use default narrator (omit property)
-        maxContextMessages: maxContext
+        maxContextMessages: maxContext,
+        shakeOpenings
       };
 
       const storage = await StorageService.getInstance();
@@ -1338,6 +1338,7 @@ export class RPGLiteView {
         prefixContext: split.prefixContext,
         narratorPurpose,
         maxContextMessages: maxContext,
+        shakeOpenings,
         conversation: []
       };
 
@@ -1363,6 +1364,9 @@ export class RPGLiteView {
     
     // Initialize temperature if not set
     session.temperature ??= 1.0;
+
+    // Initialize the per-session "Shake things up" flag if not set (default: off)
+    session.shakeOpenings ??= false;
 
     // Initialize retry fields if not set (default: 10 retries, 0 used)
     if (session.retryLimit === undefined) {
@@ -1398,6 +1402,10 @@ export class RPGLiteView {
           <label style="display:flex; align-items:center; gap:.5rem;">
             <span style="opacity:.85;">Max msgs</span>
             <input id="rpg-lite-max-context-session" class="rpg-lite-input" type="number" min="2" step="1" value="${String(session.maxContextMessages)}" style="max-width: 8rem;" />
+          </label>
+          <label style="display:flex; align-items:center; gap:.4rem; cursor:pointer;" title="When on, the opening scene is shaken up with a random divergent direction (applies when (re)generating the opening). Adds one quick brainstorming call.">
+            <input type="checkbox" id="rpg-lite-shake-session" ${session.shakeOpenings ? 'checked' : ''} />
+            <span style="opacity:.85;">Shake openings</span>
           </label>
           <div style="display:flex; align-items:center; gap:.5rem; border-left: 1px solid rgba(255,255,255,0.12); padding-left:.75rem;">
             <span style="opacity:.85;">Retries</span>
@@ -1521,6 +1529,13 @@ export class RPGLiteView {
       const normalized = Math.max(2, Math.floor(Number(maxContextEl.value)));
       session.maxContextMessages = normalized;
       void this.saveSession().then(() => this.updateContextStats());
+    });
+
+    const shakeSessionEl = this.container.querySelector('#rpg-lite-shake-session') as HTMLInputElement;
+    shakeSessionEl.checked = session.shakeOpenings ?? false;
+    shakeSessionEl.addEventListener('change', () => {
+      session.shakeOpenings = shakeSessionEl.checked;
+      void this.saveSession();
     });
 
     const retryLimitInput = this.container.querySelector('#rpg-lite-retry-limit') as HTMLInputElement;
@@ -1798,6 +1813,7 @@ export class RPGLiteView {
       prefixContext: base.prefixContext,
       narratorPurpose: base.narratorPurpose,
       maxContextMessages: base.maxContextMessages,
+      shakeOpenings: base.shakeOpenings ?? false,
       conversation: clonedConversation
     };
 
@@ -2544,11 +2560,10 @@ export class RPGLiteView {
     msgEl.classList.add('rpg-lite-message-streaming');
     this.addWaitingIndicator(msgEl);
 
-    // "Shake things up": if enabled, brainstorm divergent opening directions, show
-    // them in the chat as a distinct block, and hand the randomly chosen one to the
-    // narrator so openings don't collapse to the same default scene.
-    const settingsManager = await SettingsManager.getInstance();
-    if (settingsManager.isRpgLiteShakeOpeningsEnabled()) {
+    // "Shake things up" (per-session): if enabled, brainstorm divergent opening
+    // directions, show them in the chat as a distinct block, and hand the randomly
+    // chosen one to the narrator so openings don't collapse to the same default scene.
+    if (session.shakeOpenings === true) {
       const shakeEl = this.showOpeningShakeBlock(msgEl, null);
       // The brainstorm shares this run's operation id so it is aborted together with
       // the opening (e.g. when the user hits Retry/Abort mid-brainstorm).

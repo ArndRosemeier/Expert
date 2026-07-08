@@ -31,7 +31,6 @@ export const STORAGE_KEYS = {
     PROMPTS: 'expert_app_prompts',
     AI_LOGGING_ENABLED: 'expert_app_ai_logging_enabled',
     DEBUG_GENERATION_ENABLED: 'expert_app_debug_generation_enabled',
-    RPG_LITE_SHAKE_OPENINGS: 'expert_app_rpg_lite_shake_openings',
     CURRENT_PROJECT: 'expert_app_current_project',
     PROJECTS: 'expert_app_projects',
     ACTIVE_PROJECT: 'expert_app_active_project',

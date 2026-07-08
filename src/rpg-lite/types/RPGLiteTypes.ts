@@ -63,6 +63,9 @@ export interface RPGLiteSession {
   /** How many retries have been used in this session. */
   retriesUsed?: number;
 
+  /** When true, opening generation is "shaken up" with a random divergent direction. Per-session. */
+  shakeOpenings?: boolean;
+
   conversation: RPGLiteChatMessage[];
   clipboard?: string;
 }
@@ -78,6 +81,8 @@ export interface RPGLiteStartPreset {
   prefixContext: string;
   narratorPurpose?: RPGLiteModelPurpose; // Optional: undefined means use default
   maxContextMessages: number;
+  /** When true, sessions started from this template shake up the opening by default. */
+  shakeOpenings?: boolean;
 }
 
 export interface RPGLiteActionButton {

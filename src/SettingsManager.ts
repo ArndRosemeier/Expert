@@ -17,7 +17,6 @@ const SETTINGS_PROFILES_KEY = STORAGE_KEYS.SETTINGS_PROFILES;
 const LAST_USED_PROFILE_KEY = STORAGE_KEYS.LAST_USED_PROFILE;
 const AI_LOGGING_ENABLED_KEY = STORAGE_KEYS.AI_LOGGING_ENABLED;
 const DEBUG_GENERATION_ENABLED_KEY = STORAGE_KEYS.DEBUG_GENERATION_ENABLED;
-const RPG_LITE_SHAKE_OPENINGS_KEY = STORAGE_KEYS.RPG_LITE_SHAKE_OPENINGS;
 
 export const DEFAULT_CRITERIA: QualityCriterion[] = [
     {
@@ -187,7 +186,6 @@ export class SettingsManager {
     private storageService: Promise<IStorageService>;
     private aiLoggingEnabled: boolean = false;
     private debugGenerationEnabled: boolean = false;
-    private rpgLiteShakeOpeningsEnabled: boolean = false;
     private initialized: boolean = false;
     private globalLanguage: string = 'English'; // Global language setting
 
@@ -250,7 +248,6 @@ export class SettingsManager {
         await this.loadPrompts();
         await this.loadAILoggingSetting();
         await this.loadDebugGenerationSetting();
-        await this.loadRpgLiteShakeOpeningsSetting();
         await this.loadGlobalLanguage();
     }
 
@@ -440,16 +437,6 @@ export class SettingsManager {
         } catch (error) {
             console.error('Failed to load AI logging setting from storage', error);
             this.aiLoggingEnabled = false;
-        }
-    }
-
-    private async loadRpgLiteShakeOpeningsSetting(): Promise<void> {
-        try {
-            const storage = await this.storageService;
-            this.rpgLiteShakeOpeningsEnabled = await storage.get<boolean>(RPG_LITE_SHAKE_OPENINGS_KEY) ?? false;
-        } catch (error) {
-            console.error('Failed to load RPG Lite shake-openings setting from storage', error);
-            this.rpgLiteShakeOpeningsEnabled = false;
         }
     }
 
@@ -1027,20 +1014,6 @@ export class SettingsManager {
                 success: false, 
                 message: `Failed to parse import file: ${error instanceof Error ? error.message : 'Invalid JSON format'}` 
             };
-        }
-    }
-
-    public isRpgLiteShakeOpeningsEnabled(): boolean {
-        return this.rpgLiteShakeOpeningsEnabled;
-    }
-
-    public async setRpgLiteShakeOpeningsEnabled(enabled: boolean): Promise<void> {
-        this.rpgLiteShakeOpeningsEnabled = enabled;
-        try {
-            const storage = await this.storageService;
-            await storage.set(RPG_LITE_SHAKE_OPENINGS_KEY, enabled);
-        } catch (error) {
-            console.error('Failed to save RPG Lite shake-openings setting to storage', error);
         }
     }
 
