@@ -86,7 +86,7 @@ export interface RPGLiteSession {
   maxContextMessages: number;
   temperature?: number;  // Optional temperature override for this session (0-2)
 
-  /** Maximum number of retries allowed. null = unlimited. Defaults to 10 when undefined. */
+  /** Maximum number of retries allowed. null = unlimited. Defaults to unlimited when undefined. */
   retryLimit?: number | null;
   /** How many retries have been used in this session. */
   retriesUsed?: number;

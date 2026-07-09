@@ -342,10 +342,10 @@ export class RPGLiteView {
     const remainingEl = this.container.querySelector('#rpg-lite-retries-remaining') as HTMLElement | null;
     if (!remainingEl) return;
     const used = session.retriesUsed ?? 0;
-    // undefined means field not yet initialized; treat same as default (10).
-    // null means unlimited.
-    const limit = session.retryLimit ?? 10;
-    const unlimited = session.retryLimit === null;
+    // null OR undefined (not yet initialized) both mean unlimited — the default.
+    // A finite cap only applies when retryLimit is an explicit number.
+    const unlimited = session.retryLimit === null || session.retryLimit === undefined;
+    const limit = session.retryLimit ?? 0;
     const exhausted = !unlimited && used >= limit;
     remainingEl.textContent = unlimited ? '∞ left' : `${Math.max(0, limit - used)} left`;
     remainingEl.classList.toggle('rpg-lite-retries-exhausted', exhausted);
@@ -1516,9 +1516,9 @@ export class RPGLiteView {
     // Initialize the per-session "Shake things up" flag if not set (default: off)
     session.shakeOpenings ??= false;
 
-    // Initialize retry fields if not set (default: 10 retries, 0 used)
+    // Initialize retry fields if not set (default: unlimited retries, 0 used)
     if (session.retryLimit === undefined) {
-      session.retryLimit = 10;
+      session.retryLimit = null;
     }
     session.retriesUsed ??= 0;
 
@@ -2435,11 +2435,11 @@ export class RPGLiteView {
     const currentVersionIndex = msg.activeVersionIndex ?? 0;
     const versionCount = msg.versions?.length ?? 1;
 
-    // Determine if retries are exhausted for this session
-    const retryLimit = this.currentSession?.retryLimit ?? 10;
+    // Determine if retries are exhausted for this session (null/undefined = unlimited)
+    const retryLimit = this.currentSession?.retryLimit ?? null;
     const retriesUsed = this.currentSession?.retriesUsed ?? 0;
     const retriesExhausted = retryLimit !== null && retriesUsed >= retryLimit;
-    const retryDisabled = retriesExhausted ? ' disabled title="Retry limit reached — reset the counter in the topbar"' : '';
+    const retryDisabled = retriesExhausted ? ' disabled title="Retry limit reached — reset the counter in Settings"' : '';
     
     el.innerHTML = `
       <div class="rpg-lite-message-header">
@@ -2750,11 +2750,11 @@ export class RPGLiteView {
   private async retryFromAssistant(assistantMessageId: string): Promise<void> {
     if (!this.currentSession) throw new Error('No current session.');
 
-    // Enforce retry limit
-    const retryLimit = this.currentSession.retryLimit ?? 10;
+    // Enforce retry limit (null/undefined = unlimited)
+    const retryLimit = this.currentSession.retryLimit ?? null;
     const retriesUsed = this.currentSession.retriesUsed ?? 0;
     if (retryLimit !== null && retriesUsed >= retryLimit) {
-      alert(`Retry limit of ${retryLimit} reached. Reset the counter in the topbar to continue.`);
+      alert(`Retry limit of ${retryLimit} reached. Reset the counter in Settings to continue.`);
       return;
     }
 
