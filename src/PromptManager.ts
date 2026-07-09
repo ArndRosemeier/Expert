@@ -128,6 +128,7 @@ export interface OrchestratorPrompts {
     rpg_lite_prompt_refine_more_details_system: string;
     rpg_lite_prompt_refine_variation_system: string;
     rpg_lite_prompt_refine_user: string;
+    rpg_lite_summarize: string;
     rpg_game_narration_system: string;
     rpg_state_parser_system: string;
     rpg_state_parser_user: string;
@@ -2476,7 +2477,34 @@ Provide {{refinement_mode}}. Remember this is for a TEXT-BASED storytelling adve
         placeholders: ['adventure_prompt', 'refinement_mode', 'noise_names'],
         description: 'User prompt for refining RPG Lite adventure prompt. refinement_mode should be "an expanded version with more narrative details" or "a creative narrative variation".'
     },
-    
+
+    rpg_lite_summarize: {
+        text: `
+You are maintaining a running "story so far" summary for a TEXT-BASED roleplaying adventure. Your job is to fold new events into the existing summary, producing a single updated summary that lets the narrator continue seamlessly without the full transcript.
+
+## Adventure rules / style (system prompt)
+{{system_prompt}}
+
+## Adventure setting / setup (prefix context)
+{{prefix_context}}
+
+## Summary so far (may be empty at the start)
+{{previous_summary}}
+
+## New events to fold in (chronological transcript excerpt)
+{{new_messages}}
+
+## Requirements
+- Return ONLY the updated "story so far" summary as plain prose. No preamble, no headings, no meta-commentary, no markdown fences.
+- Be faithful: never invent events that did not happen. Integrate the new events into the existing summary in chronological order.
+- Preserve continuity-critical facts: who the characters are and their current state/relationships, the player's goals, unresolved threads, promises, items, locations, and any established world facts.
+- Preserve any details recorded inside <hidden>...</hidden> notes if present, as these track information the narrator must remember.
+- Be concise but complete. Prefer dropping incidental phrasing over dropping facts. Aim for a summary that stays roughly stable in length as the story grows by generalizing older, less relevant detail.
+        `.trim(),
+        placeholders: ['system_prompt', 'prefix_context', 'previous_summary', 'new_messages'],
+        description: 'Cumulative "story so far" summarizer for RPG Lite. Folds new transcript events into the previous summary. Returns plain prose only.'
+    },
+
     rpg_game_narration_system: {
         text: `
 You are the Game Master for an immersive roleplaying adventure. Your role is to narrate events, describe scenes, roleplay characters, and respond to the player's actions in a dynamic and engaging way.

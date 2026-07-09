@@ -1,6 +1,7 @@
 import { OpenRouterClient, OpenRouterMessage } from '../../OpenRouterClient';
 import { StorageService } from '../../StorageService';
 import { RPGLitePromptSplitService } from '../services/RPGLitePromptSplitService';
+import { RPGLiteSummaryService } from '../services/RPGLiteSummaryService';
 import { createPromptExpansionService } from '../../services/PromptExpansionService';
 import { SettingsManager } from '../../SettingsManager';
 import { getPromptText } from '../../PromptManager';
@@ -9,6 +10,7 @@ import {
   RPGLiteActionButton,
   RPGLiteChatMessage,
   RPGLiteMessageGenerationMeta,
+  RPGLiteMilestone,
   RPGLiteModelPurpose,
   RPGLiteOpeningShake,
   RPGLiteSession,
@@ -63,6 +65,23 @@ function escapeHtmlText(text: string): string {
     .replace(/'/g, '&#39;');
 }
 
+/**
+ * Select the most recent milestone whose summary is still valid for the current
+ * conversation length. A milestone is valid when it covers no more messages than
+ * currently exist (coveredCount <= completedCount); the one with the largest
+ * coveredCount wins. Returns null when summaries are absent.
+ */
+function latestValidMilestone(session: RPGLiteSession, completedCount: number): RPGLiteMilestone | null {
+  if (!session.milestones || session.milestones.length === 0) return null;
+  let best: RPGLiteMilestone | null = null;
+  for (const m of session.milestones) {
+    if (m.coveredCount <= completedCount && (!best || m.coveredCount > best.coveredCount)) {
+      best = m;
+    }
+  }
+  return best;
+}
+
 async function buildContextMessages(session: RPGLiteSession): Promise<OpenRouterMessage[]> {
   const messages: OpenRouterMessage[] = [];
   
@@ -84,8 +103,27 @@ async function buildContextMessages(session: RPGLiteSession): Promise<OpenRouter
   // the model, which corrupts the role sequence and can cause repeated responses.
   const completed = session.conversation.filter(m => m.content.trim().length > 0);
 
-  // Take the N most recent completed messages.
-  let startIdx = Math.max(0, completed.length - session.maxContextMessages);
+  const summariesOn = session.summaryEnabled === true;
+  const milestone = summariesOn
+    ? latestValidMilestone(session, completed.length)
+    : null;
+
+  // Window selection:
+  // - Milestone present: everything up to coveredCount is carried by the summary,
+  //   so the verbatim tail begins at coveredCount.
+  // - Summaries on but no checkpoint reached yet: send every message verbatim.
+  //   The first checkpoint at summaryInterval bounds this, so maxContextMessages
+  //   is intentionally NOT applied here (it would silently drop un-summarized
+  //   history that no summary covers yet).
+  // - Summaries off: fall back to the last-N recency window (maxContextMessages).
+  let startIdx: number;
+  if (milestone) {
+    startIdx = milestone.coveredCount;
+  } else if (summariesOn) {
+    startIdx = 0;
+  } else {
+    startIdx = Math.max(0, completed.length - session.maxContextMessages);
+  }
 
   // The adventure context above is injected as a 'user' message. The conversation
   // starts with an assistant message (the opening), so the pattern is:
@@ -93,8 +131,18 @@ async function buildContextMessages(session: RPGLiteSession): Promise<OpenRouter
   // If the slice cuts at an even-offset position it starts with a 'user' message,
   // creating consecutive user roles which confuses most LLMs.
   // Fix: step back one to include the preceding assistant message, keeping the pair intact.
+  // This also guarantees the tail after the injected summary begins with an assistant turn.
   if (startIdx > 0 && completed[startIdx]?.role === 'user') {
     startIdx -= 1;
+  }
+
+  if (milestone) {
+    messages.push({
+      role: 'user',
+      content:
+        `STORY SO FAR (summary of earlier events, always in context):\n` +
+        `${milestone.summary}`
+    });
   }
 
   for (const m of completed.slice(startIdx)) {
@@ -124,6 +172,7 @@ export class RPGLiteView {
 
   private openRouterClient: OpenRouterClient;
   private promptSplitService: RPGLitePromptSplitService;
+  private summaryService: RPGLiteSummaryService;
 
   private currentSession: RPGLiteSession | null = null;
   private sessions: RPGLiteSession[] = [];
@@ -144,6 +193,59 @@ export class RPGLiteView {
     this.container = container;
     this.openRouterClient = OpenRouterClient.getInstance();
     this.promptSplitService = new RPGLitePromptSplitService(this.openRouterClient);
+    this.summaryService = new RPGLiteSummaryService(this.openRouterClient);
+  }
+
+  /** Default number of new messages that must accumulate past the last milestone before a new one is generated. */
+  private static readonly DEFAULT_SUMMARY_INTERVAL = 50;
+
+  /**
+   * Drop every milestone whose summary covers messages at or beyond `index`.
+   * Called whenever history is mutated at `index` (retry, edit, version switch,
+   * truncation) so a summary can never reflect content that no longer exists or
+   * has changed. Milestones covering only messages[0 .. index-1] survive.
+   */
+  private invalidateMilestonesFrom(index: number): void {
+    if (!this.currentSession?.milestones) return;
+    this.currentSession.milestones = this.currentSession.milestones.filter(m => m.coveredCount <= index);
+  }
+
+  /**
+   * After a turn completes, cut the next cumulative milestone when the message
+   * count crosses an interval boundary (N, 2N, 3N, …). Each milestone folds the
+   * previous summary with the messages since the last checkpoint and covers the
+   * whole prefix up to that boundary; messages after it are sent verbatim.
+   * This makes "summaries every N messages" literally true, independent of
+   * maxContextMessages. Runs after the turn is rendered so it never blocks streaming.
+   */
+  private async maybeCreateMilestone(session: RPGLiteSession): Promise<void> {
+    if (session.summaryEnabled !== true) return;
+
+    const completed = session.conversation.filter(m => m.content.trim().length > 0);
+    const interval = session.summaryInterval ?? RPGLiteView.DEFAULT_SUMMARY_INTERVAL;
+
+    // The checkpoint sits at the largest interval multiple at or below the
+    // current message count: floor(count / interval) * interval.
+    const desiredCovered = Math.floor(completed.length / interval) * interval;
+    if (desiredCovered === 0) return;
+
+    session.milestones ??= [];
+    const latest = latestValidMilestone(session, completed.length);
+    const latestCovered = latest ? latest.coveredCount : 0;
+    if (desiredCovered <= latestCovered) return;
+
+    const newMessages = completed.slice(latestCovered, desiredCovered);
+    if (newMessages.length === 0) return;
+
+    const milestone = await this.summaryService.buildMilestone(
+      session,
+      latest ? latest.summary : '',
+      newMessages,
+      desiredCovered
+    );
+    session.milestones.push(milestone);
+    await this.saveSession();
+    void this.updateContextStats();
   }
 
   private setComposerButtonsGenerating(): void {
@@ -814,7 +916,10 @@ export class RPGLiteView {
       systemPrompt: preset.systemPrompt,
       prefixContext: preset.prefixContext,
       ...(preset.narratorPurpose !== undefined ? { narratorPurpose: preset.narratorPurpose } : {}),
-      maxContextMessages: preset.maxContextMessages
+      maxContextMessages: preset.maxContextMessages,
+      shakeOpenings: preset.shakeOpenings ?? false,
+      summaryEnabled: preset.summaryEnabled ?? false,
+      ...(typeof preset.summaryInterval === 'number' ? { summaryInterval: preset.summaryInterval } : {})
     };
 
     const storage = await StorageService.getInstance();
@@ -865,9 +970,10 @@ export class RPGLiteView {
               ${purposes.map(p => `<option value="${p.key}" ${p.key === selectedPurpose ? 'selected' : ''}>${p.label}</option>`).join('')}
             </select>
           </label>
-          <label style="display:flex; flex-direction:column; gap:0.35rem; min-width: 12rem;">
+          <label style="display:flex; flex-direction:column; gap:0.35rem; min-width: 12rem;" title="Verbatim recency window used only when summaries are off. When summaries are on, the summary interval controls context instead.">
             <span class="rpg-lite-section-title">Max msgs</span>
-            <input id="rpg-lite-preset-editor-max-context" class="rpg-lite-input" type="number" min="2" step="1" value="${String(preset.maxContextMessages)}" />
+            <input id="rpg-lite-preset-editor-max-context" class="rpg-lite-input" type="number" min="2" step="1" value="${String(preset.maxContextMessages)}"${preset.summaryEnabled ? ' disabled' : ''} />
+            <span id="rpg-lite-preset-editor-max-context-note" style="opacity:.6; font-size:0.78rem; font-style:italic; ${preset.summaryEnabled ? '' : 'display:none;'}">controlled by summary interval</span>
           </label>
           <label style="display:flex; flex-direction:column; gap:0.35rem; min-width: 12rem;" title="When on, sessions started from this template shake up the opening with a random divergent direction (adds one quick brainstorming call per start).">
             <span class="rpg-lite-section-title">Shake openings</span>
@@ -875,6 +981,17 @@ export class RPGLiteView {
               <input type="checkbox" id="rpg-lite-preset-editor-shake" ${preset.shakeOpenings ? 'checked' : ''} />
               <span style="opacity:.85;">Shake things up</span>
             </label>
+          </label>
+          <label style="display:flex; flex-direction:column; gap:0.35rem; min-width: 12rem;" title="When on, sessions started from this template use periodical 'story so far' summaries to lighten LLM load. A checkpoint is cut every N messages: everything before the latest checkpoint is condensed, everything after is sent verbatim.">
+            <span class="rpg-lite-section-title">Summaries</span>
+            <div style="display:flex; align-items:center; gap:.5rem; height: 100%;">
+              <label style="display:flex; align-items:center; gap:.4rem; cursor:pointer;">
+                <input type="checkbox" id="rpg-lite-preset-editor-summary" ${preset.summaryEnabled ? 'checked' : ''} />
+                <span style="opacity:.85;">every</span>
+              </label>
+              <input id="rpg-lite-preset-editor-summary-interval" class="rpg-lite-input" type="number" min="2" step="1" value="${String(preset.summaryInterval ?? RPGLiteView.DEFAULT_SUMMARY_INTERVAL)}" style="max-width: 4.5rem;"${preset.summaryEnabled ? '' : ' disabled'} />
+              <span style="opacity:.85;">msgs</span>
+            </div>
           </label>
         </div>
 
@@ -926,6 +1043,16 @@ export class RPGLiteView {
       void this.saveEditedPreset(preset.id);
     });
 
+    const summaryEl = this.container.querySelector('#rpg-lite-preset-editor-summary') as HTMLInputElement;
+    const summaryIntervalEl = this.container.querySelector('#rpg-lite-preset-editor-summary-interval') as HTMLInputElement;
+    const presetMaxContextEl = this.container.querySelector('#rpg-lite-preset-editor-max-context') as HTMLInputElement;
+    const presetMaxContextNoteEl = this.container.querySelector('#rpg-lite-preset-editor-max-context-note') as HTMLElement;
+    summaryEl.addEventListener('change', () => {
+      summaryIntervalEl.disabled = !summaryEl.checked;
+      presetMaxContextEl.disabled = summaryEl.checked;
+      presetMaxContextNoteEl.style.display = summaryEl.checked ? '' : 'none';
+    });
+
     // Prefix context refinement buttons
     const moreDetailsBtn = this.container.querySelector('#rpg-lite-prefix-more-details') as HTMLButtonElement | null;
     const variationBtn = this.container.querySelector('#rpg-lite-prefix-variation') as HTMLButtonElement | null;
@@ -964,6 +1091,8 @@ export class RPGLiteView {
     const purposeEl = this.container.querySelector('#rpg-lite-preset-editor-purpose') as HTMLSelectElement;
     const maxEl = this.container.querySelector('#rpg-lite-preset-editor-max-context') as HTMLInputElement;
     const shakeEl = this.container.querySelector('#rpg-lite-preset-editor-shake') as HTMLInputElement;
+    const summaryEl = this.container.querySelector('#rpg-lite-preset-editor-summary') as HTMLInputElement;
+    const summaryIntervalEl = this.container.querySelector('#rpg-lite-preset-editor-summary-interval') as HTMLInputElement;
     const systemEl = this.container.querySelector('#rpg-lite-preset-editor-system') as HTMLTextAreaElement;
     const prefixEl = this.container.querySelector('#rpg-lite-preset-editor-prefix') as HTMLTextAreaElement;
 
@@ -981,6 +1110,8 @@ export class RPGLiteView {
     }
     preset.maxContextMessages = Math.max(2, Math.floor(Number(maxEl.value)));
     preset.shakeOpenings = shakeEl.checked;
+    preset.summaryEnabled = summaryEl.checked;
+    preset.summaryInterval = Math.max(2, Math.floor(Number(summaryIntervalEl.value) || RPGLiteView.DEFAULT_SUMMARY_INTERVAL));
     preset.systemPrompt = systemEl.value;
     preset.prefixContext = prefixEl.value;
     preset.updatedAt = now();
@@ -1022,6 +1153,9 @@ export class RPGLiteView {
       narratorPurpose: preset.narratorPurpose ?? this.defaultNarratorPurpose,
       maxContextMessages: preset.maxContextMessages,
       shakeOpenings: preset.shakeOpenings ?? false,
+      summaryEnabled: preset.summaryEnabled ?? false,
+      ...(typeof preset.summaryInterval === 'number' ? { summaryInterval: preset.summaryInterval } : {}),
+      milestones: [],
       conversation: []
     };
     const storage = await StorageService.getInstance();
@@ -1399,14 +1533,26 @@ export class RPGLiteView {
                    style="width: 80px;" title="Temperature: ${session.temperature}" />
             <span id="rpg-lite-temperature-value" style="opacity:.85; font-size:0.85rem; min-width:2.5rem;">${session.temperature.toFixed(1)}</span>
           </label>
-          <label style="display:flex; align-items:center; gap:.5rem;">
+          <label style="display:flex; align-items:center; gap:.5rem;" title="Verbatim recency window used only when summaries are off. When summaries are on, the summary interval controls context instead.">
             <span style="opacity:.85;">Max msgs</span>
-            <input id="rpg-lite-max-context-session" class="rpg-lite-input" type="number" min="2" step="1" value="${String(session.maxContextMessages)}" style="max-width: 8rem;" />
+            <input id="rpg-lite-max-context-session" class="rpg-lite-input" type="number" min="2" step="1" value="${String(session.maxContextMessages)}" style="max-width: 8rem;"${session.summaryEnabled ? ' disabled' : ''} />
+            <span id="rpg-lite-max-context-note" style="opacity:.6; font-size:0.78rem; font-style:italic; ${session.summaryEnabled ? '' : 'display:none;'}">controlled by summary interval</span>
           </label>
           <label style="display:flex; align-items:center; gap:.4rem; cursor:pointer;" title="When on, the opening scene is shaken up with a random divergent direction (applies when (re)generating the opening). Adds one quick brainstorming call.">
             <input type="checkbox" id="rpg-lite-shake-session" ${session.shakeOpenings ? 'checked' : ''} />
             <span style="opacity:.85;">Shake openings</span>
           </label>
+          <div style="display:flex; align-items:center; gap:.5rem; border-left: 1px solid rgba(255,255,255,0.12); padding-left:.75rem;" title="Periodical 'story so far' summaries replace older messages in the LLM context to lighten load without changing the visible chat. A checkpoint is cut every N messages: everything before the latest checkpoint is condensed into the summary, everything after is sent verbatim.">
+            <label style="display:flex; align-items:center; gap:.4rem; cursor:pointer;">
+              <input type="checkbox" id="rpg-lite-summary-enabled" ${session.summaryEnabled ? 'checked' : ''} />
+              <span style="opacity:.85;">Summaries</span>
+            </label>
+            <label style="display:flex; align-items:center; gap:.4rem;">
+              <span style="opacity:.85;">every</span>
+              <input id="rpg-lite-summary-interval" class="rpg-lite-input" type="number" min="2" step="1" value="${String(session.summaryInterval ?? RPGLiteView.DEFAULT_SUMMARY_INTERVAL)}" style="max-width: 4.5rem;"${session.summaryEnabled ? '' : ' disabled'} />
+              <span style="opacity:.85;">msgs</span>
+            </label>
+          </div>
           <div style="display:flex; align-items:center; gap:.5rem; border-left: 1px solid rgba(255,255,255,0.12); padding-left:.75rem;">
             <span style="opacity:.85;">Retries</span>
             <input id="rpg-lite-retry-limit" class="rpg-lite-input" type="number" min="1" step="1"
@@ -1535,6 +1681,26 @@ export class RPGLiteView {
     shakeSessionEl.checked = session.shakeOpenings ?? false;
     shakeSessionEl.addEventListener('change', () => {
       session.shakeOpenings = shakeSessionEl.checked;
+      void this.saveSession();
+    });
+
+    const summaryEnabledEl = this.container.querySelector('#rpg-lite-summary-enabled') as HTMLInputElement;
+    const summaryIntervalEl = this.container.querySelector('#rpg-lite-summary-interval') as HTMLInputElement;
+    const maxContextNoteEl = this.container.querySelector('#rpg-lite-max-context-note') as HTMLElement;
+    summaryEnabledEl.checked = session.summaryEnabled ?? false;
+    summaryIntervalEl.disabled = !summaryEnabledEl.checked;
+    summaryEnabledEl.addEventListener('change', () => {
+      session.summaryEnabled = summaryEnabledEl.checked;
+      summaryIntervalEl.disabled = !summaryEnabledEl.checked;
+      // When summaries are on, maxContextMessages no longer governs context, so
+      // disable it and surface a note to avoid a phantom setting.
+      maxContextEl.disabled = summaryEnabledEl.checked;
+      maxContextNoteEl.style.display = summaryEnabledEl.checked ? '' : 'none';
+      void this.saveSession();
+      void this.updateContextStats();
+    });
+    summaryIntervalEl.addEventListener('input', () => {
+      session.summaryInterval = Math.max(2, Math.floor(Number(summaryIntervalEl.value) || RPGLiteView.DEFAULT_SUMMARY_INTERVAL));
       void this.saveSession();
     });
 
@@ -1780,8 +1946,20 @@ export class RPGLiteView {
     const statsEl = this.container.querySelector('#rpg-lite-context-stats-topbar') as HTMLElement | null;
     if (!statsEl) return;
 
-    const { promptChars, messageCount } = await computeContextCharCount(this.currentSession);
-    statsEl.textContent = `📊 ${promptChars.toLocaleString()} chars · ${messageCount} msgs`;
+    // "msgs" reflects the conversation's content messages (the same count that
+    // drives summarization), NOT the LLM payload length. "chars" still reflects
+    // the actual context payload size so the effect of an active summary is
+    // visible (the story grows while the payload stays lean).
+    const { promptChars } = await computeContextCharCount(this.currentSession);
+    const completedCount = this.currentSession.conversation.filter(m => m.content.trim().length > 0).length;
+    let text = `📊 ${promptChars.toLocaleString()} chars · ${completedCount} msgs`;
+    if (this.currentSession.summaryEnabled === true) {
+      const milestone = latestValidMilestone(this.currentSession, completedCount);
+      text += milestone
+        ? ` · 🧭 summary covers ${milestone.coveredCount} msgs`
+        : ` · 🧭 summaries on`;
+    }
+    statsEl.textContent = text;
   }
 
   private async saveCurrentAsSessionCopy(): Promise<void> {
@@ -1804,6 +1982,14 @@ export class RPGLiteView {
 
     const finalTitle = this.makeUniqueSessionTitle(title.trim());
 
+    const clonedMilestones: RPGLiteMilestone[] = (base.milestones ?? []).map((m) => ({
+      id: newId('rpg_lite_milestone'),
+      coveredCount: m.coveredCount,
+      summary: m.summary,
+      createdAt: m.createdAt,
+      ...(m.generation ? { generation: { ...m.generation } } : {})
+    }));
+
     const newSession: RPGLiteSession = {
       id: newId('rpg_lite_session'),
       title: finalTitle,
@@ -1814,6 +2000,9 @@ export class RPGLiteView {
       narratorPurpose: base.narratorPurpose,
       maxContextMessages: base.maxContextMessages,
       shakeOpenings: base.shakeOpenings ?? false,
+      summaryEnabled: base.summaryEnabled ?? false,
+      ...(typeof base.summaryInterval === 'number' ? { summaryInterval: base.summaryInterval } : {}),
+      milestones: clonedMilestones,
       conversation: clonedConversation
     };
 
@@ -1868,12 +2057,126 @@ export class RPGLiteView {
     const messagesEl = this.container.querySelector('#rpg-lite-messages') as HTMLElement;
     messagesEl.innerHTML = '';
 
-    for (const msg of this.currentSession.conversation) {
+    // Determine where the active summary boundary sits: the first message NOT
+    // covered by the latest valid milestone. A marker is rendered just above it
+    // so the player can see that everything earlier is condensed into a summary
+    // in the model's context (the visible transcript itself is unchanged).
+    const session = this.currentSession;
+    const completedCount = session.conversation.filter(m => m.content.trim().length > 0).length;
+    const activeMilestone = session.summaryEnabled === true
+      ? latestValidMilestone(session, completedCount)
+      : null;
+    const markerAt = activeMilestone && activeMilestone.coveredCount < completedCount
+      ? activeMilestone.coveredCount
+      : -1;
+
+    let completedIndex = 0;
+    for (const msg of session.conversation) {
+      const hasContent = msg.content.trim().length > 0;
+      if (hasContent && completedIndex === markerAt && activeMilestone) {
+        messagesEl.appendChild(this.renderMilestoneMarker(activeMilestone));
+      }
       messagesEl.appendChild(this.renderMessage(msg));
+      if (hasContent) completedIndex += 1;
     }
 
     messagesEl.scrollTop = messagesEl.scrollHeight;
     void this.updateContextStats();
+  }
+
+  /**
+   * A boundary marker shown above the first message that is NOT covered by the
+   * active milestone summary. Everything above the marker is represented to the
+   * model by the "story so far" summary; messages below are sent verbatim.
+   */
+  private renderMilestoneMarker(milestone: RPGLiteMilestone): HTMLElement {
+    const el = document.createElement('div');
+    el.className = 'rpg-lite-milestone-marker';
+    el.dataset['role'] = 'milestone-marker';
+    el.title =
+      `Summary checkpoint: the earlier ${milestone.coveredCount} messages are condensed into a ` +
+      `"story so far" summary in the model's context. Messages below this line are sent verbatim. ` +
+      `Click to view the summary.`;
+    el.style.display = 'flex';
+    el.style.alignItems = 'center';
+    el.style.gap = '0.75rem';
+    el.style.width = '100%';
+    el.style.margin = '0.85rem 0';
+    el.style.opacity = '0.7';
+    el.style.userSelect = 'none';
+    el.style.cursor = 'pointer';
+    el.innerHTML =
+      `<span style="flex:1 1 auto; height:0; border-top:1px dashed currentColor; opacity:.5;"></span>` +
+      `<span style="flex:0 0 auto; font-size:0.78rem; white-space:nowrap; padding:0.15rem 0.6rem; border:1px solid currentColor; border-radius:1rem;">` +
+      `📜 Summary checkpoint · earlier ${milestone.coveredCount} messages condensed · 🔍 view` +
+      `</span>` +
+      `<span style="flex:1 1 auto; height:0; border-top:1px dashed currentColor; opacity:.5;"></span>`;
+    el.addEventListener('click', () => { this.showMilestoneSummaryModal(milestone); });
+    return el;
+  }
+
+  /**
+   * Read-only modal that displays a milestone's "story so far" summary plus its
+   * generation metadata. Purely a debugging/inspection aid so summarization
+   * problems (drift, omissions, hallucinations) can be spotted directly.
+   */
+  private showMilestoneSummaryModal(milestone: RPGLiteMilestone): void {
+    const overlay = document.createElement('div');
+    overlay.className = 'rpg-lite-action-editor-overlay';
+    overlay.innerHTML = `
+      <div class="rpg-lite-action-editor-modal">
+        <div class="rpg-lite-action-editor-header">
+          <h3>Story-so-far summary</h3>
+          <button class="rpg-lite-action-editor-close" title="Close">✕</button>
+        </div>
+        <div class="rpg-lite-action-editor-body">
+          <div style="font-size:0.82rem; opacity:0.75; line-height:1.5;" data-role="meta"></div>
+          <div class="rpg-lite-action-editor-field">
+            <label>Summary text (read-only)</label>
+            <textarea class="rpg-lite-textarea rpg-lite-action-editor-textarea" readonly data-role="summary"></textarea>
+          </div>
+        </div>
+        <div class="rpg-lite-action-editor-footer">
+          <button class="rpg-lite-btn rpg-lite-btn-secondary" data-role="copy">Copy</button>
+          <button class="rpg-lite-btn rpg-lite-btn-primary" data-role="close">Close</button>
+        </div>
+      </div>
+    `;
+    document.body.appendChild(overlay);
+
+    const metaEl = overlay.querySelector('[data-role="meta"]') as HTMLElement;
+    const summaryEl = overlay.querySelector('[data-role="summary"]') as HTMLTextAreaElement;
+    const headerCloseBtn = overlay.querySelector('.rpg-lite-action-editor-close') as HTMLButtonElement;
+    const footerCloseBtn = overlay.querySelector('[data-role="close"]') as HTMLButtonElement;
+    const copyBtn = overlay.querySelector('[data-role="copy"]') as HTMLButtonElement;
+
+    summaryEl.value = milestone.summary;
+
+    const metaParts = [
+      `Covers first ${milestone.coveredCount} messages`,
+      `created ${new Date(milestone.createdAt).toLocaleString()}`
+    ];
+    const gen = milestone.generation;
+    if (gen) {
+      metaParts.push(`model ${gen.model}`);
+      metaParts.push(`${gen.completionChars.toLocaleString()} chars`);
+      if (typeof gen.totalCostUsd === 'number') {
+        metaParts.push(`$${gen.totalCostUsd.toFixed(4)}`);
+      }
+    }
+    metaEl.textContent = metaParts.join(' · ');
+
+    const cleanup = () => { overlay.remove(); };
+    headerCloseBtn.addEventListener('click', cleanup);
+    footerCloseBtn.addEventListener('click', cleanup);
+    overlay.addEventListener('click', (e) => {
+      if (e.target === overlay) cleanup();
+    });
+    copyBtn.addEventListener('click', () => {
+      void navigator.clipboard.writeText(milestone.summary);
+      copyBtn.textContent = 'Copied';
+      setTimeout(() => { copyBtn.textContent = 'Copy'; }, 1200);
+    });
   }
 
   private containsGraphicalContent(content: string): boolean {
@@ -2172,7 +2475,9 @@ export class RPGLiteView {
 
   private startEditMessage(messageId: string): void {
     if (!this.currentSession) throw new Error('No current session.');
-    const msg = this.currentSession.conversation.find((m) => m.id === messageId);
+    const editIndex = this.currentSession.conversation.findIndex((m) => m.id === messageId);
+    if (editIndex === -1) throw new Error(`Message not found: ${messageId}`);
+    const msg = this.currentSession.conversation[editIndex];
     if (!msg) throw new Error(`Message not found: ${messageId}`);
 
     const messagesEl = this.container.querySelector('#rpg-lite-messages') as HTMLElement;
@@ -2231,7 +2536,10 @@ export class RPGLiteView {
               msg.versions[activeIndex]!.content = textarea.value;
             }
           }
-          
+
+          // The edited message's content changed, so drop summaries covering it or later.
+          this.invalidateMilestonesFrom(editIndex);
+
           void this.saveSession().then(() => {
             this.renderConversation();
             void this.retryFromAssistant(nextMsg.id);
@@ -2267,7 +2575,10 @@ export class RPGLiteView {
               msg.versions[activeIndex]!.content = textarea.value;
             }
           }
-          
+
+          // The edited message's content changed, so drop summaries covering it or later.
+          this.invalidateMilestonesFrom(editIndex);
+
           void this.saveSession().then(() => { this.renderConversation(); });
         }
       }, 150);
@@ -2314,7 +2625,9 @@ export class RPGLiteView {
   private async switchToVersion(messageId: string, direction: number): Promise<void> {
     if (!this.currentSession) throw new Error('No current session.');
     
-    const msg = this.currentSession.conversation.find((m) => m.id === messageId);
+    const msgIndex = this.currentSession.conversation.findIndex((m) => m.id === messageId);
+    if (msgIndex === -1) throw new Error(`Message not found: ${messageId}`);
+    const msg = this.currentSession.conversation[msgIndex];
     if (!msg) throw new Error(`Message not found: ${messageId}`);
     if (!msg.versions || msg.versions.length <= 1) return;
     
@@ -2337,7 +2650,10 @@ export class RPGLiteView {
     } else {
       delete msg.generation;
     }
-    
+
+    // This message's content changed, so any summary covering it (or later) is stale.
+    this.invalidateMilestonesFrom(msgIndex);
+
     await this.saveSession();
     this.renderConversation();
   }
@@ -2407,6 +2723,8 @@ export class RPGLiteView {
       // Opening message retry: no preceding user message exists.
       // Remove all messages after the one we're retrying, keep the message to be updated
       this.currentSession.conversation = this.currentSession.conversation.slice(0, idx + 1);
+      // Drop summaries that covered the regenerated message or anything after it.
+      this.invalidateMilestonesFrom(idx);
       // Reset the message content to prepare for new generation
       assistantMsg.content = '';
       await this.saveSession();
@@ -2417,6 +2735,8 @@ export class RPGLiteView {
 
     // Remove all messages after the one we're retrying, keep the message to be updated
     this.currentSession.conversation = this.currentSession.conversation.slice(0, idx + 1);
+    // Drop summaries that covered the regenerated message or anything after it.
+    this.invalidateMilestonesFrom(idx);
     // Reset the message content to prepare for new generation
     assistantMsg.content = '';
     await this.saveSession();
@@ -2699,6 +3019,7 @@ export class RPGLiteView {
         this.renderConversation();
         const inputEl = this.container.querySelector('#rpg-lite-input') as HTMLTextAreaElement;
         inputEl.focus();
+        await this.maybeCreateMilestone(session);
       },
       onError: (error: Error) => {
         console.error('❌ [RPG Lite Opening] Streaming error:', error);
@@ -2888,6 +3209,7 @@ export class RPGLiteView {
         this.renderConversation();
         const inputEl = this.container.querySelector('#rpg-lite-input') as HTMLTextAreaElement;
         inputEl.focus();
+        await this.maybeCreateMilestone(session);
       },
       onError: (error: Error) => {
         console.error('❌ [RPG Lite Reply] Streaming error:', error);

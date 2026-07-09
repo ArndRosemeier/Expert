@@ -45,6 +45,22 @@ export interface RPGLiteChatMessage {
   openingShake?: RPGLiteOpeningShake;
 }
 
+/**
+ * A cumulative "story so far" summary anchored to a conversation prefix length.
+ * A milestone reflects conversation[0 .. coveredCount-1]. Anchoring by a prefix
+ * COUNT (not a message id) makes retry-safety trivial: any milestone whose
+ * coveredCount exceeds the point of a history mutation is simply dropped.
+ */
+export interface RPGLiteMilestone {
+  id: string;
+  /** Number of conversation messages this summary covers (summarizes conversation[0 .. coveredCount-1]). */
+  coveredCount: number;
+  /** The cumulative "story so far" summary text. */
+  summary: string;
+  createdAt: number;
+  generation?: RPGLiteMessageGenerationMeta;
+}
+
 export interface RPGLiteSession {
   id: string;
   title: string;
@@ -66,6 +82,13 @@ export interface RPGLiteSession {
   /** When true, opening generation is "shaken up" with a random divergent direction. Per-session. */
   shakeOpenings?: boolean;
 
+  /** When true, periodical "story so far" milestone summaries are generated and injected into context. */
+  summaryEnabled?: boolean;
+  /** How many new messages must accumulate past the last milestone before a new one is generated. Defaults to 50 when undefined. */
+  summaryInterval?: number;
+  /** Cumulative "story so far" summaries, each anchored to a conversation prefix length. */
+  milestones?: RPGLiteMilestone[];
+
   conversation: RPGLiteChatMessage[];
   clipboard?: string;
 }
@@ -83,6 +106,10 @@ export interface RPGLiteStartPreset {
   maxContextMessages: number;
   /** When true, sessions started from this template shake up the opening by default. */
   shakeOpenings?: boolean;
+  /** When true, sessions started from this template have periodical summaries enabled by default. */
+  summaryEnabled?: boolean;
+  /** Default milestone interval (messages) for sessions started from this template. */
+  summaryInterval?: number;
 }
 
 export interface RPGLiteActionButton {
