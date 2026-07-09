@@ -15,6 +15,7 @@ import {
   RPGLiteOpeningShake,
   RPGLiteSession,
   RPGLiteStartPreset,
+  RPGLiteSummaryMode,
   mapCompletionMetaToGenerationMeta
 } from '../types/RPGLiteTypes';
 
@@ -71,6 +72,11 @@ function escapeHtmlText(text: string): string {
  * currently exist (coveredCount <= completedCount); the one with the largest
  * coveredCount wins. Returns null when summaries are absent.
  */
+/** Whether periodical summaries are active for this session (any non-'off' mode). */
+function summariesEnabled(session: RPGLiteSession): boolean {
+  return session.summaryMode === 'lean' || session.summaryMode === 'full';
+}
+
 function latestValidMilestone(session: RPGLiteSession, completedCount: number): RPGLiteMilestone | null {
   if (!session.milestones || session.milestones.length === 0) return null;
   let best: RPGLiteMilestone | null = null;
@@ -103,7 +109,7 @@ async function buildContextMessages(session: RPGLiteSession): Promise<OpenRouter
   // the model, which corrupts the role sequence and can cause repeated responses.
   const completed = session.conversation.filter(m => m.content.trim().length > 0);
 
-  const summariesOn = session.summaryEnabled === true;
+  const summariesOn = summariesEnabled(session);
   const milestone = summariesOn
     ? latestValidMilestone(session, completed.length)
     : null;
@@ -219,7 +225,8 @@ export class RPGLiteView {
    * maxContextMessages. Runs after the turn is rendered so it never blocks streaming.
    */
   private async maybeCreateMilestone(session: RPGLiteSession): Promise<void> {
-    if (session.summaryEnabled !== true) return;
+    const mode = session.summaryMode ?? 'off';
+    if (mode === 'off') return;
 
     const completed = session.conversation.filter(m => m.content.trim().length > 0);
     const interval = session.summaryInterval ?? RPGLiteView.DEFAULT_SUMMARY_INTERVAL;
@@ -234,12 +241,19 @@ export class RPGLiteView {
     const latestCovered = latest ? latest.coveredCount : 0;
     if (desiredCovered <= latestCovered) return;
 
-    const newMessages = completed.slice(latestCovered, desiredCovered);
+    // 'lean' (rolling): fold the previous summary with only the new interval's
+    //   messages — cheap, low-context-friendly, errors can compound.
+    // 'full' (accurate): re-summarize every message up to the boundary from
+    //   scratch — no drift, but processes the whole covered prefix each checkpoint.
+    const latestSummary = latest ? latest.summary : '';
+    const previousSummary = mode === 'full' ? '' : latestSummary;
+    const sliceStart = mode === 'full' ? 0 : latestCovered;
+    const newMessages = completed.slice(sliceStart, desiredCovered);
     if (newMessages.length === 0) return;
 
     const milestone = await this.summaryService.buildMilestone(
       session,
-      latest ? latest.summary : '',
+      previousSummary,
       newMessages,
       desiredCovered
     );
@@ -918,7 +932,7 @@ export class RPGLiteView {
       ...(preset.narratorPurpose !== undefined ? { narratorPurpose: preset.narratorPurpose } : {}),
       maxContextMessages: preset.maxContextMessages,
       shakeOpenings: preset.shakeOpenings ?? false,
-      summaryEnabled: preset.summaryEnabled ?? false,
+      summaryMode: preset.summaryMode ?? 'off',
       ...(typeof preset.summaryInterval === 'number' ? { summaryInterval: preset.summaryInterval } : {})
     };
 
@@ -944,6 +958,8 @@ export class RPGLiteView {
     ];
 
     const selectedPurpose = preset.narratorPurpose ?? '';
+    const presetSummaryMode = preset.summaryMode ?? 'off';
+    const presetSummariesOn = presetSummaryMode !== 'off';
 
     return `
       <div class="rpg-lite-message">
@@ -972,8 +988,8 @@ export class RPGLiteView {
           </label>
           <label style="display:flex; flex-direction:column; gap:0.35rem; min-width: 12rem;" title="Verbatim recency window used only when summaries are off. When summaries are on, the summary interval controls context instead.">
             <span class="rpg-lite-section-title">Max msgs</span>
-            <input id="rpg-lite-preset-editor-max-context" class="rpg-lite-input" type="number" min="2" step="1" value="${String(preset.maxContextMessages)}"${preset.summaryEnabled ? ' disabled' : ''} />
-            <span id="rpg-lite-preset-editor-max-context-note" style="opacity:.6; font-size:0.78rem; font-style:italic; ${preset.summaryEnabled ? '' : 'display:none;'}">controlled by summary interval</span>
+            <input id="rpg-lite-preset-editor-max-context" class="rpg-lite-input" type="number" min="2" step="1" value="${String(preset.maxContextMessages)}"${presetSummariesOn ? ' disabled' : ''} />
+            <span id="rpg-lite-preset-editor-max-context-note" style="opacity:.6; font-size:0.78rem; font-style:italic; ${presetSummariesOn ? '' : 'display:none;'}">controlled by summary interval</span>
           </label>
           <label style="display:flex; flex-direction:column; gap:0.35rem; min-width: 12rem;" title="When on, sessions started from this template shake up the opening with a random divergent direction (adds one quick brainstorming call per start).">
             <span class="rpg-lite-section-title">Shake openings</span>
@@ -982,14 +998,16 @@ export class RPGLiteView {
               <span style="opacity:.85;">Shake things up</span>
             </label>
           </label>
-          <label style="display:flex; flex-direction:column; gap:0.35rem; min-width: 12rem;" title="When on, sessions started from this template use periodical 'story so far' summaries to lighten LLM load. A checkpoint is cut every N messages: everything before the latest checkpoint is condensed, everything after is sent verbatim.">
+          <label style="display:flex; flex-direction:column; gap:0.35rem; min-width: 12rem;" title="Periodical 'story so far' summaries lighten LLM load. A checkpoint is cut every N messages: everything before the latest checkpoint is condensed, everything after is sent verbatim. Lean = cheap rolling summary (errors can drift). Full = re-summarize everything each checkpoint (accurate, costlier, needs more context).">
             <span class="rpg-lite-section-title">Summaries</span>
             <div style="display:flex; align-items:center; gap:.5rem; height: 100%;">
-              <label style="display:flex; align-items:center; gap:.4rem; cursor:pointer;">
-                <input type="checkbox" id="rpg-lite-preset-editor-summary" ${preset.summaryEnabled ? 'checked' : ''} />
-                <span style="opacity:.85;">every</span>
-              </label>
-              <input id="rpg-lite-preset-editor-summary-interval" class="rpg-lite-input" type="number" min="2" step="1" value="${String(preset.summaryInterval ?? RPGLiteView.DEFAULT_SUMMARY_INTERVAL)}" style="max-width: 4.5rem;"${preset.summaryEnabled ? '' : ' disabled'} />
+              <select id="rpg-lite-preset-editor-summary-mode" class="rpg-lite-select">
+                <option value="off"${presetSummaryMode === 'off' ? ' selected' : ''}>Off</option>
+                <option value="lean"${presetSummaryMode === 'lean' ? ' selected' : ''}>Lean (rolling)</option>
+                <option value="full"${presetSummaryMode === 'full' ? ' selected' : ''}>Full (accurate)</option>
+              </select>
+              <span style="opacity:.85;">every</span>
+              <input id="rpg-lite-preset-editor-summary-interval" class="rpg-lite-input" type="number" min="2" step="1" value="${String(preset.summaryInterval ?? RPGLiteView.DEFAULT_SUMMARY_INTERVAL)}" style="max-width: 4.5rem;"${presetSummariesOn ? '' : ' disabled'} />
               <span style="opacity:.85;">msgs</span>
             </div>
           </label>
@@ -1043,14 +1061,15 @@ export class RPGLiteView {
       void this.saveEditedPreset(preset.id);
     });
 
-    const summaryEl = this.container.querySelector('#rpg-lite-preset-editor-summary') as HTMLInputElement;
+    const summaryModeEl = this.container.querySelector('#rpg-lite-preset-editor-summary-mode') as HTMLSelectElement;
     const summaryIntervalEl = this.container.querySelector('#rpg-lite-preset-editor-summary-interval') as HTMLInputElement;
     const presetMaxContextEl = this.container.querySelector('#rpg-lite-preset-editor-max-context') as HTMLInputElement;
     const presetMaxContextNoteEl = this.container.querySelector('#rpg-lite-preset-editor-max-context-note') as HTMLElement;
-    summaryEl.addEventListener('change', () => {
-      summaryIntervalEl.disabled = !summaryEl.checked;
-      presetMaxContextEl.disabled = summaryEl.checked;
-      presetMaxContextNoteEl.style.display = summaryEl.checked ? '' : 'none';
+    summaryModeEl.addEventListener('change', () => {
+      const on = summaryModeEl.value !== 'off';
+      summaryIntervalEl.disabled = !on;
+      presetMaxContextEl.disabled = on;
+      presetMaxContextNoteEl.style.display = on ? '' : 'none';
     });
 
     // Prefix context refinement buttons
@@ -1091,7 +1110,7 @@ export class RPGLiteView {
     const purposeEl = this.container.querySelector('#rpg-lite-preset-editor-purpose') as HTMLSelectElement;
     const maxEl = this.container.querySelector('#rpg-lite-preset-editor-max-context') as HTMLInputElement;
     const shakeEl = this.container.querySelector('#rpg-lite-preset-editor-shake') as HTMLInputElement;
-    const summaryEl = this.container.querySelector('#rpg-lite-preset-editor-summary') as HTMLInputElement;
+    const summaryModeEl = this.container.querySelector('#rpg-lite-preset-editor-summary-mode') as HTMLSelectElement;
     const summaryIntervalEl = this.container.querySelector('#rpg-lite-preset-editor-summary-interval') as HTMLInputElement;
     const systemEl = this.container.querySelector('#rpg-lite-preset-editor-system') as HTMLTextAreaElement;
     const prefixEl = this.container.querySelector('#rpg-lite-preset-editor-prefix') as HTMLTextAreaElement;
@@ -1110,7 +1129,7 @@ export class RPGLiteView {
     }
     preset.maxContextMessages = Math.max(2, Math.floor(Number(maxEl.value)));
     preset.shakeOpenings = shakeEl.checked;
-    preset.summaryEnabled = summaryEl.checked;
+    preset.summaryMode = summaryModeEl.value as RPGLiteSummaryMode;
     preset.summaryInterval = Math.max(2, Math.floor(Number(summaryIntervalEl.value) || RPGLiteView.DEFAULT_SUMMARY_INTERVAL));
     preset.systemPrompt = systemEl.value;
     preset.prefixContext = prefixEl.value;
@@ -1153,7 +1172,7 @@ export class RPGLiteView {
       narratorPurpose: preset.narratorPurpose ?? this.defaultNarratorPurpose,
       maxContextMessages: preset.maxContextMessages,
       shakeOpenings: preset.shakeOpenings ?? false,
-      summaryEnabled: preset.summaryEnabled ?? false,
+      summaryMode: preset.summaryMode ?? 'off',
       ...(typeof preset.summaryInterval === 'number' ? { summaryInterval: preset.summaryInterval } : {}),
       milestones: [],
       conversation: []
@@ -1491,11 +1510,6 @@ export class RPGLiteView {
     if (!this.currentSession) throw new Error('No current session.');
     const session = this.currentSession;
 
-    // Get the model name for the current purpose
-    const modelSelector = state.getModelSelector();
-    const selectedModels = modelSelector?.getSelectedModels() ?? {};
-    const modelName = selectedModels[session.narratorPurpose] ?? 'Not configured';
-    
     // Initialize temperature if not set
     session.temperature ??= 1.0;
 
@@ -1517,55 +1531,7 @@ export class RPGLiteView {
         </div>
         <div class="rpg-lite-topbar-right">
           <div id="rpg-lite-context-stats-topbar" class="rpg-lite-context-stats"></div>
-          <label style="display:flex; align-items:center; gap:.5rem;">
-            <span style="opacity:.85;">Narrator</span>
-            <select id="rpg-lite-purpose" class="rpg-lite-select">
-              <option value="prose">Prose</option>
-              <option value="creator">Creator</option>
-              <option value="editor">Editor</option>
-              <option value="rater">Rater</option>
-            </select>
-            <span style="opacity:.65; font-size:0.85rem;" id="rpg-lite-model-name" title="Current model for this purpose">${modelName}</span>
-          </label>
-          <label style="display:flex; align-items:center; gap:.5rem;">
-            <span style="opacity:.85;">Temp</span>
-            <input id="rpg-lite-temperature" type="range" min="0" max="2" step="0.1" value="${session.temperature}" 
-                   style="width: 80px;" title="Temperature: ${session.temperature}" />
-            <span id="rpg-lite-temperature-value" style="opacity:.85; font-size:0.85rem; min-width:2.5rem;">${session.temperature.toFixed(1)}</span>
-          </label>
-          <label style="display:flex; align-items:center; gap:.5rem;" title="Verbatim recency window used only when summaries are off. When summaries are on, the summary interval controls context instead.">
-            <span style="opacity:.85;">Max msgs</span>
-            <input id="rpg-lite-max-context-session" class="rpg-lite-input" type="number" min="2" step="1" value="${String(session.maxContextMessages)}" style="max-width: 8rem;"${session.summaryEnabled ? ' disabled' : ''} />
-            <span id="rpg-lite-max-context-note" style="opacity:.6; font-size:0.78rem; font-style:italic; ${session.summaryEnabled ? '' : 'display:none;'}">controlled by summary interval</span>
-          </label>
-          <label style="display:flex; align-items:center; gap:.4rem; cursor:pointer;" title="When on, the opening scene is shaken up with a random divergent direction (applies when (re)generating the opening). Adds one quick brainstorming call.">
-            <input type="checkbox" id="rpg-lite-shake-session" ${session.shakeOpenings ? 'checked' : ''} />
-            <span style="opacity:.85;">Shake openings</span>
-          </label>
-          <div style="display:flex; align-items:center; gap:.5rem; border-left: 1px solid rgba(255,255,255,0.12); padding-left:.75rem;" title="Periodical 'story so far' summaries replace older messages in the LLM context to lighten load without changing the visible chat. A checkpoint is cut every N messages: everything before the latest checkpoint is condensed into the summary, everything after is sent verbatim.">
-            <label style="display:flex; align-items:center; gap:.4rem; cursor:pointer;">
-              <input type="checkbox" id="rpg-lite-summary-enabled" ${session.summaryEnabled ? 'checked' : ''} />
-              <span style="opacity:.85;">Summaries</span>
-            </label>
-            <label style="display:flex; align-items:center; gap:.4rem;">
-              <span style="opacity:.85;">every</span>
-              <input id="rpg-lite-summary-interval" class="rpg-lite-input" type="number" min="2" step="1" value="${String(session.summaryInterval ?? RPGLiteView.DEFAULT_SUMMARY_INTERVAL)}" style="max-width: 4.5rem;"${session.summaryEnabled ? '' : ' disabled'} />
-              <span style="opacity:.85;">msgs</span>
-            </label>
-          </div>
-          <div style="display:flex; align-items:center; gap:.5rem; border-left: 1px solid rgba(255,255,255,0.12); padding-left:.75rem;">
-            <span style="opacity:.85;">Retries</span>
-            <input id="rpg-lite-retry-limit" class="rpg-lite-input" type="number" min="1" step="1"
-                   value="${session.retryLimit ?? 10}" style="max-width: 4.5rem;"${session.retryLimit === null ? ' disabled' : ''} />
-            <label style="display:flex; align-items:center; gap:.25rem; cursor:pointer; user-select:none;" title="Unlimited retries">
-              <input type="checkbox" id="rpg-lite-retry-unlimited"${session.retryLimit === null ? ' checked' : ''} />
-              <span style="opacity:.85;">∞</span>
-            </label>
-            <span id="rpg-lite-retries-remaining" class="rpg-lite-retries-remaining${session.retryLimit !== null && session.retriesUsed! >= session.retryLimit! ? ' rpg-lite-retries-exhausted' : ''}">
-              ${session.retryLimit === null ? '∞' : String(Math.max(0, session.retryLimit - session.retriesUsed!))} left
-            </span>
-            <button id="rpg-lite-retry-reset" class="rpg-lite-btn rpg-lite-btn-sm" title="Reset retry counter">↺</button>
-          </div>
+          <button id="rpg-lite-settings" class="rpg-lite-btn" title="Session settings (narrator, temperature, context, summaries, retries)">⚙️ Settings</button>
           <button id="rpg-lite-save-session" class="rpg-lite-btn">Save Session</button>
           <button id="rpg-lite-close" class="rpg-lite-btn">Close</button>
         </div>
@@ -1648,91 +1614,8 @@ export class RPGLiteView {
       void this.editSessionTitle();
     });
 
-    const purposeSelect = this.container.querySelector('#rpg-lite-purpose') as HTMLSelectElement;
-    const modelNameEl = this.container.querySelector('#rpg-lite-model-name') as HTMLElement;
-    purposeSelect.value = session.narratorPurpose;
-    purposeSelect.addEventListener('change', () => {
-      session.narratorPurpose = purposeSelect.value as RPGLiteModelPurpose;
-      const ms = state.getModelSelector();
-      const models = ms?.getSelectedModels() ?? {};
-      modelNameEl.textContent = models[session.narratorPurpose] ?? 'Not configured';
-      void this.saveSession();
-    });
-
-    const temperatureSlider = this.container.querySelector('#rpg-lite-temperature') as HTMLInputElement;
-    const temperatureValue = this.container.querySelector('#rpg-lite-temperature-value') as HTMLElement;
-    temperatureSlider.addEventListener('input', () => {
-      const temp = parseFloat(temperatureSlider.value);
-      session.temperature = temp;
-      temperatureValue.textContent = temp.toFixed(1);
-      temperatureSlider.title = `Temperature: ${temp.toFixed(1)}`;
-      void this.saveSession();
-    });
-
-    const maxContextEl = this.container.querySelector('#rpg-lite-max-context-session') as HTMLInputElement;
-    maxContextEl.value = String(session.maxContextMessages);
-    maxContextEl.addEventListener('input', () => {
-      const normalized = Math.max(2, Math.floor(Number(maxContextEl.value)));
-      session.maxContextMessages = normalized;
-      void this.saveSession().then(() => this.updateContextStats());
-    });
-
-    const shakeSessionEl = this.container.querySelector('#rpg-lite-shake-session') as HTMLInputElement;
-    shakeSessionEl.checked = session.shakeOpenings ?? false;
-    shakeSessionEl.addEventListener('change', () => {
-      session.shakeOpenings = shakeSessionEl.checked;
-      void this.saveSession();
-    });
-
-    const summaryEnabledEl = this.container.querySelector('#rpg-lite-summary-enabled') as HTMLInputElement;
-    const summaryIntervalEl = this.container.querySelector('#rpg-lite-summary-interval') as HTMLInputElement;
-    const maxContextNoteEl = this.container.querySelector('#rpg-lite-max-context-note') as HTMLElement;
-    summaryEnabledEl.checked = session.summaryEnabled ?? false;
-    summaryIntervalEl.disabled = !summaryEnabledEl.checked;
-    summaryEnabledEl.addEventListener('change', () => {
-      session.summaryEnabled = summaryEnabledEl.checked;
-      summaryIntervalEl.disabled = !summaryEnabledEl.checked;
-      // When summaries are on, maxContextMessages no longer governs context, so
-      // disable it and surface a note to avoid a phantom setting.
-      maxContextEl.disabled = summaryEnabledEl.checked;
-      maxContextNoteEl.style.display = summaryEnabledEl.checked ? '' : 'none';
-      void this.saveSession();
-      void this.updateContextStats();
-    });
-    summaryIntervalEl.addEventListener('input', () => {
-      session.summaryInterval = Math.max(2, Math.floor(Number(summaryIntervalEl.value) || RPGLiteView.DEFAULT_SUMMARY_INTERVAL));
-      void this.saveSession();
-    });
-
-    const retryLimitInput = this.container.querySelector('#rpg-lite-retry-limit') as HTMLInputElement;
-    const retryUnlimitedCheckbox = this.container.querySelector('#rpg-lite-retry-unlimited') as HTMLInputElement;
-
-    retryUnlimitedCheckbox.addEventListener('change', () => {
-      if (retryUnlimitedCheckbox.checked) {
-        session.retryLimit = null;
-        retryLimitInput.disabled = true;
-      } else {
-        const limit = Math.max(1, Math.floor(Number(retryLimitInput.value) || 10));
-        session.retryLimit = limit;
-        retryLimitInput.disabled = false;
-      }
-      this.updateRetriesDisplay();
-      void this.saveSession();
-    });
-
-    retryLimitInput.addEventListener('input', () => {
-      if (session.retryLimit === null) return;
-      const limit = Math.max(1, Math.floor(Number(retryLimitInput.value) || 1));
-      session.retryLimit = limit;
-      this.updateRetriesDisplay();
-      void this.saveSession();
-    });
-
-    (this.container.querySelector('#rpg-lite-retry-reset') as HTMLButtonElement).addEventListener('click', () => {
-      session.retriesUsed = 0;
-      this.updateRetriesDisplay();
-      this.renderConversation();
-      void this.saveSession();
+    (this.container.querySelector('#rpg-lite-settings') as HTMLButtonElement).addEventListener('click', () => {
+      this.showSessionSettingsModal();
     });
 
     (this.container.querySelector('#rpg-lite-save-session') as HTMLButtonElement).addEventListener('click', () => {
@@ -1953,11 +1836,12 @@ export class RPGLiteView {
     const { promptChars } = await computeContextCharCount(this.currentSession);
     const completedCount = this.currentSession.conversation.filter(m => m.content.trim().length > 0).length;
     let text = `📊 ${promptChars.toLocaleString()} chars · ${completedCount} msgs`;
-    if (this.currentSession.summaryEnabled === true) {
+    if (summariesEnabled(this.currentSession)) {
       const milestone = latestValidMilestone(this.currentSession, completedCount);
+      const modeLabel = this.currentSession.summaryMode === 'full' ? 'full' : 'lean';
       text += milestone
-        ? ` · 🧭 summary covers ${milestone.coveredCount} msgs`
-        : ` · 🧭 summaries on`;
+        ? ` · 🧭 summary covers ${milestone.coveredCount} msgs (${modeLabel})`
+        : ` · 🧭 summaries on (${modeLabel})`;
     }
     statsEl.textContent = text;
   }
@@ -2000,7 +1884,7 @@ export class RPGLiteView {
       narratorPurpose: base.narratorPurpose,
       maxContextMessages: base.maxContextMessages,
       shakeOpenings: base.shakeOpenings ?? false,
-      summaryEnabled: base.summaryEnabled ?? false,
+      summaryMode: base.summaryMode ?? 'off',
       ...(typeof base.summaryInterval === 'number' ? { summaryInterval: base.summaryInterval } : {}),
       milestones: clonedMilestones,
       conversation: clonedConversation
@@ -2063,7 +1947,7 @@ export class RPGLiteView {
     // in the model's context (the visible transcript itself is unchanged).
     const session = this.currentSession;
     const completedCount = session.conversation.filter(m => m.content.trim().length > 0).length;
-    const activeMilestone = session.summaryEnabled === true
+    const activeMilestone = summariesEnabled(session)
       ? latestValidMilestone(session, completedCount)
       : null;
     const markerAt = activeMilestone && activeMilestone.coveredCount < completedCount
@@ -2176,6 +2060,211 @@ export class RPGLiteView {
       void navigator.clipboard.writeText(milestone.summary);
       copyBtn.textContent = 'Copied';
       setTimeout(() => { copyBtn.textContent = 'Copy'; }, 1200);
+    });
+  }
+
+  /** Human-readable description of what each summary mode does, shown in settings. */
+  private summaryModeDescription(mode: RPGLiteSummaryMode): string {
+    if (mode === 'lean') {
+      return 'Rolling: each checkpoint folds the previous summary with only the newest messages. ' +
+        'Cheapest and works on low-context models, but summary errors can compound over time.';
+    }
+    if (mode === 'full') {
+      return 'Accurate: each checkpoint re-summarizes the entire story so far from scratch. ' +
+        'No drift, but costs more per checkpoint and needs a model that can hold the whole covered history.';
+    }
+    return 'No summaries. Only the last N messages (Max msgs) are sent to the model; older messages are dropped.';
+  }
+
+  /**
+   * Session settings modal: houses the per-session configuration that used to
+   * crowd the topbar (narrator model, temperature, context/summaries, retries).
+   * All controls save live to the session.
+   */
+  private showSessionSettingsModal(): void {
+    if (!this.currentSession) throw new Error('No current session.');
+    const session = this.currentSession;
+
+    const modelSelector = state.getModelSelector();
+    const selectedModels = modelSelector?.getSelectedModels() ?? {};
+    const modelName = selectedModels[session.narratorPurpose] ?? 'Not configured';
+
+    const mode: RPGLiteSummaryMode = session.summaryMode ?? 'off';
+    const summariesOn = mode !== 'off';
+    const temperature = session.temperature ?? 1.0;
+    const retryUnlimited = session.retryLimit === null;
+    const retryLimitValue = session.retryLimit ?? 10;
+
+    const overlay = document.createElement('div');
+    overlay.className = 'rpg-lite-action-editor-overlay';
+    overlay.innerHTML = `
+      <div class="rpg-lite-action-editor-modal">
+        <div class="rpg-lite-action-editor-header">
+          <h3>Session settings</h3>
+          <button class="rpg-lite-action-editor-close" title="Close">✕</button>
+        </div>
+        <div class="rpg-lite-action-editor-body">
+          <div class="rpg-lite-action-editor-field">
+            <label>Narrator model</label>
+            <div style="display:flex; align-items:center; gap:.6rem;">
+              <select id="rpg-lite-settings-purpose" class="rpg-lite-select">
+                <option value="prose">Prose</option>
+                <option value="creator">Creator</option>
+                <option value="editor">Editor</option>
+                <option value="rater">Rater</option>
+              </select>
+              <span id="rpg-lite-settings-model-name" style="opacity:.7; font-size:0.85rem;" title="Current model for this purpose">${modelName}</span>
+            </div>
+          </div>
+
+          <div class="rpg-lite-action-editor-field">
+            <label>Temperature: <span id="rpg-lite-settings-temp-value">${temperature.toFixed(1)}</span></label>
+            <input id="rpg-lite-settings-temperature" type="range" min="0" max="2" step="0.1" value="${temperature}" style="width:100%;" />
+          </div>
+
+          <div class="rpg-lite-action-editor-field">
+            <label>Summaries</label>
+            <div style="display:flex; align-items:center; gap:.6rem; flex-wrap:wrap;">
+              <select id="rpg-lite-settings-summary-mode" class="rpg-lite-select">
+                <option value="off"${mode === 'off' ? ' selected' : ''}>Off</option>
+                <option value="lean"${mode === 'lean' ? ' selected' : ''}>Lean (rolling)</option>
+                <option value="full"${mode === 'full' ? ' selected' : ''}>Full (accurate)</option>
+              </select>
+              <span style="opacity:.85;">every</span>
+              <input id="rpg-lite-settings-summary-interval" class="rpg-lite-input" type="number" min="2" step="1" value="${String(session.summaryInterval ?? RPGLiteView.DEFAULT_SUMMARY_INTERVAL)}" style="max-width:5rem;"${summariesOn ? '' : ' disabled'} />
+              <span style="opacity:.85;">messages</span>
+            </div>
+            <div id="rpg-lite-settings-summary-desc" style="opacity:.7; font-size:0.82rem; line-height:1.5;">${this.summaryModeDescription(mode)}</div>
+          </div>
+
+          <div class="rpg-lite-action-editor-field">
+            <label>Max messages (context window)</label>
+            <div style="display:flex; align-items:center; gap:.6rem;">
+              <input id="rpg-lite-settings-max-context" class="rpg-lite-input" type="number" min="2" step="1" value="${String(session.maxContextMessages)}" style="max-width:8rem;"${summariesOn ? ' disabled' : ''} />
+              <span id="rpg-lite-settings-max-context-note" style="opacity:.6; font-size:0.8rem; font-style:italic; ${summariesOn ? '' : 'display:none;'}">controlled by summary interval</span>
+            </div>
+          </div>
+
+          <div class="rpg-lite-action-editor-field">
+            <label style="display:flex; align-items:center; gap:.5rem; cursor:pointer;">
+              <input type="checkbox" id="rpg-lite-settings-shake"${session.shakeOpenings ? ' checked' : ''} />
+              <span>Shake openings (random divergent opening direction; adds one brainstorming call)</span>
+            </label>
+          </div>
+
+          <div class="rpg-lite-action-editor-field">
+            <label>Retries</label>
+            <div style="display:flex; align-items:center; gap:.6rem; flex-wrap:wrap;">
+              <input id="rpg-lite-settings-retry-limit" class="rpg-lite-input" type="number" min="1" step="1" value="${retryLimitValue}" style="max-width:5rem;"${retryUnlimited ? ' disabled' : ''} />
+              <label style="display:flex; align-items:center; gap:.35rem; cursor:pointer;" title="Unlimited retries">
+                <input type="checkbox" id="rpg-lite-settings-retry-unlimited"${retryUnlimited ? ' checked' : ''} />
+                <span>∞ unlimited</span>
+              </label>
+              <span id="rpg-lite-retries-remaining" class="rpg-lite-retries-remaining"></span>
+              <button id="rpg-lite-settings-retry-reset" class="rpg-lite-btn rpg-lite-btn-sm" title="Reset retry counter">↺ reset</button>
+            </div>
+          </div>
+        </div>
+        <div class="rpg-lite-action-editor-footer">
+          <button class="rpg-lite-btn rpg-lite-btn-primary" data-role="close">Done</button>
+        </div>
+      </div>
+    `;
+    document.body.appendChild(overlay);
+
+    const purposeSelect = overlay.querySelector('#rpg-lite-settings-purpose') as HTMLSelectElement;
+    const modelNameEl = overlay.querySelector('#rpg-lite-settings-model-name') as HTMLElement;
+    const tempSlider = overlay.querySelector('#rpg-lite-settings-temperature') as HTMLInputElement;
+    const tempValueEl = overlay.querySelector('#rpg-lite-settings-temp-value') as HTMLElement;
+    const summaryModeEl = overlay.querySelector('#rpg-lite-settings-summary-mode') as HTMLSelectElement;
+    const summaryIntervalEl = overlay.querySelector('#rpg-lite-settings-summary-interval') as HTMLInputElement;
+    const summaryDescEl = overlay.querySelector('#rpg-lite-settings-summary-desc') as HTMLElement;
+    const maxContextEl = overlay.querySelector('#rpg-lite-settings-max-context') as HTMLInputElement;
+    const maxContextNoteEl = overlay.querySelector('#rpg-lite-settings-max-context-note') as HTMLElement;
+    const shakeEl = overlay.querySelector('#rpg-lite-settings-shake') as HTMLInputElement;
+    const retryLimitEl = overlay.querySelector('#rpg-lite-settings-retry-limit') as HTMLInputElement;
+    const retryUnlimitedEl = overlay.querySelector('#rpg-lite-settings-retry-unlimited') as HTMLInputElement;
+    const retryResetBtn = overlay.querySelector('#rpg-lite-settings-retry-reset') as HTMLButtonElement;
+    const headerCloseBtn = overlay.querySelector('.rpg-lite-action-editor-close') as HTMLButtonElement;
+    const footerCloseBtn = overlay.querySelector('[data-role="close"]') as HTMLButtonElement;
+
+    purposeSelect.value = session.narratorPurpose;
+    this.updateRetriesDisplay();
+
+    purposeSelect.addEventListener('change', () => {
+      session.narratorPurpose = purposeSelect.value as RPGLiteModelPurpose;
+      const models = state.getModelSelector()?.getSelectedModels() ?? {};
+      modelNameEl.textContent = models[session.narratorPurpose] ?? 'Not configured';
+      void this.saveSession();
+    });
+
+    tempSlider.addEventListener('input', () => {
+      const temp = parseFloat(tempSlider.value);
+      session.temperature = temp;
+      tempValueEl.textContent = temp.toFixed(1);
+      void this.saveSession();
+    });
+
+    summaryModeEl.addEventListener('change', () => {
+      const newMode = summaryModeEl.value as RPGLiteSummaryMode;
+      session.summaryMode = newMode;
+      const on = newMode !== 'off';
+      summaryIntervalEl.disabled = !on;
+      maxContextEl.disabled = on;
+      maxContextNoteEl.style.display = on ? '' : 'none';
+      summaryDescEl.textContent = this.summaryModeDescription(newMode);
+      void this.saveSession();
+      void this.updateContextStats();
+      this.renderConversation();
+    });
+
+    summaryIntervalEl.addEventListener('input', () => {
+      session.summaryInterval = Math.max(2, Math.floor(Number(summaryIntervalEl.value) || RPGLiteView.DEFAULT_SUMMARY_INTERVAL));
+      void this.saveSession();
+    });
+
+    maxContextEl.addEventListener('input', () => {
+      session.maxContextMessages = Math.max(2, Math.floor(Number(maxContextEl.value)));
+      void this.saveSession();
+      void this.updateContextStats();
+    });
+
+    shakeEl.addEventListener('change', () => {
+      session.shakeOpenings = shakeEl.checked;
+      void this.saveSession();
+    });
+
+    retryUnlimitedEl.addEventListener('change', () => {
+      if (retryUnlimitedEl.checked) {
+        session.retryLimit = null;
+        retryLimitEl.disabled = true;
+      } else {
+        session.retryLimit = Math.max(1, Math.floor(Number(retryLimitEl.value) || 10));
+        retryLimitEl.disabled = false;
+      }
+      this.updateRetriesDisplay();
+      void this.saveSession();
+    });
+
+    retryLimitEl.addEventListener('input', () => {
+      if (session.retryLimit === null) return;
+      session.retryLimit = Math.max(1, Math.floor(Number(retryLimitEl.value) || 1));
+      this.updateRetriesDisplay();
+      void this.saveSession();
+    });
+
+    retryResetBtn.addEventListener('click', () => {
+      session.retriesUsed = 0;
+      this.updateRetriesDisplay();
+      this.renderConversation();
+      void this.saveSession();
+    });
+
+    const cleanup = () => { overlay.remove(); };
+    headerCloseBtn.addEventListener('click', cleanup);
+    footerCloseBtn.addEventListener('click', cleanup);
+    overlay.addEventListener('click', (e) => {
+      if (e.target === overlay) cleanup();
     });
   }
 

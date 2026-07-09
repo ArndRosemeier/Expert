@@ -4,6 +4,18 @@ export type RPGLiteModelPurpose = 'creator' | 'prose' | 'editor' | 'rater';
 
 export type RPGLiteMessageRole = 'user' | 'assistant';
 
+/**
+ * How periodical "story so far" summaries are produced.
+ * - 'off':  no summaries; context uses the last-N recency window (maxContextMessages).
+ * - 'lean': rolling — each checkpoint folds the previous summary with only the new
+ *            interval's messages. Cheap and low-context-friendly, but summary errors
+ *            compound because earlier raw messages are never re-read.
+ * - 'full': accurate — each checkpoint re-summarizes ALL messages up to the boundary
+ *            from scratch. No drift, but cost grows with story length and it needs a
+ *            model that can hold the whole covered prefix in one call.
+ */
+export type RPGLiteSummaryMode = 'off' | 'lean' | 'full';
+
 export interface RPGLiteMessageGenerationMeta {
   purpose: RPGLiteModelPurpose;
   model: string;
@@ -82,8 +94,8 @@ export interface RPGLiteSession {
   /** When true, opening generation is "shaken up" with a random divergent direction. Per-session. */
   shakeOpenings?: boolean;
 
-  /** When true, periodical "story so far" milestone summaries are generated and injected into context. */
-  summaryEnabled?: boolean;
+  /** Periodical "story so far" summary mode. Defaults to 'off' when undefined. */
+  summaryMode?: RPGLiteSummaryMode;
   /** How many new messages must accumulate past the last milestone before a new one is generated. Defaults to 50 when undefined. */
   summaryInterval?: number;
   /** Cumulative "story so far" summaries, each anchored to a conversation prefix length. */
@@ -106,8 +118,8 @@ export interface RPGLiteStartPreset {
   maxContextMessages: number;
   /** When true, sessions started from this template shake up the opening by default. */
   shakeOpenings?: boolean;
-  /** When true, sessions started from this template have periodical summaries enabled by default. */
-  summaryEnabled?: boolean;
+  /** Default summary mode for sessions started from this template. */
+  summaryMode?: RPGLiteSummaryMode;
   /** Default milestone interval (messages) for sessions started from this template. */
   summaryInterval?: number;
 }
