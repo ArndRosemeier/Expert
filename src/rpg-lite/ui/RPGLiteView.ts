@@ -203,7 +203,7 @@ export class RPGLiteView {
   }
 
   /** Default number of new messages that must accumulate past the last milestone before a new one is generated. */
-  private static readonly DEFAULT_SUMMARY_INTERVAL = 50;
+  private static readonly DEFAULT_SUMMARY_INTERVAL = 25;
 
   /**
    * Drop every milestone whose summary covers messages at or beyond `index`.
@@ -2416,6 +2416,7 @@ export class RPGLiteView {
 
     if (msg.generation) {
       const g = msg.generation;
+      infoParts.push(`🤖 ${g.model}`);
       if (g.usage) {
         infoParts.push(`🔤 ${g.usage.prompt_tokens}→${g.usage.completion_tokens}`);
       }
