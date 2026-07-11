@@ -440,13 +440,13 @@
       "count": 2
     },
     "@typescript-eslint/no-unnecessary-condition": {
-      "count": 6
+      "count": 4
     },
     "@typescript-eslint/no-unnecessary-type-assertion": {
-      "count": 37
+      "count": 34
     },
     "@typescript-eslint/promise-function-async": {
-      "count": 4
+      "count": 3
     },
     "@typescript-eslint/require-await": {
       "count": 1

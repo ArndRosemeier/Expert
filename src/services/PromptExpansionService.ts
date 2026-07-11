@@ -133,6 +133,9 @@ class PromptExpansionService {
             };
         }
         
+        // Dice-roll selection: {{selectonefrom a;b;c}} -> one random option.
+        expanded = this.expandSelectOneFrom(expanded);
+        
         // Handle global placeholders (check overrides first)
         for (const [name, provider] of this.globalProviders) {
             const placeholder = `{{${name}}}`;
@@ -179,6 +182,9 @@ class PromptExpansionService {
                 }
             };
         }
+        
+        // Dice-roll selection: {{selectonefrom a;b;c}} -> one random option.
+        expanded = this.expandSelectOneFrom(expanded);
         
         // Handle global placeholders (check overrides first)
         for (const [name, provider] of this.globalProviders) {
@@ -331,6 +337,9 @@ class PromptExpansionService {
             placeholders[name] = `Interactive placeholder: ${name} (shows input dialog)`;
         }
         
+        // Argument-based dice-roll selection
+        placeholders['selectonefrom a;b;c'] = 'Roll a die and return one of the listed options. Separate with semicolons (or commas when no semicolon is present), e.g. {{selectonefrom sword;axe;bow}}.';
+        
         return placeholders;
     }
     
@@ -394,6 +403,15 @@ class PromptExpansionService {
                 continue;
             }
             
+            // Handle dice-roll selection: {{selectonefrom a;b;c}} (or comma-separated)
+            if (placeholderName.startsWith('selectonefrom')) {
+                const isValidSelectOneFrom = /^selectonefrom\s+\S[^}]*$/.test(placeholderName);
+                if (!isValidSelectOneFrom) {
+                    errors.push(`Invalid selectonefrom placeholder: {{${placeholderName}}} - use {{selectonefrom a;b;c}} (semicolons, or commas when no semicolon is present)`);
+                }
+                continue;
+            }
+            
             // Handle special placeholders
             if (placeholderName === 'selected') {
                 // Selected text is handled specially
@@ -430,6 +448,28 @@ class PromptExpansionService {
     
     private escapeRegex(string: string): string {
         return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    }
+
+    /**
+     * Expand every {{selectonefrom a;b;c}} occurrence by rolling a die and
+     * returning one of the listed options. Semicolon is the separator; when the
+     * argument list contains no semicolon, commas are accepted instead (friendlier
+     * for simple lists). Whitespace around each option is trimmed and empty
+     * options are ignored. Re-rolls on every expansion (like {{noise_names}}).
+     *
+     * Public so callers that inject raw text (e.g. RPG Lite's adventure/prefix
+     * context) can support the placeholder without running the full expansion.
+     */
+    expandSelectOneFrom(template: string): string {
+        return template.replace(/\{\{selectonefrom\s+([^}]*)\}\}/gi, (_full: string, rawArgs: string): string => {
+            const separator = rawArgs.includes(';') ? ';' : ',';
+            const options = rawArgs.split(separator).map(option => option.trim()).filter(option => option.length > 0);
+            if (options.length === 0) {
+                return '';
+            }
+            const index = Math.floor(Math.random() * options.length);
+            return options[index]!;
+        });
     }
 
 

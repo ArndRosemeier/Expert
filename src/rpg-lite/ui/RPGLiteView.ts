@@ -95,13 +95,20 @@ async function buildContextMessages(session: RPGLiteSession): Promise<OpenRouter
   const settingsManager = await SettingsManager.getInstance();
   const expansionService = createPromptExpansionService(settingsManager);
   const expandedSystemPrompt = expansionService.expandPrompt(session.systemPrompt, {});
-  
+  // Safety net: resolve {{selectonefrom …}} here too so the literal placeholder can
+  // never reach the model. New sessions freeze the roll at creation (rollSelectPlaceholders),
+  // in which case no placeholder remains and this is a no-op. Legacy sessions or prompts
+  // edited live inside a running session are resolved here instead of leaking raw text —
+  // a raw placeholder would otherwise be "chosen" by the model, which strongly favours
+  // the first listed option (primacy bias).
+  const expandedPrefixContext = expansionService.expandSelectOneFrom(session.prefixContext);
+
   messages.push({ role: 'system', content: expandedSystemPrompt });
   messages.push({
     role: 'user',
     content:
       `ADVENTURE CONTEXT (always in context, not the system prompt):\n` +
-      `${session.prefixContext}`
+      `${expandedPrefixContext}`
   });
 
   // Only include messages that have content. Empty messages are in-flight placeholders
@@ -161,6 +168,18 @@ async function computeContextCharCount(session: RPGLiteSession): Promise<{ promp
   const messages = await buildContextMessages(session);
   const promptForLogging = messages.map((m) => `${m.role}: ${m.content}`).join('\n');
   return { promptChars: promptForLogging.length, messageCount: messages.length };
+}
+
+/**
+ * Resolve {{selectonefrom a;b;c}} dice-roll placeholders in scenario text once,
+ * at session creation, so each adventure gets a single stable roll instead of
+ * re-rolling every turn. Other placeholders (e.g. {{noise_names}}) are left
+ * untouched here — they stay dynamic and expand per turn during generation.
+ */
+async function rollSelectPlaceholders(text: string): Promise<string> {
+  const settingsManager = await SettingsManager.getInstance();
+  const expansionService = createPromptExpansionService(settingsManager);
+  return expansionService.expandSelectOneFrom(text);
 }
 
 function getOpeningInstruction(): string {
@@ -1018,13 +1037,19 @@ export class RPGLiteView {
             <span class="rpg-lite-section-title">System Prompt</span>
             <span style="font-size: 0.8rem; opacity: 0.7;">
               Available: <code style="background: rgba(255,255,255,0.1); padding: 0.1rem 0.3rem; border-radius: 3px;">{{noise_names}}</code>
+              <code style="background: rgba(255,255,255,0.1); padding: 0.1rem 0.3rem; border-radius: 3px;" title="Rolls a die once when a session starts and picks one option. Use ; to separate (or , when there is no ;).">{{selectonefrom a;b;c}}</code>
             </span>
           </div>
           <textarea id="rpg-lite-preset-editor-system" class="rpg-lite-textarea rpg-lite-preset-editor-textarea">${preset.systemPrompt}</textarea>
         </label>
 
         <label style="display:flex; flex-direction:column; gap:0.35rem;">
-          <span class="rpg-lite-section-title">Prefix Context</span>
+          <div style="display: flex; align-items: center; justify-content: space-between; gap: 0.5rem;">
+            <span class="rpg-lite-section-title">Prefix Context</span>
+            <span style="font-size: 0.8rem; opacity: 0.7;">
+              Available: <code style="background: rgba(255,255,255,0.1); padding: 0.1rem 0.3rem; border-radius: 3px;" title="Rolls a die once when a session starts and picks one option. Use ; to separate (or , when there is no ;).">{{selectonefrom a;b;c}}</code>
+            </span>
+          </div>
           <textarea id="rpg-lite-preset-editor-prefix" class="rpg-lite-textarea rpg-lite-preset-editor-textarea">${preset.prefixContext}</textarea>
           <div style="display:flex; gap:.5rem; align-items:center; flex-wrap:wrap;">
             <button id="rpg-lite-prefix-more-details" class="rpg-lite-btn rpg-lite-btn-sm" title="Add more details to the prefix context">More Details</button>
@@ -1167,8 +1192,8 @@ export class RPGLiteView {
       title: this.makeUniqueSessionTitle(preset.name),
       createdAt: now(),
       updatedAt: now(),
-      systemPrompt: preset.systemPrompt,
-      prefixContext: preset.prefixContext,
+      systemPrompt: await rollSelectPlaceholders(preset.systemPrompt),
+      prefixContext: await rollSelectPlaceholders(preset.prefixContext),
       narratorPurpose: preset.narratorPurpose ?? this.defaultNarratorPurpose,
       maxContextMessages: preset.maxContextMessages,
       shakeOpenings: preset.shakeOpenings ?? false,
@@ -1487,8 +1512,8 @@ export class RPGLiteView {
         title: this.makeUniqueSessionTitle(split.title),
         createdAt: now(),
         updatedAt: now(),
-        systemPrompt: split.systemPrompt,
-        prefixContext: split.prefixContext,
+        systemPrompt: await rollSelectPlaceholders(split.systemPrompt),
+        prefixContext: await rollSelectPlaceholders(split.prefixContext),
         narratorPurpose,
         maxContextMessages: maxContext,
         shakeOpenings,
