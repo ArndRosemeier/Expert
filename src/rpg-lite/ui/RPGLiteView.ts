@@ -958,7 +958,9 @@ export class RPGLiteView {
       ...(preset.narratorPurpose !== undefined ? { narratorPurpose: preset.narratorPurpose } : {}),
       maxContextMessages: preset.maxContextMessages,
       shakeOpenings: preset.shakeOpenings ?? false,
-      summaryMode: preset.summaryMode ?? 'off',
+      // Carry the source's summary mode; fall back to the lean default for legacy
+      // templates that predate the setting.
+      summaryMode: preset.summaryMode ?? 'lean',
       ...(typeof preset.summaryInterval === 'number' ? { summaryInterval: preset.summaryInterval } : {})
     };
 
@@ -1210,7 +1212,9 @@ export class RPGLiteView {
       narratorPurpose: preset.narratorPurpose ?? this.defaultNarratorPurpose,
       maxContextMessages: preset.maxContextMessages,
       shakeOpenings: preset.shakeOpenings ?? false,
-      summaryMode: preset.summaryMode ?? 'off',
+      // Inherit the template's summary mode; fall back to the lean default for legacy
+      // templates that predate the setting.
+      summaryMode: preset.summaryMode ?? 'lean',
       ...(typeof preset.summaryInterval === 'number' ? { summaryInterval: preset.summaryInterval } : {}),
       milestones: [],
       conversation: []
@@ -1512,7 +1516,9 @@ export class RPGLiteView {
         prefixContext: split.prefixContext,
         // New presets use default narrator (omit property)
         maxContextMessages: maxContext,
-        shakeOpenings
+        shakeOpenings,
+        // Lean summaries are the economical default for new templates.
+        summaryMode: 'lean'
       };
 
       const storage = await StorageService.getInstance();
@@ -1531,6 +1537,8 @@ export class RPGLiteView {
         narratorPurpose,
         maxContextMessages: maxContext,
         shakeOpenings,
+        // Lean summaries are the economical default for new sessions.
+        summaryMode: 'lean',
         conversation: []
       };
 
