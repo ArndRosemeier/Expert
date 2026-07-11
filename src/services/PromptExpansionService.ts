@@ -455,21 +455,43 @@ class PromptExpansionService {
      * returning one of the listed options. Semicolon is the separator; when the
      * argument list contains no semicolon, commas are accepted instead (friendlier
      * for simple lists). Whitespace around each option is trimmed and empty
-     * options are ignored. Re-rolls on every expansion (like {{noise_names}}).
+     * options are ignored.
+     *
+     * When `seed` is omitted the roll is random on every call (like {{noise_names}}).
+     * When a `seed` is supplied the roll is deterministic: the same seed always yields
+     * the same picks, so a caller can keep a selection stable across repeated
+     * expansions and reshuffle it only by changing the seed.
      *
      * Public so callers that inject raw text (e.g. RPG Lite's adventure/prefix
      * context) can support the placeholder without running the full expansion.
      */
-    expandSelectOneFrom(template: string): string {
+    expandSelectOneFrom(template: string, seed?: number): string {
+        let occurrence = 0;
         return template.replace(/\{\{selectonefrom\s+([^}]*)\}\}/gi, (_full: string, rawArgs: string): string => {
             const separator = rawArgs.includes(';') ? ';' : ',';
             const options = rawArgs.split(separator).map(option => option.trim()).filter(option => option.length > 0);
             if (options.length === 0) {
                 return '';
             }
-            const index = Math.floor(Math.random() * options.length);
-            return options[index]!;
+            const roll = seed === undefined ? Math.random() : this.seededUnitFloat(seed, occurrence);
+            occurrence += 1;
+            const index = Math.floor(roll * options.length);
+            const chosen = options[index]!;
+            console.log(`[selectonefrom] chose "${chosen}" (index ${index} of ${options.length}) from [${options.join(', ')}]`);
+            return chosen;
         });
+    }
+
+    /**
+     * Deterministic PRNG (mulberry32-style) mapping a (seed, offset) pair to a float
+     * in [0, 1). Used by {{selectonefrom …}} so that, for a fixed seed, each successive
+     * placeholder occurrence gets its own stable roll.
+     */
+    private seededUnitFloat(seed: number, offset: number): number {
+        let t = (Math.imul(offset ^ seed, 0x6d2b79f5) + seed) >>> 0;
+        t = Math.imul(t ^ (t >>> 15), t | 1);
+        t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+        return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
     }
 
 

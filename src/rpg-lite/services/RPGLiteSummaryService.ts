@@ -1,5 +1,7 @@
 import { OpenRouterClient, OpenRouterCompletionMeta, OpenRouterMessage } from '../../OpenRouterClient';
 import { getPromptText } from '../../PromptManager';
+import { SettingsManager } from '../../SettingsManager';
+import { createPromptExpansionService } from '../../services/PromptExpansionService';
 import {
   RPGLiteChatMessage,
   RPGLiteMilestone,
@@ -51,10 +53,18 @@ export class RPGLiteSummaryService {
       throw new Error('RPGLiteSummaryService.buildMilestone called with no new messages.');
     }
 
+    // Resolve {{selectonefrom …}} in the grounding prompts using the session's seed so
+    // the summarizer sees the same fixed picks the narrator is playing with, not the
+    // raw placeholder text.
+    const settingsManager = await SettingsManager.getInstance();
+    const expansionService = createPromptExpansionService(settingsManager);
+    const groundingSystemPrompt = expansionService.expandSelectOneFrom(session.systemPrompt, session.selectionSeed);
+    const groundingPrefixContext = expansionService.expandSelectOneFrom(session.prefixContext, session.selectionSeed);
+
     const template = getPromptText('rpg_lite_summarize');
     const prompt = template
-      .split('{{system_prompt}}').join(session.systemPrompt)
-      .split('{{prefix_context}}').join(session.prefixContext)
+      .split('{{system_prompt}}').join(groundingSystemPrompt)
+      .split('{{prefix_context}}').join(groundingPrefixContext)
       .split('{{previous_summary}}').join(previousSummary.trim().length > 0 ? previousSummary : '(none yet)')
       .split('{{new_messages}}').join(formatMessagesForSummary(newMessages));
 

@@ -91,17 +91,19 @@ function latestValidMilestone(session: RPGLiteSession, completedCount: number): 
 async function buildContextMessages(session: RPGLiteSession): Promise<OpenRouterMessage[]> {
   const messages: OpenRouterMessage[] = [];
   
-  // Expand placeholders in systemPrompt on every call for fresh name inspiration
   const settingsManager = await SettingsManager.getInstance();
   const expansionService = createPromptExpansionService(settingsManager);
-  const expandedSystemPrompt = expansionService.expandPrompt(session.systemPrompt, {});
-  // Safety net: resolve {{selectonefrom …}} here too so the literal placeholder can
-  // never reach the model. New sessions freeze the roll at creation (rollSelectPlaceholders),
-  // in which case no placeholder remains and this is a no-op. Legacy sessions or prompts
-  // edited live inside a running session are resolved here instead of leaking raw text —
-  // a raw placeholder would otherwise be "chosen" by the model, which strongly favours
-  // the first listed option (primacy bias).
-  const expandedPrefixContext = expansionService.expandSelectOneFrom(session.prefixContext);
+  // Resolve {{selectonefrom …}} first, using the session's selectionSeed. The seed is
+  // fixed for a playthrough, so the chosen options stay stable turn-to-turn (a scenario
+  // pick won't contradict the already-written story); it is re-minted whenever the
+  // opening is (re)generated, so retrying the first prompt reshuffles the picks.
+  // Doing this before expandPrompt also guarantees the literal placeholder can never
+  // reach the model (a raw placeholder would be "chosen" by the model, which strongly
+  // favours the first listed option — primacy bias). Other placeholders like
+  // {{noise_names}} stay raw and expand fresh every turn via expandPrompt.
+  const systemWithSelections = expansionService.expandSelectOneFrom(session.systemPrompt, session.selectionSeed);
+  const expandedSystemPrompt = expansionService.expandPrompt(systemWithSelections, {});
+  const expandedPrefixContext = expansionService.expandSelectOneFrom(session.prefixContext, session.selectionSeed);
 
   messages.push({ role: 'system', content: expandedSystemPrompt });
   messages.push({
@@ -171,15 +173,12 @@ async function computeContextCharCount(session: RPGLiteSession): Promise<{ promp
 }
 
 /**
- * Resolve {{selectonefrom a;b;c}} dice-roll placeholders in scenario text once,
- * at session creation, so each adventure gets a single stable roll instead of
- * re-rolling every turn. Other placeholders (e.g. {{noise_names}}) are left
- * untouched here — they stay dynamic and expand per turn during generation.
+ * Mint a fresh seed for {{selectonefrom …}} rolls. A session keeps one seed so its
+ * picks stay stable turn-to-turn; a new seed is minted whenever the opening message is
+ * (re)generated, which reshuffles the picks (e.g. when retrying the very first prompt).
  */
-async function rollSelectPlaceholders(text: string): Promise<string> {
-  const settingsManager = await SettingsManager.getInstance();
-  const expansionService = createPromptExpansionService(settingsManager);
-  return expansionService.expandSelectOneFrom(text);
+function newSelectionSeed(): number {
+  return Math.floor(Math.random() * 0x100000000);
 }
 
 function getOpeningInstruction(): string {
@@ -391,6 +390,14 @@ export class RPGLiteView {
   private async loadAll(): Promise<void> {
     const storage = await StorageService.getInstance();
     this.sessions = await storage.listRPGLiteSessions<RPGLiteSession>();
+    // Migrate sessions persisted before selectionSeed existed: mint a stable seed once
+    // so their {{selectonefrom …}} picks stay consistent instead of re-rolling per turn.
+    for (const session of this.sessions) {
+      if (typeof session.selectionSeed !== 'number') {
+        session.selectionSeed = newSelectionSeed();
+        await storage.saveRPGLiteSession(session);
+      }
+    }
     this.sessions.sort((a, b) => b.updatedAt - a.updatedAt);
     this.presets = await storage.listRPGLiteStartPresets<RPGLiteStartPreset>();
     this.presets.sort((a, b) => b.updatedAt - a.updatedAt);
@@ -1037,7 +1044,7 @@ export class RPGLiteView {
             <span class="rpg-lite-section-title">System Prompt</span>
             <span style="font-size: 0.8rem; opacity: 0.7;">
               Available: <code style="background: rgba(255,255,255,0.1); padding: 0.1rem 0.3rem; border-radius: 3px;">{{noise_names}}</code>
-              <code style="background: rgba(255,255,255,0.1); padding: 0.1rem 0.3rem; border-radius: 3px;" title="Rolls a die once when a session starts and picks one option. Use ; to separate (or , when there is no ;).">{{selectonefrom a;b;c}}</code>
+              <code style="background: rgba(255,255,255,0.1); padding: 0.1rem 0.3rem; border-radius: 3px;" title="Picks one option at random. The pick stays fixed while you play and only reshuffles when the opening is (re)generated (e.g. retrying the first message). Use ; to separate (or , when there is no ;).">{{selectonefrom a;b;c}}</code>
             </span>
           </div>
           <textarea id="rpg-lite-preset-editor-system" class="rpg-lite-textarea rpg-lite-preset-editor-textarea">${preset.systemPrompt}</textarea>
@@ -1047,7 +1054,7 @@ export class RPGLiteView {
           <div style="display: flex; align-items: center; justify-content: space-between; gap: 0.5rem;">
             <span class="rpg-lite-section-title">Prefix Context</span>
             <span style="font-size: 0.8rem; opacity: 0.7;">
-              Available: <code style="background: rgba(255,255,255,0.1); padding: 0.1rem 0.3rem; border-radius: 3px;" title="Rolls a die once when a session starts and picks one option. Use ; to separate (or , when there is no ;).">{{selectonefrom a;b;c}}</code>
+              Available: <code style="background: rgba(255,255,255,0.1); padding: 0.1rem 0.3rem; border-radius: 3px;" title="Picks one option at random. The pick stays fixed while you play and only reshuffles when the opening is (re)generated (e.g. retrying the first message). Use ; to separate (or , when there is no ;).">{{selectonefrom a;b;c}}</code>
             </span>
           </div>
           <textarea id="rpg-lite-preset-editor-prefix" class="rpg-lite-textarea rpg-lite-preset-editor-textarea">${preset.prefixContext}</textarea>
@@ -1175,6 +1182,11 @@ export class RPGLiteView {
     if (!session) {
       throw new Error(`RPG Lite session not found: ${sessionId}`);
     }
+    // Migrate sessions persisted before selectionSeed existed (see loadAll).
+    if (typeof session.selectionSeed !== 'number') {
+      session.selectionSeed = newSelectionSeed();
+      await storage.saveRPGLiteSession(session);
+    }
     this.currentSession = session;
     await this.loadAll();
     this.renderSession();
@@ -1192,8 +1204,9 @@ export class RPGLiteView {
       title: this.makeUniqueSessionTitle(preset.name),
       createdAt: now(),
       updatedAt: now(),
-      systemPrompt: await rollSelectPlaceholders(preset.systemPrompt),
-      prefixContext: await rollSelectPlaceholders(preset.prefixContext),
+      systemPrompt: preset.systemPrompt,
+      prefixContext: preset.prefixContext,
+      selectionSeed: newSelectionSeed(),
       narratorPurpose: preset.narratorPurpose ?? this.defaultNarratorPurpose,
       maxContextMessages: preset.maxContextMessages,
       shakeOpenings: preset.shakeOpenings ?? false,
@@ -1512,8 +1525,9 @@ export class RPGLiteView {
         title: this.makeUniqueSessionTitle(split.title),
         createdAt: now(),
         updatedAt: now(),
-        systemPrompt: await rollSelectPlaceholders(split.systemPrompt),
-        prefixContext: await rollSelectPlaceholders(split.prefixContext),
+        systemPrompt: split.systemPrompt,
+        prefixContext: split.prefixContext,
+        selectionSeed: newSelectionSeed(),
         narratorPurpose,
         maxContextMessages: maxContext,
         shakeOpenings,
@@ -1906,6 +1920,7 @@ export class RPGLiteView {
       updatedAt: now(),
       systemPrompt: base.systemPrompt,
       prefixContext: base.prefixContext,
+      selectionSeed: base.selectionSeed,
       narratorPurpose: base.narratorPurpose,
       maxContextMessages: base.maxContextMessages,
       shakeOpenings: base.shakeOpenings ?? false,
@@ -2904,11 +2919,12 @@ export class RPGLiteView {
       const settingsManager = await SettingsManager.getInstance();
       const expansionService = createPromptExpansionService(settingsManager);
 
-      // Fill user-provided placeholders literally, then expand {{noise_opening}}
-      // (and any other global placeholders) via the expansion service.
+      // Fill user-provided placeholders literally, resolving {{selectonefrom …}} with the
+      // session seed so the brainstorm is grounded in the same scenario picks the opening
+      // will use, then expand {{noise_opening}} (and other global placeholders).
       const filled = template
-        .split('{{system_prompt}}').join(session.systemPrompt)
-        .split('{{prefix_context}}').join(session.prefixContext)
+        .split('{{system_prompt}}').join(expansionService.expandSelectOneFrom(session.systemPrompt, session.selectionSeed))
+        .split('{{prefix_context}}').join(expansionService.expandSelectOneFrom(session.prefixContext, session.selectionSeed))
         .split('{{direction_count}}').join(String(DIRECTION_COUNT));
       const prompt = expansionService.expandPrompt(filled, {});
 
@@ -2943,6 +2959,13 @@ export class RPGLiteView {
     if (this.isStreaming) return;
 
     const session = this.currentSession;
+
+    // Re-roll {{selectonefrom …}} picks for this playthrough: the opening is being
+    // (re)generated, so a fresh seed reshuffles scenario choices. Retrying the first
+    // prompt therefore yields a new selection without recreating the session, while
+    // later turns reuse this seed and stay stable.
+    session.selectionSeed = newSelectionSeed();
+
     let assistantMsg: RPGLiteChatMessage;
     
     if (existingMessage) {

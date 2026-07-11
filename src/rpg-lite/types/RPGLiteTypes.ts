@@ -82,6 +82,14 @@ export interface RPGLiteSession {
   systemPrompt: string;
   prefixContext: string;
 
+  /**
+   * Deterministic seed for {{selectonefrom …}} dice-roll placeholders in the system
+   * prompt / prefix context. A fixed seed keeps every roll stable across turns so the
+   * chosen scenario stays coherent while playing; a new seed is minted whenever the
+   * opening message is (re)generated, so retrying the first prompt reshuffles the picks.
+   */
+  selectionSeed: number;
+
   narratorPurpose: RPGLiteModelPurpose;
   maxContextMessages: number;
   temperature?: number;  // Optional temperature override for this session (0-2)
