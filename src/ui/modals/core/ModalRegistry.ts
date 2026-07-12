@@ -8,7 +8,7 @@ import { IModal, ModalRegistryEntry, ModalState, ModalEventEmitter, ModalEvents 
  * Simple event emitter for modal events
  */
 class SimpleEventEmitter implements ModalEventEmitter {
-    private handlers: Map<keyof ModalEvents, ((data: any) => void)[]> = new Map();
+    private handlers: Map<keyof ModalEvents, ((data: ModalEvents[keyof ModalEvents]) => void)[]> = new Map();
 
     emit<K extends keyof ModalEvents>(event: K, data: ModalEvents[K]): void {
         const eventHandlers = this.handlers.get(event);
@@ -21,13 +21,13 @@ class SimpleEventEmitter implements ModalEventEmitter {
         if (!this.handlers.has(event)) {
             this.handlers.set(event, []);
         }
-        this.handlers.get(event)!.push(handler as (data: any) => void);
+        this.handlers.get(event)!.push(handler as (data: ModalEvents[keyof ModalEvents]) => void);
     }
 
     off<K extends keyof ModalEvents>(event: K, handler: (data: ModalEvents[K]) => void): void {
         const eventHandlers = this.handlers.get(event);
         if (eventHandlers) {
-            const index = eventHandlers.indexOf(handler as (data: any) => void);
+            const index = eventHandlers.indexOf(handler as (data: ModalEvents[keyof ModalEvents]) => void);
             if (index > -1) {
                 eventHandlers.splice(index, 1);
             }
@@ -39,7 +39,7 @@ class SimpleEventEmitter implements ModalEventEmitter {
  * Modal registry manages all modal instances
  */
 export class ModalRegistry {
-    private static instance: ModalRegistry;
+    private static instance: ModalRegistry | undefined;
     private modals: Map<string, ModalRegistryEntry> = new Map();
     private eventEmitter: ModalEventEmitter = new SimpleEventEmitter();
     private activeModals: string[] = [];
@@ -50,9 +50,7 @@ export class ModalRegistry {
      * Get the singleton instance
      */
     public static getInstance(): ModalRegistry {
-        if (!ModalRegistry.instance) {
-            ModalRegistry.instance = new ModalRegistry();
-        }
+        ModalRegistry.instance ??= new ModalRegistry();
         return ModalRegistry.instance;
     }
 

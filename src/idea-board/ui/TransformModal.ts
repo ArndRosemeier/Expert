@@ -439,8 +439,7 @@ export class TransformModal extends BaseModal {
     }
     
     // History item clicks
-    if (this.historyContainer) {
-      this.historyContainer.addEventListener('click', (event) => {
+    this.historyContainer.addEventListener('click', (event) => {
         const deleteButton = (event.target as HTMLElement).closest('.history-item-delete');
         if (deleteButton) {
           // Handle delete button click
@@ -469,17 +468,14 @@ export class TransformModal extends BaseModal {
           }
         }
       });
-    }
     
     // Enter key handling (Ctrl+Enter to submit)
-    if (this.instructionTextarea) {
-      this.instructionTextarea.addEventListener('keydown', (event) => {
+    this.instructionTextarea.addEventListener('keydown', (event) => {
         if (event.ctrlKey && event.key === 'Enter') {
           event.preventDefault();
           void this.handleTransform();
         }
       });
-    }
   }
 
   private async handleTransform(): Promise<void> {

@@ -5,6 +5,18 @@ import { ProjectManager } from '../../ProjectManager';
 
 import { AI_ASSISTANT_EMOJI } from '../../constants';
 
+interface ConversationalGenerationWindow extends Window {
+    conversationalModal?: ConversationalGenerationModal;
+}
+
+function requireSelectElement(id: string): HTMLSelectElement {
+    const element = document.getElementById(id);
+    if (!(element instanceof HTMLSelectElement)) {
+        throw new Error(`Select element not found: ${id}`);
+    }
+    return element;
+}
+
 export interface ConversationalGenerationModalConfig {
     projectManager: ProjectManager;
     node: DocumentNode;
@@ -493,7 +505,7 @@ export class ConversationalGenerationModal extends BaseModal {
         await super.open();
         
         // Expose modal instance to window for event handlers
-        (window as any).conversationalModal = this;
+        (window as ConversationalGenerationWindow).conversationalModal = this;
         
         this.updateValidation();
     }
@@ -573,29 +585,23 @@ export class ConversationalGenerationModal extends BaseModal {
         const contextCleaningLevels = this.getContextCleaningLevels();
         const coherenceLevels = this.getCoherenceLevels();
         
-        // Update context cleaning dropdown
-        const contextSelect = document.getElementById('context-prune-level-select') as HTMLSelectElement;
-        if (contextSelect) {
-            const currentValue = this.contextPruneLevel;
-            contextSelect.innerHTML = `
-                <option value="-1">Don't clean context</option>
-                ${contextCleaningLevels.map(level => 
-                    `<option value="${level.value}" ${currentValue === level.value ? 'selected' : ''}>${level.name}</option>`
-                ).join('')}
-            `;
-        }
+        const contextSelect = requireSelectElement('context-prune-level-select');
+        const currentContextValue = this.contextPruneLevel;
+        contextSelect.innerHTML = `
+            <option value="-1">Don't clean context</option>
+            ${contextCleaningLevels.map(level => 
+                `<option value="${level.value}" ${currentContextValue === level.value ? 'selected' : ''}>${level.name}</option>`
+            ).join('')}
+        `;
         
-        // Update coherence dropdown
-        const coherenceSelect = document.getElementById('coherence-level-select') as HTMLSelectElement;
-        if (coherenceSelect) {
-            const currentValue = this.coherenceLevel;
-            coherenceSelect.innerHTML = `
-                <option value="-1">Don't check coherence</option>
-                ${coherenceLevels.map(level => 
-                    `<option value="${level.value}" ${currentValue === level.value ? 'selected' : ''}>${level.name}</option>`
-                ).join('')}
-            `;
-        }
+        const coherenceSelect = requireSelectElement('coherence-level-select');
+        const currentCoherenceValue = this.coherenceLevel;
+        coherenceSelect.innerHTML = `
+            <option value="-1">Don't check coherence</option>
+            ${coherenceLevels.map(level => 
+                `<option value="${level.value}" ${currentCoherenceValue === level.value ? 'selected' : ''}>${level.name}</option>`
+            ).join('')}
+        `;
     }
 
     /**
@@ -603,12 +609,10 @@ export class ConversationalGenerationModal extends BaseModal {
      */
     private updateInlineControlStyles(): void {
         const updateControlStyle = (selectId: string, value: number) => {
-            const select = document.getElementById(selectId) as HTMLSelectElement;
-            if (select) {
-                const control = select.closest('.inline-control');
-                if (control) {
-                    control.classList.toggle('none-selected', value === -1);
-                }
+            const select = requireSelectElement(selectId);
+            const control = select.closest('.inline-control');
+            if (control) {
+                control.classList.toggle('none-selected', value === -1);
             }
         };
 
@@ -624,9 +628,11 @@ export class ConversationalGenerationModal extends BaseModal {
      */
     private updateValidation(): void {
         const validationMessage = document.getElementById('validation-message');
-        const applyButton = document.getElementById('apply-settings-btn') as HTMLButtonElement;
+        const applyButton = document.getElementById('apply-settings-btn');
         
-        if (!validationMessage || !applyButton) return;
+        if (!validationMessage || !(applyButton instanceof HTMLButtonElement)) {
+            return;
+        }
 
         const errors: string[] = [];
 
@@ -684,42 +690,39 @@ export class ConversationalGenerationModal extends BaseModal {
      * Set the main UI level dropdown values
      */
     private setMainUILevels(): void {
-        const draftSelector = document.getElementById('draft-level-selector') as HTMLSelectElement;
-        const contentSelector = document.getElementById('content-level-selector') as HTMLSelectElement;
-        const contextPruneSelector = document.getElementById('context-prune-level-selector') as HTMLSelectElement;
-        const coherenceSelector = document.getElementById('coherence-level-selector') as HTMLSelectElement;
-        const autofixSelector = document.getElementById('autofix-severity-selector') as HTMLSelectElement;
-        const contextRatingThresholdSelector = document.getElementById('context-rating-threshold-selector') as HTMLSelectElement;
+        const draftSelector = requireSelectElement('draft-level-selector');
+        const contentSelector = requireSelectElement('content-level-selector');
+        const contextPruneSelector = requireSelectElement('context-prune-level-selector');
+        const coherenceSelector = requireSelectElement('coherence-level-selector');
+        const autofixSelector = requireSelectElement('autofix-severity-selector');
+        const contextRatingThresholdSelector = requireSelectElement('context-rating-threshold-selector');
         
-        if (draftSelector) draftSelector.value = this.draftLevel.toString();
-        if (contentSelector) contentSelector.value = this.contentLevel.toString();
-        if (contextPruneSelector) contextPruneSelector.value = this.contextPruneLevel.toString();
-        if (coherenceSelector) coherenceSelector.value = this.coherenceLevel.toString();
-        if (autofixSelector) autofixSelector.value = this.autofixSeverity.toString();
-        if (contextRatingThresholdSelector) contextRatingThresholdSelector.value = this.contextRatingThreshold.toString();
+        draftSelector.value = this.draftLevel.toString();
+        contentSelector.value = this.contentLevel.toString();
+        contextPruneSelector.value = this.contextPruneLevel.toString();
+        coherenceSelector.value = this.coherenceLevel.toString();
+        autofixSelector.value = this.autofixSeverity.toString();
+        contextRatingThresholdSelector.value = this.contextRatingThreshold.toString();
         
-        // Trigger change events to update any dependent UI
-        [draftSelector, contentSelector, contextPruneSelector, coherenceSelector, autofixSelector, contextRatingThresholdSelector].forEach(selector => {
-            if (selector) {
-                selector.dispatchEvent(new Event('change', { bubbles: true }));
-            }
-        });
+        for (const selector of [draftSelector, contentSelector, contextPruneSelector, coherenceSelector, autofixSelector, contextRatingThresholdSelector]) {
+            selector.dispatchEvent(new Event('change', { bubbles: true }));
+        }
     }
 
     /**
      * Trigger the main generate button
      */
     private triggerMainGeneration(): void {
-        const generateButton = document.getElementById('node-generate-btn') as HTMLButtonElement;
-        if (generateButton) {
-            // Small delay to ensure UI is updated
-            setTimeout(() => {
-                generateButton.click();
-            }, 100);
-        } else {
+        const generateButton = document.getElementById('node-generate-btn');
+        if (!(generateButton instanceof HTMLButtonElement)) {
             console.error('Main generate button not found');
             alert('Could not find the main generate button. Please use the Generate button in the main interface.');
+            return;
         }
+
+        setTimeout(() => {
+            generateButton.click();
+        }, 100);
     }
 
     /**
@@ -727,7 +730,7 @@ export class ConversationalGenerationModal extends BaseModal {
      */
     public override async close(): Promise<void> {
         // Clean up window reference
-        delete (window as any).conversationalModal;
+        delete (window as ConversationalGenerationWindow).conversationalModal;
         await super.close();
     }
 } 

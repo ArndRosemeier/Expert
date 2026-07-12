@@ -1,26 +1,30 @@
-type Listener<T extends any[] = any[]> = (...args: T) => void;
+type Listener<T extends readonly unknown[] = readonly unknown[]> = (...args: T) => void;
 
-export class EventEmitter<Events extends Record<string, any[]>> {
+export class EventEmitter<Events extends Record<string, readonly unknown[]>> {
     private listeners: { [K in keyof Events]?: Listener<Events[K]>[] } = {};
 
     on<K extends keyof Events>(eventName: K, listener: Listener<Events[K]>): void {
-        if (!this.listeners[eventName]) {
-            this.listeners[eventName] = [];
+        const existing = this.listeners[eventName];
+        if (existing) {
+            existing.push(listener);
+        } else {
+            this.listeners[eventName] = [listener];
         }
-        this.listeners[eventName]!.push(listener);
     }
 
     off<K extends keyof Events>(eventName: K, listener: Listener<Events[K]>): void {
-        if (!this.listeners[eventName]) {
+        const existing = this.listeners[eventName];
+        if (!existing) {
             return;
         }
-        this.listeners[eventName] = this.listeners[eventName]!.filter(l => l !== listener);
+        this.listeners[eventName] = existing.filter(l => l !== listener);
     }
 
     emit<K extends keyof Events>(eventName: K, ...args: Events[K]): void {
-        if (!this.listeners[eventName]) {
+        const existing = this.listeners[eventName];
+        if (!existing) {
             return;
         }
-        this.listeners[eventName]!.forEach(listener => { listener(...args); });
+        existing.forEach(listener => { listener(...args); });
     }
-} 
+}

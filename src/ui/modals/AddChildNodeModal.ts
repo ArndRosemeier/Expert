@@ -100,7 +100,7 @@ export class AddChildNodeModal extends BaseModal {
         });
 
         // Update parent checkbox - show in AI mode or in manual mode when there's draft content
-        const showCheckbox = this.childModalState.mode === 'ai' || (this.childModalState.mode === 'simple' && this.childModalState.manualDraft.trim() !== '');
+        const showCheckbox = this.shouldShowUpdateParentCheckbox();
         const checkboxContainer = createElement('label', {
             attributes: { 
                 style: `display: ${showCheckbox ? 'flex' : 'none'}; align-items: center; margin-bottom: 16px; cursor: pointer;`
@@ -113,7 +113,7 @@ export class AddChildNodeModal extends BaseModal {
                 checked: this.childModalState.updateParent ? 'checked' : '',
                 style: 'margin-right: 8px;'
             }
-        }) as HTMLInputElement;
+        });
 
         const checkboxLabel = createElement('span', {
             content: 'Update parent content to reference new child section'
@@ -140,7 +140,7 @@ export class AddChildNodeModal extends BaseModal {
             attributes: { 
                 style: 'padding: 8px 16px; border: 1px solid #ccc; background: #f5f5f5; border-radius: 4px; cursor: pointer;'
             }
-        }) as HTMLButtonElement;
+        });
 
         cancelButton.addEventListener('click', (e) => {
             e.preventDefault();
@@ -157,7 +157,7 @@ export class AddChildNodeModal extends BaseModal {
                 style: `padding: 8px 16px; border: none; background: ${canCreate && !isCreating ? '#4CAF50' : '#ccc'}; color: white; border-radius: 4px; cursor: ${canCreate && !isCreating ? 'pointer' : 'not-allowed'};`,
                 ...(canCreate && !isCreating ? {} : { disabled: 'disabled' })
             }
-        }) as HTMLButtonElement;
+        });
 
         createButton.addEventListener('click', (e) => {
             e.preventDefault();
@@ -259,7 +259,7 @@ export class AddChildNodeModal extends BaseModal {
                 value: this.childModalState.manualTitle,
                 'data-manual-input': 'true'
             }
-        }) as HTMLInputElement;
+        });
 
         titleInput.addEventListener('input', (e) => {
             const target = e.target as HTMLInputElement;
@@ -276,9 +276,9 @@ export class AddChildNodeModal extends BaseModal {
                 const cursorPosition = target.selectionStart;
                 this.refreshContent();
                 // Restore focus and cursor position after refresh
-                void void setTimeout(() => {
-                    const newInput = this.element?.querySelector('[data-manual-input="true"]') as HTMLInputElement;
-                    if (newInput) {
+                void setTimeout(() => {
+                    const newInput = this.element?.querySelector('[data-manual-input="true"]');
+                    if (newInput instanceof HTMLInputElement) {
                         newInput.focus();
                         newInput.setSelectionRange(cursorPosition ?? 0, cursorPosition ?? 0);
                     }
@@ -305,7 +305,7 @@ export class AddChildNodeModal extends BaseModal {
                 value: this.childModalState.manualDraft,
                 'data-manual-draft': 'true'
             }
-        }) as HTMLTextAreaElement;
+        });
 
         draftTextarea.addEventListener('input', (e) => {
             const target = e.target as HTMLTextAreaElement;
@@ -322,11 +322,11 @@ export class AddChildNodeModal extends BaseModal {
                 const cursorPosition = target.selectionStart;
                 this.refreshContent();
                 // Restore focus and cursor position after refresh
-                void void setTimeout(() => {
-                    const newTextarea = this.element?.querySelector('[data-manual-draft="true"]') as HTMLTextAreaElement;
-                    if (newTextarea) {
+                void setTimeout(() => {
+                    const newTextarea = this.element?.querySelector('[data-manual-draft="true"]');
+                    if (newTextarea instanceof HTMLTextAreaElement) {
                         newTextarea.focus();
-                        newTextarea.setSelectionRange(cursorPosition || 0, cursorPosition || 0);
+                        newTextarea.setSelectionRange(cursorPosition, cursorPosition);
                     }
                 }, 0);
             }
@@ -404,7 +404,7 @@ export class AddChildNodeModal extends BaseModal {
                 placeholder: 'e.g., "Focus on character development", "Include a conflict scene", "Explore the theme of redemption"...',
                 style: 'width: 100%; min-height: 6rem; padding: 0.75rem; border: 0.125rem solid #e0e0e0; border-radius: 0.375rem; font-size: 0.875rem; font-family: inherit; resize: vertical; box-sizing: border-box;'
             }
-        }) as HTMLTextAreaElement;
+        });
 
         directionTextarea.addEventListener('input', () => {
             this.childModalState.userDirection = directionTextarea.value;
@@ -512,7 +512,7 @@ export class AddChildNodeModal extends BaseModal {
             attributes: { style: 'padding: 8px 16px;' }
         });
 
-        retryButton.addEventListener('click', async () => this.generateSuggestions());
+        retryButton.addEventListener('click', () => { void this.generateSuggestions(); });
         fallbackButton.addEventListener('click', () => { this.switchMode('simple'); });
 
         container.appendChild(errorMessage);
@@ -537,8 +537,8 @@ export class AddChildNodeModal extends BaseModal {
             attributes: { style: 'margin-bottom: 16px;' }
         });
 
-        this.childModalState.suggestions.forEach((suggestion, index) => {
-            const suggestionCard = this.createSuggestionCard(suggestion, index);
+        this.childModalState.suggestions.forEach((suggestion) => {
+            const suggestionCard = this.createSuggestionCard(suggestion);
             suggestionsList.appendChild(suggestionCard);
         });
 
@@ -569,7 +569,7 @@ export class AddChildNodeModal extends BaseModal {
         return container;
     }
 
-    private createSuggestionCard(suggestion: NodeSuggestion, _index: number): HTMLElement {
+    private createSuggestionCard(suggestion: NodeSuggestion): HTMLElement {
         const isSelected = this.childModalState.selectedSuggestion === suggestion;
         
         const card = createElement('div', {
@@ -674,6 +674,23 @@ export class AddChildNodeModal extends BaseModal {
         this.refreshContent();
     }
 
+    private shouldShowUpdateParentCheckbox(): boolean {
+        if (this.childModalState.mode === 'ai') {
+            return true;
+        }
+        return this.childModalState.manualDraft.trim() !== '';
+    }
+
+    private shouldUpdateParentOnCreate(): boolean {
+        if (!this.childModalState.updateParent || !this.childModalConfig.parentNode.content) {
+            return false;
+        }
+        if (this.childModalState.mode === 'ai') {
+            return true;
+        }
+        return this.childModalState.manualDraft.trim() !== '';
+    }
+
     private canCreate(): boolean {
         if (this.childModalState.isCreating || this.childModalState.isGenerating) {
             return false;
@@ -717,7 +734,7 @@ export class AddChildNodeModal extends BaseModal {
             const createConfig: NodeCreationConfig = {
                 parentNodeId: this.childModalConfig.parentNodeId,
                 title,
-                updateParent: (this.childModalState.mode === 'ai' || (this.childModalState.mode === 'simple' && this.childModalState.manualDraft.trim() !== '')) && this.childModalState.updateParent && Boolean(this.childModalConfig.parentNode.content)
+                updateParent: this.shouldUpdateParentOnCreate()
             };
             
             if (draft) {
@@ -725,7 +742,7 @@ export class AddChildNodeModal extends BaseModal {
             }
 
             // Show different step if updating parent
-            if ((this.childModalState.mode === 'ai' || (this.childModalState.mode === 'simple' && this.childModalState.manualDraft.trim() !== '')) && this.childModalState.updateParent && this.childModalConfig.parentNode.content) {
+            if (this.shouldUpdateParentOnCreate()) {
                 this.childModalState.creationStep = 'Updating parent content with AI...';
                 this.refreshContent();
             }
@@ -737,7 +754,7 @@ export class AddChildNodeModal extends BaseModal {
             this.refreshContent();
 
             // Brief delay to show the final step
-            await new Promise(resolve => void void setTimeout(resolve, 500));
+            await new Promise(resolve => setTimeout(resolve, 500));
             
             // Reset creation state
             this.childModalState.isCreating = false;

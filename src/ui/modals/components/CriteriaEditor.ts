@@ -19,7 +19,7 @@ export class CriteriaEditor {
     constructor(container: HTMLElement) {
         this.container = container;
         this.initializeStyles();
-        void this.render();
+        this.render();
     }
 
     /**
@@ -34,7 +34,7 @@ export class CriteriaEditor {
      */
     public setCriteria(criteria: QualityCriterion[]): void {
         this.criteria = this.migrateCriteriaFormat(criteria);
-        void this.render();
+        this.render();
         this.emitChange();
     }
 
@@ -63,9 +63,7 @@ export class CriteriaEditor {
             textarea.focus();
             autoResizeTextarea(textarea);
             const textDisplay = newElement.querySelector('.criterion-text-display') as HTMLElement;
-            if (textDisplay) {
-                textDisplay.style.display = 'none';
-            }
+            textDisplay.style.display = 'none';
         }
 
         this.emitChange();
@@ -247,13 +245,13 @@ export class CriteriaEditor {
             classes: ['btn-secondary'],
             content: 'Copy All'
         });
-        copyButton.addEventListener('click', async () => this.copyCriteria());
+        copyButton.addEventListener('click', () => { void this.copyCriteria(); });
 
         const pasteButton = createElement('button', {
             classes: ['btn-secondary'],
             content: 'Paste'
         });
-        pasteButton.addEventListener('click', async () => this.pasteCriteria());
+        pasteButton.addEventListener('click', () => { void this.pasteCriteria(); });
 
         actionsBar.appendChild(addButton);
         actionsBar.appendChild(addMetricButton);
@@ -319,7 +317,7 @@ export class CriteriaEditor {
                 placeholder: "e.g., 'Clarity and conciseness'",
                 value: fullText
             }
-        }) as HTMLTextAreaElement;
+        });
 
         textarea.addEventListener('input', (e) => {
             autoResizeTextarea(e.target as HTMLTextAreaElement);
@@ -337,7 +335,7 @@ export class CriteriaEditor {
                 value: criterion.goal.toString(),
                 title: 'Goal (1-10)'
             }
-        }) as HTMLInputElement;
+        });
 
         // Create checkboxes for outline and leaf
         const outlineCheckbox = createElement('input', {
@@ -346,7 +344,7 @@ export class CriteriaEditor {
                 type: 'checkbox',
                 title: 'Use for outline/branch nodes'
             }
-        }) as HTMLInputElement;
+        });
         outlineCheckbox.checked = criterion.outline !== false; // Default to true if undefined
 
         const leafCheckbox = createElement('input', {
@@ -355,7 +353,7 @@ export class CriteriaEditor {
                 type: 'checkbox',
                 title: 'Use for leaf nodes'
             }
-        }) as HTMLInputElement;
+        });
         leafCheckbox.checked = criterion.leaf !== false; // Default to true if undefined
         
         const removeBtn = createElement('button', {
@@ -431,17 +429,17 @@ export class CriteriaEditor {
         const nameInput = createElement('input', {
             classes: ['metric-name'],
             attributes: { type: 'text', value: criterion.name, placeholder: 'Metric name', title: 'Display name' }
-        }) as HTMLInputElement;
+        });
 
         const typeSelect = createElement('select', {
             classes: ['metric-type'],
             attributes: { title: 'Metric type' }
-        }) as HTMLSelectElement;
+        });
         for (const definition of getAllMetricDefinitions()) {
             const option = createElement('option', {
                 content: definition.label,
                 attributes: { value: definition.type }
-            }) as HTMLOptionElement;
+            });
             if (definition.type === criterion.metricType) {
                 option.selected = true;
             }
@@ -451,29 +449,29 @@ export class CriteriaEditor {
         const goalInput = createElement('input', {
             classes: ['metric-goal'],
             attributes: { type: 'number', min: '1', max: '10', value: criterion.goal.toString(), title: 'Goal (1-10) — must be met to pass' }
-        }) as HTMLInputElement;
+        });
 
         const weightInput = createElement('input', {
             classes: ['metric-weight'],
             attributes: { type: 'number', min: '0', step: '0.5', value: criterion.weight.toString(), title: 'Weight — only ranks failing attempts, not pass/fail' }
-        }) as HTMLInputElement;
+        });
 
         const enabledCheckbox = createElement('input', {
             classes: ['metric-enabled'],
             attributes: { type: 'checkbox', title: 'Enabled' }
-        }) as HTMLInputElement;
+        });
         enabledCheckbox.checked = criterion.enabled;
 
         const outlineCheckbox = createElement('input', {
             classes: ['outline-checkbox'],
             attributes: { type: 'checkbox', title: 'Use for outline/branch nodes' }
-        }) as HTMLInputElement;
+        });
         outlineCheckbox.checked = criterion.outline !== false;
 
         const leafCheckbox = createElement('input', {
             classes: ['leaf-checkbox'],
             attributes: { type: 'checkbox', title: 'Use for leaf nodes' }
-        }) as HTMLInputElement;
+        });
         leafCheckbox.checked = criterion.leaf !== false;
 
         const removeBtn = createElement('button', {
@@ -532,7 +530,7 @@ export class CriteriaEditor {
                         'data-param-key': field.key,
                         'data-param-type': 'number'
                     }
-                }) as HTMLInputElement;
+                });
                 if (field.min !== undefined) input.min = String(field.min);
                 if (field.max !== undefined) input.max = String(field.max);
                 if (field.step !== undefined) input.step = String(field.step);
@@ -546,7 +544,7 @@ export class CriteriaEditor {
                         'data-param-type': 'stringList',
                         value: list.join('\n')
                     }
-                }) as HTMLTextAreaElement;
+                });
                 textarea.value = list.join('\n');
                 fieldWrapper.appendChild(textarea);
             }
@@ -702,7 +700,7 @@ export class CriteriaEditor {
                     ...criterion,
                     outline: criterion.outline ?? true,
                     leaf: criterion.leaf ?? true,
-                    enabled: criterion.enabled ?? true
+                    enabled: criterion.enabled
                 } as MetricCriterion;
             }
 

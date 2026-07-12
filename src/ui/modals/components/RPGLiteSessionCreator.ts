@@ -229,19 +229,15 @@ export class RPGLiteSessionCreator {
 
         // Create button
         const createBtn = container.querySelector('#rpglite-create-btn') as HTMLButtonElement;
-        if (createBtn) {
-            const createHandler = () => this.handleCreate();
-            createBtn.addEventListener('click', createHandler);
-            this.cleanupHandlers.push(() => { createBtn.removeEventListener('click', createHandler); });
-        }
+        const createHandler = () => { void this.handleCreate(); };
+        createBtn.addEventListener('click', createHandler);
+        this.cleanupHandlers.push(() => { createBtn.removeEventListener('click', createHandler); });
 
         // Cancel button
         const cancelBtn = container.querySelector('#rpglite-cancel-btn') as HTMLButtonElement;
-        if (cancelBtn) {
-            const cancelHandler = () => { this.handleCancel(); };
-            cancelBtn.addEventListener('click', cancelHandler);
-            this.cleanupHandlers.push(() => { cancelBtn.removeEventListener('click', cancelHandler); });
-        }
+        const cancelHandler = () => { this.handleCancel(); };
+        cancelBtn.addEventListener('click', cancelHandler);
+        this.cleanupHandlers.push(() => { cancelBtn.removeEventListener('click', cancelHandler); });
     }
 
     private initializeTemplateSelector(): void {
@@ -330,9 +326,7 @@ export class RPGLiteSessionCreator {
     private showProgress(show: boolean): void {
         if (!this.container) return;
         const progressContainer = this.container.querySelector('#rpglite-progress-container') as HTMLElement;
-        if (progressContainer) {
-            progressContainer.style.display = show ? 'block' : 'none';
-        }
+        progressContainer.style.display = show ? 'block' : 'none';
     }
 
     private updateProgress(progress: ConversionProgress): void {
@@ -341,11 +335,9 @@ export class RPGLiteSessionCreator {
         const messageEl = this.container.querySelector('#rpglite-progress-message') as HTMLElement;
         const barEl = this.container.querySelector('#rpglite-progress-bar') as HTMLElement;
 
-        if (messageEl) {
-            messageEl.textContent = progress.message;
-        }
+        messageEl.textContent = progress.message;
 
-        if (barEl && progress.progress !== undefined) {
+        if (progress.progress !== undefined) {
             barEl.style.width = `${progress.progress}%`;
         }
     }
@@ -356,12 +348,8 @@ export class RPGLiteSessionCreator {
         const createBtn = this.container.querySelector('#rpglite-create-btn') as HTMLButtonElement;
         const cancelBtn = this.container.querySelector('#rpglite-cancel-btn') as HTMLButtonElement;
 
-        if (createBtn) {
-            createBtn.disabled = !enabled;
-        }
-        if (cancelBtn) {
-            cancelBtn.disabled = !enabled;
-        }
+        createBtn.disabled = !enabled;
+        cancelBtn.disabled = !enabled;
     }
 
     private formatRelativeTime(timestamp: number): string {

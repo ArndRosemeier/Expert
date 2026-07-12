@@ -91,7 +91,7 @@ export class XMLStoryParser {
                     };
                     // Leave no marker so it displays in insertion order near where the model placed it (subsequent display layer will render in-stream)
                     commands.push(syntheticEdit);
-                } else if (previous && previous.description !== el.description) {
+                } else if (previous.description !== el.description) {
                     // Updated context element → echo as edit
                     const syntheticEdit: SystemCommand = {
                         type: 'edit',
@@ -480,7 +480,7 @@ export class XMLStoryParser {
         // Remove remaining XML commands from text but keep our markers
         // Preserve context/outline tags exactly at their positions by replacing with markers for chat echo
         const elementTagRegex = new RegExp(`<(outline|context)(\\s${TAG_ATTRS})?\\s*(?:\\/>|>\\s*[\\s\\S]*?<\\/\\1>)`, 'gi');
-        cleanedText = cleanedText.replace(elementTagRegex, _m => '');
+        cleanedText = cleanedText.replace(elementTagRegex, () => '');
 
 
         
@@ -534,7 +534,7 @@ export class XMLStoryParser {
             return this.updateExistingElement(existingElement, attributes, sourceText);
         } else {
             // Create new element
-            return this.createNewElement(type, attributes, sourceText, existingElements);
+            return this.createNewElement(type, attributes, sourceText);
         }
     }
     
@@ -548,8 +548,7 @@ export class XMLStoryParser {
     private createNewElement(
         type: StoryElementType,
         attributes: Record<string, string>,
-        sourceText: string,
-        _existingElements: Map<string, StoryElement>
+        sourceText: string
     ): StoryElement & { insertPosition?: number } {
         const id = attributes['id'];
         const description = attributes['description'];

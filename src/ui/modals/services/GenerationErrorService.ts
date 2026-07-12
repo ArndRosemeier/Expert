@@ -1,5 +1,9 @@
 import { GenerationErrorModal, ErrorDetails } from '../GenerationErrorModal';
 
+interface DebugWindow extends Window {
+    clearErrorModals?: () => void;
+}
+
 export class GenerationErrorService {
     private static instance: GenerationErrorService | null = null;
     private currentErrorModal: GenerationErrorModal | null = null;
@@ -20,7 +24,7 @@ export class GenerationErrorService {
         // Private constructor for singleton
         
         // Expose emergency clear function globally for debug purposes
-        (window as any).clearErrorModals = () => {
+        (window as DebugWindow).clearErrorModals = () => {
             this.clearAllErrorModals();
         };
     }

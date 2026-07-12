@@ -8,7 +8,7 @@
  * 4. State updates are applied and snapshot is created
  */
 
-import { RPGEntityType, RPGGameSession, RPGConversationMessage, RPGGoal, RPGGoalPriority, RPGGoalStatus, RPGStateUpdateXML, RPGLocation, RPGCharacter, RPGLore, RPGRelationship, RPGDistance, RPGManualSave, RPGSuspiciousEntityFlag } from '../types/RPGTypes';
+import { RPGEntityType, RPGGameSession, RPGConversationMessage, RPGGoal, RPGStateUpdateXML, RPGLocation, RPGCharacter, RPGLore, RPGRelationship, RPGDistance, RPGManualSave, RPGSuspiciousEntityFlag } from '../types/RPGTypes';
 import { WorldStateService } from './WorldStateService';
 import { RPGContextBuilder } from './RPGContextBuilder';
 import { RPGStateParser } from './RPGStateParser';
@@ -325,14 +325,10 @@ export class RPGInteractionService {
             const loc = this.worldStateService.getLocation(worldState, entityId);
             if (!loc) throw new Error(`Location not found: ${entityId}`);
             this.worldStateService.updateLocation(worldState, entityId, { state: stateObj, lastUsedTurn: Math.max(loc.lastUsedTurn, existingTurn) });
-        } else if (entityType === 'lore') {
+        } else {
             const lore = this.worldStateService.getLore(worldState, entityId);
             if (!lore) throw new Error(`Lore not found: ${entityId}`);
-            // For lore, we consolidate "content" by moving derived state into content? Keep simple: store as JSON into content if requested.
-            // But since you asked about entity state bloat, we only support consolidating lore by normalizing tags/content is out of scope.
             throw new Error('Consolidation for lore is not supported (lore has no state).');
-        } else {
-            throw new Error(`Unsupported entity type for consolidation: ${entityType}`);
         }
 
         // After a successful consolidation, clear the flag for this entity (it was addressed).
@@ -375,20 +371,30 @@ export class RPGInteractionService {
             );
         }
 
-        if (entityType === 'lore') {
-            const lore = this.worldStateService.getLore(worldState, entityId);
-            if (!lore) throw new Error(`Lore not found: ${entityId}`);
-            return (
-                `<entity kind="lore">\n` +
-                `  <id>${lore.id}</id>\n` +
-                `  <title>${lore.title}</title>\n` +
-                `  <content><![CDATA[${lore.content}]]></content>\n` +
-                `  <tags>${lore.tags.join(',')}</tags>\n` +
-                `</entity>`
-            );
-        }
+        const lore = this.worldStateService.getLore(worldState, entityId);
+        if (!lore) throw new Error(`Lore not found: ${entityId}`);
+        return (
+            `<entity kind="lore">\n` +
+            `  <id>${lore.id}</id>\n` +
+            `  <title>${lore.title}</title>\n` +
+            `  <content><![CDATA[${lore.content}]]></content>\n` +
+            `  <tags>${lore.tags.join(',')}</tags>\n` +
+            `</entity>`
+        );
+    }
 
-        throw new Error(`Unsupported entity type: ${entityType}`);
+    private resolveDiagnosticEntityType(
+        worldState: RPGGameSession['worldState'],
+        entityId: string
+    ): RPGEntityType {
+        if (worldState.locations.has(entityId)) return 'location';
+        if (worldState.characters.has(entityId)) return 'character';
+        if (worldState.lore.has(entityId)) return 'lore';
+        if (worldState.relationships.has(entityId)) return 'relationship';
+        if (worldState.distances.some(x => x.fromLocationId === entityId || x.toLocationId === entityId)) {
+            return 'distance';
+        }
+        return 'lore';
     }
 
     private collectNarratorUsedWorldItems(session: RPGGameSession): {
@@ -655,13 +661,7 @@ export class RPGInteractionService {
 
         const flags: RPGSuspiciousEntityFlag[] = [];
         for (const d of diagnostics) {
-            const entityType: RPGEntityType =
-                worldState.locations.has(d.entityId) ? 'location' :
-                worldState.characters.has(d.entityId) ? 'character' :
-                worldState.lore.has(d.entityId) ? 'lore' :
-                worldState.relationships.has(d.entityId) ? 'relationship' :
-                worldState.distances.some(x => x.fromLocationId === d.entityId || x.toLocationId === d.entityId) ? 'distance' :
-                'lore';
+            const entityType = this.resolveDiagnosticEntityType(worldState, d.entityId);
 
             flags.push({
                 entityId: d.entityId,
@@ -901,19 +901,21 @@ export class RPGInteractionService {
 
             const normalized: RPGGoal[] = [];
             for (const g of incomingGoals) {
-                if (!g || typeof g !== 'object') throw new Error('Goal must be an object.');
                 if (typeof g.id !== 'string') throw new Error('Goal.id must be a string.');
                 if (typeof g.text !== 'string') throw new Error('Goal.text must be a string.');
-                if (g.status !== 'active' && g.status !== 'completed' && g.status !== 'abandoned') throw new Error(`Invalid goal.status for '${g.id}'.`);
-                if (g.priority !== 1 && g.priority !== 2 && g.priority !== 3 && g.priority !== 4 && g.priority !== 5) throw new Error(`Invalid goal.priority for '${g.id}'.`);
 
                 const prev = existingById.get(g.id);
-                const createdTurn = prev ? prev.createdTurn : (typeof g.createdTurn === 'number' && g.createdTurn >= 0 ? g.createdTurn : turn);
+                let createdTurn = turn;
+                if (prev) {
+                    createdTurn = prev.createdTurn;
+                } else if (typeof g.createdTurn === 'number' && g.createdTurn >= 0) {
+                    createdTurn = g.createdTurn;
+                }
                 normalized.push({
                     id: g.id,
                     text: g.text,
-                    status: g.status as RPGGoalStatus,
-                    priority: g.priority as RPGGoalPriority,
+                    status: g.status,
+                    priority: g.priority,
                     createdTurn,
                     updatedTurn: turn
                 });
@@ -968,7 +970,7 @@ export class RPGInteractionService {
                     };
                     this.worldStateService.createLocation(worldState, location);
                     console.log(`  ✅ Created location: ${location.name}`);
-                } else if (locationUpdate.action === 'update') {
+                } else {
                     const updates: Partial<RPGLocation> = {};
                     if (locationUpdate.name) updates.name = locationUpdate.name;
                     if (locationUpdate.description) {
@@ -1033,7 +1035,7 @@ export class RPGInteractionService {
                     };
                     this.worldStateService.createCharacter(worldState, character);
                     console.log(`  ✅ Created character: ${character.name}`);
-                } else if (characterUpdate.action === 'update') {
+                } else {
                     const updates: Partial<RPGCharacter> = {};
                     if (characterUpdate.name) updates.name = characterUpdate.name;
                     if (characterUpdate.description) {
@@ -1082,7 +1084,7 @@ export class RPGInteractionService {
                     };
                     this.worldStateService.createLore(worldState, lore);
                     console.log(`  ✅ Created lore: ${lore.title}`);
-                } else if (loreUpdate.action === 'update') {
+                } else {
                     const updates: Partial<RPGLore> = {};
                     if (loreUpdate.title) updates.title = loreUpdate.title;
                     if (loreUpdate.content) updates.content = loreUpdate.content;
@@ -1175,7 +1177,7 @@ export class RPGInteractionService {
                         }
                         console.log(`  ✅ Updated relationship: ${existing.id}`);
                     }
-                } else if (relationshipUpdate.action === 'delete') {
+                } else {
                     const existing = this.worldStateService.listRelationships(worldState).find(
                         r => r.fromId === relationshipUpdate.fromId && r.toId === relationshipUpdate.toId && r.kind === relationshipUpdate.kind
                     );

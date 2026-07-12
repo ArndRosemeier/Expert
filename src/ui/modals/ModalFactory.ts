@@ -12,7 +12,7 @@ import { GuidedReviewModal, GuidedReviewModalConfig } from './GuidedReviewModal'
 import { OnboardingWizardModal } from './OnboardingWizardModal';
 import { GenericModal } from './GenericModal';
 import { getModalRegistry, ModalRegistry } from './core/ModalRegistry';
-import { IModal } from './types/ModalTypes';
+import { IModal, ModalAction } from './types/ModalTypes';
 import { SettingsManager } from '../../SettingsManager';
 import { ModelSelector } from '../../ModelSelector';
 import { ProjectManager } from '../../ProjectManager';
@@ -289,7 +289,7 @@ export class ModalFactory {
         
                     // Refresh the project UI by triggering a re-render
                     const { renderProjectUI } = await import('../project-ui');
-                    renderProjectUI(currentProjectManager);
+                    void renderProjectUI(currentProjectManager);
                 }
             }
         });
@@ -371,7 +371,7 @@ export class ModalFactory {
      * Creates a generic content modal
      */
     public createGenericModal(
-        content: string | { content: string; actions?: any[] },
+        content: string | { content: string; actions?: ModalAction[] },
         title?: string,
         options: ModalOptions = {}
     ): GenericModal {
@@ -384,10 +384,12 @@ export class ModalFactory {
         if (replaceExisting) {
             const existingIds = this.registry.getOpenModals()
                 .filter(id => id.startsWith('generic-modal-'));
-            void existingIds.forEach(id => {
-                const modal = this.registry.get(id);
-                if (modal) void modal.close();
-            });
+            for (const existingId of existingIds) {
+                const modal = this.registry.get(existingId);
+                if (modal) {
+                    void modal.close();
+                }
+            }
         }
 
         const modal = new GenericModal({
@@ -507,8 +509,8 @@ export class ModalFactory {
                             label: 'OK',
                             type: 'primary',
                             handler: async () => {
-                                const input = document.getElementById(inputId) as HTMLInputElement;
-                                const value = input ? input.value : '';
+                                const input = document.getElementById(inputId);
+                                const value = input instanceof HTMLInputElement ? input.value : '';
                                 await modal.close();
                                 resolve(value);
                             }
@@ -521,9 +523,9 @@ export class ModalFactory {
 
             // Focus the input after modal opens
             // Note: GenericModal doesn't support events yet, so we'll use a timeout
-            void void setTimeout(() => {
-                const input = document.getElementById(inputId) as HTMLInputElement;
-                if (input) {
+            setTimeout(() => {
+                const input = document.getElementById(inputId);
+                if (input instanceof HTMLInputElement) {
                     input.focus();
                     input.select();
                 }

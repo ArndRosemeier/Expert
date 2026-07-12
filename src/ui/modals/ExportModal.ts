@@ -4,7 +4,7 @@
 
 import { BaseModal } from './core/BaseModal';
 import { ExportService } from './services/ExportService';
-import { HierarchyTitleConfig } from './types/ExportTypes';
+import { HierarchyTitleConfig, ExportScope, ExportFormat } from './types/ExportTypes';
 import { DocumentNode } from '../../DocumentNode';
 import { ProjectManager } from '../../ProjectManager';
 import { ModalConfig } from './types/ModalTypes';
@@ -29,6 +29,9 @@ export class ExportModal extends BaseModal {
     private htmlTocCheckbox?: HTMLInputElement;
     private epubAuthorInput?: HTMLInputElement;
     private hierarchyTitleContainer?: HTMLElement;
+    private formatOptionsSection?: HTMLElement;
+    private htmlTocOption?: HTMLElement;
+    private epubAuthorOption?: HTMLElement;
     private reimportInfoContainer?: HTMLElement;
 
     constructor(config: ExportModalConfig) {
@@ -47,7 +50,7 @@ export class ExportModal extends BaseModal {
      * Gets the hierarchy levels from the node's template
      */
     private getHierarchyLevels(): string[] {
-        const template = this.node.template || [];
+        const template = this.node.template;
         console.log('Node template:', template, 'Node level:', this.node.level);
         return template;
     }
@@ -203,7 +206,7 @@ export class ExportModal extends BaseModal {
                 type: 'checkbox',
                 id: `hierarchy-title-${level}`
             }
-        }) as HTMLInputElement;
+        });
         
         if (defaultChecked) {
             checkbox.checked = true;
@@ -226,7 +229,7 @@ export class ExportModal extends BaseModal {
      * Creates the format-specific options section
      */
     private createFormatOptionsSection(): HTMLElement {
-        const section = createElement('div', {
+        this.formatOptionsSection = createElement('div', {
             classes: ['format-options-section', 'export-section']
         });
 
@@ -234,23 +237,23 @@ export class ExportModal extends BaseModal {
             content: 'Format Options'
         });
 
-        section.appendChild(title);
+        this.formatOptionsSection.appendChild(title);
 
         // HTML TOC option
-        const htmlTocOption = this.createHtmlTocOption();
-        section.appendChild(htmlTocOption);
+        this.htmlTocOption = this.createHtmlTocOption();
+        this.formatOptionsSection.appendChild(this.htmlTocOption);
 
         // EPUB Author option
-        const epubAuthorOption = this.createEpubAuthorOption();
-        section.appendChild(epubAuthorOption);
+        this.epubAuthorOption = this.createEpubAuthorOption();
+        this.formatOptionsSection.appendChild(this.epubAuthorOption);
 
         // Reimport info section
         const reimportInfo = this.createReimportInfoSection();
-        section.appendChild(reimportInfo);
+        this.formatOptionsSection.appendChild(reimportInfo);
 
         this.updateFormatOptionsVisibility();
 
-        return section;
+        return this.formatOptionsSection;
     }
 
     /**
@@ -266,7 +269,7 @@ export class ExportModal extends BaseModal {
                 type: 'checkbox',
                 id: 'html-toc-checkbox'
             }
-        }) as HTMLInputElement;
+        });
         
         // Default enabled
         this.htmlTocCheckbox.checked = true;
@@ -301,7 +304,7 @@ export class ExportModal extends BaseModal {
                 id: 'epub-author-input',
                 placeholder: 'Enter author name'
             }
-        }) as HTMLInputElement;
+        });
         
         // Load saved author value or use default
         void this.loadAuthorValue();
@@ -331,7 +334,7 @@ export class ExportModal extends BaseModal {
         try {
             const { StorageService } = await import('../../StorageService');
             const storage = await StorageService.getInstance();
-            const savedAuthor = await storage.get('epub_export_author') as string | undefined;
+            const savedAuthor = await storage.get<string>('epub_export_author');
             
             if (savedAuthor) {
                 this.epubAuthorInput.value = savedAuthor;
@@ -441,7 +444,7 @@ export class ExportModal extends BaseModal {
 
         this.scopeSelect = createElement('select', {
             attributes: { id: 'export-scope-select' }
-        }) as HTMLSelectElement;
+        });
 
         // Add scope options
         const scopeOptions = [
@@ -488,7 +491,7 @@ export class ExportModal extends BaseModal {
 
         this.formatSelect = createElement('select', {
             attributes: { id: 'export-format-select' }
-        }) as HTMLSelectElement;
+        });
 
         // Add format options
         const formatOptions = [
@@ -551,35 +554,7 @@ export class ExportModal extends BaseModal {
      * Gets the node path for display
      */
     private getNodePath(): string {
-        try {
-            // Try to use ProjectManager's method if available
-            if (this.projectManager && typeof this.projectManager.getNodePath === 'function') {
-                return this.projectManager.getNodePath(this.node.id);
-            }
-            
-            // Fallback to building path from node hierarchy
-            return this.buildNodePath(this.node);
-        } catch (error) {
-            console.warn('Failed to get node path:', error);
-            return this.node.title;
-        }
-    }
-
-    /**
-     * Builds node path from hierarchy
-     */
-    private buildNodePath(node: DocumentNode): string {
-        const parts: string[] = [];
-        const current: DocumentNode | null = node;
-        
-        while (current) {
-            parts.unshift(current.title);
-            // Note: DocumentNode doesn't have parent navigation built-in
-            // This is a simplified path building
-            break; // For now, just show the current node
-        }
-        
-        return parts.join(' > ');
+        return this.projectManager.getNodePath(this.node.id);
     }
 
     /**
@@ -593,7 +568,7 @@ export class ExportModal extends BaseModal {
         this.hierarchyTitleContainer.style.display = showHierarchyControls ? 'block' : 'none';
         
         // Update the description based on scope
-        const description = this.hierarchyTitleContainer.querySelector('.section-description') as HTMLElement;
+        const description = this.hierarchyTitleContainer.querySelector('.section-description');
         if (description) {
             if (this.scopeSelect.value === 'leafOnly') {
                 description.textContent = 'Choose whether to include parent hierarchy titles above leaf content (e.g., chapter titles above scenes).';
@@ -608,26 +583,17 @@ export class ExportModal extends BaseModal {
      */
     private updateFormatOptionsVisibility(): void {
         if (!this.formatSelect || !this.scopeSelect) return;
-        
-        // Find the format options section
-        const formatOptionsSection = document.querySelector('.format-options-section') as HTMLElement;
-        if (!formatOptionsSection) return;
-        
-        // Show HTML TOC option only for HTML format
+
         const isHtml = this.formatSelect.value === 'html';
-        const htmlTocOption = formatOptionsSection.querySelector('.html-toc-option') as HTMLElement;
-        if (htmlTocOption) {
-            htmlTocOption.style.display = isHtml ? 'block' : 'none';
+        if (this.htmlTocOption) {
+            this.htmlTocOption.style.display = isHtml ? 'block' : 'none';
         }
 
-        // Show EPUB author option only for EPUB format
         const isEpub = this.formatSelect.value === 'epub';
-        const epubAuthorOption = formatOptionsSection.querySelector('.epub-author-option') as HTMLElement;
-        if (epubAuthorOption) {
-            epubAuthorOption.style.display = isEpub ? 'block' : 'none';
+        if (this.epubAuthorOption) {
+            this.epubAuthorOption.style.display = isEpub ? 'block' : 'none';
         }
 
-        // Show reimport info section only for reimport scope
         const isReimport = this.scopeSelect.value === 'reimport';
         if (this.reimportInfoContainer) {
             this.reimportInfoContainer.style.display = isReimport ? 'block' : 'none';
@@ -650,12 +616,12 @@ export class ExportModal extends BaseModal {
         const clipboardButton = createElement('button', {
             classes: ['btn-secondary'],
             content: '📋 Copy to Clipboard'
-        }) as HTMLButtonElement;
+        });
 
         this.exportButton = createElement('button', {
             classes: ['btn-primary'],
             content: '💾 Export File'
-        }) as HTMLButtonElement;
+        });
 
         cancelButton.addEventListener('click', () => {
             void this.close();
@@ -690,33 +656,51 @@ export class ExportModal extends BaseModal {
         }
     }
 
+    private resolveExportScopeAndFormat(): { scope: ExportScope; format: ExportFormat } {
+        if (this.scopeSelect!.value === 'reimport') {
+            return { scope: ExportScope.Single, format: ExportFormat.Reimport };
+        }
+
+        let scope: ExportScope;
+        switch (this.scopeSelect!.value) {
+            case 'leafOnly':
+                scope = ExportScope.Leaves;
+                break;
+            case 'hierarchical':
+                scope = ExportScope.Hierarchy;
+                break;
+            default:
+                scope = ExportScope.Single;
+        }
+
+        let format: ExportFormat;
+        switch (this.formatSelect!.value) {
+            case 'html':
+                format = ExportFormat.HTML;
+                break;
+            case 'plain':
+                format = ExportFormat.Plain;
+                break;
+            case 'markdown':
+                format = ExportFormat.Markdown;
+                break;
+            case 'epub':
+                format = ExportFormat.EPUB;
+                break;
+            default:
+                format = ExportFormat.HTML;
+        }
+
+        return { scope, format };
+    }
+
     /**
      * Handles the clipboard export action
      */
     private async handleClipboardExport(): Promise<void> {
         if (!this.scopeSelect || !this.formatSelect) return;
 
-        let scope: string;
-        let format: string;
-
-        // Handle reimport case specially
-        if (this.scopeSelect.value === 'reimport') {
-            scope = 'single'; // Scope doesn't matter for reimport, but we need a valid value
-            format = 'reimport'; // This maps to ExportFormat.Reimport
-        } else {
-            // Map UI scope values to ExportService values
-            switch (this.scopeSelect.value) {
-                case 'leafOnly':
-                    scope = 'leaves';
-                    break;
-                case 'hierarchical':
-                    scope = 'hierarchy';
-                    break;
-                default:
-                    scope = 'single';
-            }
-            format = this.formatSelect.value;
-        }
+        const { scope, format } = this.resolveExportScopeAndFormat();
 
         try {
             // Collect hierarchy title configuration
@@ -733,8 +717,8 @@ export class ExportModal extends BaseModal {
 
             // Generate the content using the export service
             const result = await this.exportService.export(this.node, {
-                scope: scope as any,
-                format: format as any,
+                scope,
+                format,
                 hierarchyTitles,
                 includeHtmlToc: this.htmlTocCheckbox ? this.htmlTocCheckbox.checked : false,
                 author: this.epubAuthorInput ? this.epubAuthorInput.value : 'Expert Application'
@@ -764,27 +748,7 @@ export class ExportModal extends BaseModal {
     private async handleExport(): Promise<void> {
         if (!this.scopeSelect || !this.formatSelect || !this.exportButton) return;
 
-        let scope: string;
-        let format: string;
-
-        // Handle reimport case specially
-        if (this.scopeSelect.value === 'reimport') {
-            scope = 'single'; // Scope doesn't matter for reimport, but we need a valid value
-            format = 'reimport'; // This maps to ExportFormat.Reimport
-        } else {
-            // Map UI scope values to ExportService values
-            switch (this.scopeSelect.value) {
-                case 'leafOnly':
-                    scope = 'leaves';
-                    break;
-                case 'hierarchical':
-                    scope = 'hierarchy';
-                    break;
-                default:
-                    scope = 'single';
-            }
-            format = this.formatSelect.value;
-        }
+        const { scope, format } = this.resolveExportScopeAndFormat();
 
         // Disable button during export
         this.exportButton.disabled = true;

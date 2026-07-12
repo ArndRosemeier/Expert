@@ -86,12 +86,6 @@ export class TaskModelService {
         const taskConfigs = this.getTaskModelConfigs();
         const taskConfig = taskConfigs[taskType];
         
-        if (!taskConfig) {
-            // Fallback to defaults if task not configured
-            const defaultConfig = DEFAULT_TASK_MODEL_CONFIGS[taskType];
-            return isLeafNode ? defaultConfig.prose : defaultConfig.outline;
-        }
-        
         return isLeafNode ? taskConfig.prose : taskConfig.outline;
     }
 
@@ -103,9 +97,6 @@ export class TaskModelService {
         const profile = this.settingsManager.getLastUsedProfile();
         if (!profile) {
             throw new Error('No active profile available - settings configuration corrupted');
-        }
-        if (!profile.selectedModels) {
-            throw new Error('Profile has no selectedModels configuration - profile data corrupted');
         }
         const selectedModels = profile.selectedModels;
         const modelId = selectedModels[purpose];

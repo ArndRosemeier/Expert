@@ -45,10 +45,7 @@ export class ReviewCommandParser {
             const matches = Array.from(working.matchAll(regex));
             for (const match of matches) {
                 const index = match.index;
-                if (index === undefined) {
-                    throw new Error('ReviewCommandParser: regex match without an index');
-                }
-                onMatch(match as RegExpExecArray, index);
+                onMatch(match, index);
                 working = working.slice(0, index) + ' '.repeat(match[0].length) + working.slice(index + match[0].length);
             }
         };

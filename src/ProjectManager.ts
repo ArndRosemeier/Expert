@@ -6,6 +6,7 @@ import { SettingsManager } from './SettingsManager';
 import { OpenRouterClient } from './OpenRouterClient';
 import { AssertFlatTemplateCopy } from './ProjectUtils';
 import { ContextIDGenerator } from './ContextIDGenerator';
+import type { DocumentNodeJSONInput } from './types/DocumentNodeTypes';
 
 
 
@@ -31,8 +32,8 @@ type ProjectManagerEvents = {
     'project-loaded': [];
     'node-selected': [node: DocumentNode | null];
     'nodeGenerationStarted': [e: { nodeId: string, node: DocumentNode }];
-    'nodeGenerationComplete': [e: { nodeId: string; success: boolean; error?: any, node: DocumentNode }];
-    'bulkGenerationComplete': [e: { nodeId: string; node: DocumentNode; operation: string; options: any; success: boolean }];
+    'nodeGenerationComplete': [e: { nodeId: string; success: boolean; error?: string; node: DocumentNode }];
+    'bulkGenerationComplete': [e: { nodeId: string; node: DocumentNode; operation: string; options: Record<string, unknown>; success: boolean }];
     'nodeGenerationAborted': [e: { nodeId: string, node: DocumentNode }];
     'loop-progress': [e: { nodeId: string, progress: LoopProgress }];
     'loop-started': [e: { nodeId: string, input: LoopInput }];
@@ -104,6 +105,8 @@ export class ProjectManager extends EventEmitter<ProjectManagerEvents> {
     public getContextExtractionService(): ContextExtractionService { return this.contextExtractionService; }
     public getGenerationCoordinator(): GenerationCoordinator { return this.generationCoordinator; }
     public getSettingsManager(): SettingsManager { return this.settingsManager; }
+    public getLoopOrchestrator(): LoopOrchestrator { return this.loopOrchestrator; }
+    public getOpenRouterClient(): OpenRouterClient { return this.openRouterClient; }
 
     // Language management
     public getLanguage(): string | null { return this.language; }
@@ -124,7 +127,7 @@ export class ProjectManager extends EventEmitter<ProjectManagerEvents> {
         this.openRouterClient = openRouterClient;
 
         // The root node's title should be the project title.
-        if (!this.template.hierarchyLevels || this.template.hierarchyLevels.length === 0) {
+        if (this.template.hierarchyLevels.length === 0) {
             throw new Error(`Invalid template: "${this.template.name}" has no hierarchy levels defined.`);
         }
         
@@ -149,7 +152,7 @@ export class ProjectManager extends EventEmitter<ProjectManagerEvents> {
         this.contextExtractionService = new ContextExtractionService(this.openRouterClient, this.settingsManager);
         
         // Initialize generation coordinator
-        this.generationCoordinator = new GenerationCoordinator(this);
+        this.generationCoordinator = new GenerationCoordinator();
         
 
 
@@ -198,9 +201,9 @@ export class ProjectManager extends EventEmitter<ProjectManagerEvents> {
      * @param childIndex Optional child index for selective context copying (1-based, used when creating multiple children)
      * @returns The newly created DocumentNode.
      */
-    public addNode(title: string, parentId: string | null = null, creatorModel?: string, childIndex?: number): DocumentNode {
+    public addNode(title: string, parentId: string | null = null, creatorModel?: string): DocumentNode {
         // Delegate to TreeService
-        return this.treeService.addNode(title, parentId, this.rootNode, creatorModel, childIndex);
+        return this.treeService.addNode(title, parentId, this.rootNode, creatorModel);
     }
 
     /**
@@ -336,7 +339,7 @@ export class ProjectManager extends EventEmitter<ProjectManagerEvents> {
             const projectRecords = await services.indexedDB!.getAll<ProjectRecord>('projects');
             const activeProjectId = await services.storage.get<string>(ProjectManager.ACTIVE_PROJECT_STORAGE_KEY);
         
-            if (projectRecords && Object.keys(projectRecords).length > 0) {
+            if (Object.keys(projectRecords).length > 0) {
                 const projects = Object.values(projectRecords).map((record: ProjectRecord) => 
                     ProjectManager.load(record.data, loopOrchestrator, settingsManager, openRouterClient)
                 );
@@ -419,7 +422,7 @@ export class ProjectManager extends EventEmitter<ProjectManagerEvents> {
      * @param rootTemplate Optional root template reference for child nodes to share.
      * @returns A DocumentNode instance.
      */
-    private static rehydrateNode(plainNode: any, rootTemplate?: string[]): DocumentNode {
+    private static rehydrateNode(plainNode: DocumentNodeJSONInput, rootTemplate?: string[]): DocumentNode {
         // For root node (level 0), create a deep copy of the template
         // For child nodes, share the root template reference
         let nodeTemplate: string[];
@@ -443,7 +446,7 @@ export class ProjectManager extends EventEmitter<ProjectManagerEvents> {
         // Recursively rehydrate and add children, passing the root template for sharing
         if (plainNode.children && plainNode.children.length > 0) {
             const templateToShare = plainNode.level === 0 ? nodeTemplate : rootTemplate;
-            node.children = plainNode.children.map((child: any) => this.rehydrateNode(child, templateToShare));
+            node.children = plainNode.children.map((child) => this.rehydrateNode(child, templateToShare));
         }
 
         return node;

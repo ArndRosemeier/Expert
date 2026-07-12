@@ -15,6 +15,19 @@ import { PromptContextBuilder } from '../services/PromptContextBuilder.js';
 import { openGenericModal as newOpenGenericModal, closeGenericModal as newCloseGenericModal } from './modals/index';
 import { escapeHtml, escapeHtmlAttribute } from './modals/core/modal-utils';
 
+interface ImportFileTemplateObject {
+    name: string;
+    hierarchyLevels: string[];
+}
+
+interface ProjectImportFileData {
+    title: string;
+    template?: ImportFileTemplateObject | string[];
+    children?: ProjectImportFileData[];
+}
+
+type ImportProjectCallback = (title: string, template: ProjectTemplate, importData: ProjectImportFileData) => void;
+
 export function openGenericModal(content: string, onOpen?: () => void) {
         newOpenGenericModal(content, onOpen);
 }
@@ -33,35 +46,27 @@ export function closeGenericModal() {
 export function openTestModal(content: string) {
     const container = testModalContainer();
     const content_elem = testModalContent();
-    if (container && content_elem) {
-        content_elem.innerHTML = content;
-        container.style.display = 'flex';
-    }
+    content_elem.innerHTML = content;
+    container.style.display = 'flex';
 }
 
 export function closeTestModal() {
     const container = testModalContainer();
-    if (container) {
-        container.style.display = 'none';
-    }
+    container.style.display = 'none';
 }
 
 export function openNewProjectModal(onCreate: (title: string, template: ProjectTemplate) => void) {
     renderNewProjectModal(onCreate);
     const container = newProjectModalContainer();
-    if (container) {
-        container.style.display = 'flex';
-    }
+    container.style.display = 'flex';
 }
 
 export function closeNewProjectModal() {
     const container = newProjectModalContainer();
-    if (container) {
-        container.style.display = 'none';
-    }
+    container.style.display = 'none';
 }
 
-export function openImportProjectModal(onImport: (title: string, template: ProjectTemplate, importData: any) => void) {
+export function openImportProjectModal(onImport: ImportProjectCallback) {
     console.log('📋 Opening Import Project modal...');
     const content = `
         <h2>Import Project from File</h2>
@@ -96,7 +101,7 @@ export function openImportProjectModal(onImport: (title: string, template: Proje
     }
 }
 
-function calculateImportDepth(data: any): number {
+function calculateImportDepth(data: ProjectImportFileData): number {
     if (!data.children || !Array.isArray(data.children) || data.children.length === 0) {
         return 0; // No children = 0 additional depth
     }
@@ -110,7 +115,7 @@ function calculateImportDepth(data: any): number {
     return 1 + maxChildDepth; // 1 for this level + max child depth
 }
 
-function setupImportProjectModal(onImport: (title: string, template: ProjectTemplate, importData: any) => void) {
+function setupImportProjectModal(onImport: ImportProjectCallback) {
     console.log('🔧 Setting up import project modal...');
     const fileInput = getElementById<HTMLInputElement>('import-file-input');
     const preview = getElementById('import-preview');
@@ -120,39 +125,45 @@ function setupImportProjectModal(onImport: (title: string, template: ProjectTemp
     const confirmBtn = getElementById<HTMLButtonElement>('confirm-import-project-btn');
     const cancelBtn = getElementById<HTMLButtonElement>('cancel-import-project-btn');
     
-    let importData: any = null;
+    let importData: ProjectImportFileData | null = null;
     let detectedTemplate: ProjectTemplate | null = null;
     
     fileInput.addEventListener('change', (e) => {
-        const target = e.target as HTMLInputElement;
-        const file = target.files?.[0];
+        if (!(e.target instanceof HTMLInputElement)) {
+            throw new Error('Import file input event target is not an HTMLInputElement');
+        }
+        const file = e.target.files?.[0];
         if (!file) return;
         
         const reader = new FileReader();
         reader.onload = (event) => {
             try {
-                const content = event.target?.result as string;
-                const data = JSON.parse(content);
-                
-                // Validate import data
-                if (!data || typeof data !== 'object' || !data.title) {
+                const fileContent = event.target?.result;
+                if (typeof fileContent !== 'string') {
+                    throw new Error('Failed to read import file content');
+                }
+                const parsed: unknown = JSON.parse(fileContent);
+                if (typeof parsed !== 'object' || parsed === null || !('title' in parsed) || typeof parsed.title !== 'string') {
                     throw new Error('Invalid import file: Missing required fields');
                 }
+                const data = parsed as ProjectImportFileData;
                 
                 // Extract template - first try from project level, then from root node, then from child nodes
-                let templateData = data.template;
+                let templateData: ImportFileTemplateObject | undefined =
+                    data.template !== undefined && !Array.isArray(data.template)
+                        ? data.template
+                        : undefined;
                 
-                if (!templateData?.name || !templateData.hierarchyLevels) {
+                if (!templateData?.name || templateData.hierarchyLevels.length === 0) {
                     // Check if root node has template as array (node export format)
                     if (data.template && Array.isArray(data.template)) {
                         templateData = {
-                            name: `Imported Template (${data.title ?? 'Unknown'})`,
+                            name: `Imported Template (${data.title})`,
                             hierarchyLevels: data.template,
-                            
                         };
                     } else if (data.children && data.children.length > 0) {
                         // Try to extract template from first child that has one
-                        let foundTemplate = null;
+                        let foundTemplate: string[] | null = null;
                         for (const child of data.children) {
                             if (child.template && Array.isArray(child.template)) {
                                 foundTemplate = child.template;
@@ -162,9 +173,8 @@ function setupImportProjectModal(onImport: (title: string, template: ProjectTemp
                         
                         if (foundTemplate) {
                             templateData = {
-                                name: `Imported Template (${data.title ?? 'Unknown'})`,
+                                name: `Imported Template (${data.title})`,
                                 hierarchyLevels: foundTemplate,
-                                
                             };
                         } else {
                             throw new Error('Invalid import file: Missing or incomplete template information');
@@ -223,7 +233,7 @@ function setupImportProjectModal(onImport: (title: string, template: ProjectTemp
 
 export function openExportModal(projectManager: ProjectManager, node: DocumentNode) {
     // Use the new ExportModal implementation via ModalFactory
-    import('./modals/ModalFactory').then(async ({ ModalFactory }) => {
+    void import('./modals/ModalFactory').then(async ({ ModalFactory }) => {
         try {
             const settingsManager = state.getSettingsManager();
             const modelSelector = state.getModelSelector();
@@ -241,10 +251,10 @@ export function openExportModal(projectManager: ProjectManager, node: DocumentNo
             await modalFactory.createExportModal(node);
             // Modal opens automatically by default
             
-        } catch (_error) {
+        } catch {
             alert('Failed to open export dialog. Please try again.');
         }
-    }).catch(_error => {
+    }).catch(() => {
         alert('Failed to load export modal. Please try again.');
     });
 }
@@ -405,15 +415,15 @@ export function openExtractContextModal(projectManager: ProjectManager, node: Do
                         label: 'Extract Context',
                         type: 'primary',
                         handler: async () => {
-                            const extractPrompt = document.getElementById('extract-prompt') as HTMLInputElement;
-                            const extractDepth = document.getElementById('extract-depth') as HTMLSelectElement;
+                            const extractPrompt = getElementById<HTMLInputElement>('extract-prompt');
+                            const extractDepth = getElementById<HTMLSelectElement>('extract-depth');
                             
-                            const prompt = extractPrompt?.value?.trim();
-                            const depth = parseInt(extractDepth?.value || '0');
+                            const prompt = extractPrompt.value.trim();
+                            const depth = parseInt(extractDepth.value || '0');
                             
                             if (!prompt) {
                                 alert('Please enter what you want to extract.');
-                                extractPrompt?.focus();
+                                extractPrompt.focus();
                                 throw new Error('Missing prompt'); // Prevent modal from closing
                             }
                             
@@ -434,61 +444,50 @@ export function openExtractContextModal(projectManager: ProjectManager, node: Do
                             }
                             
                             // Show loading indicators
-                            const extractBtn = document.querySelector('[data-action-id="extract"]') as HTMLButtonElement;
-                            const loadingSection = document.getElementById('loading-section');
-                            const resultSection = document.getElementById('result-section');
-                            const originalText = extractBtn?.textContent ?? 'Extract Context';
-                            
-                            if (extractBtn) {
-                                extractBtn.disabled = true;
-                                extractBtn.textContent = '⏳ Extracting...';
+                            const extractBtnElement = document.querySelector('[data-action-id="extract"]');
+                            if (!(extractBtnElement instanceof HTMLButtonElement)) {
+                                throw new Error('Extract action button not found');
                             }
+                            const extractBtn = extractBtnElement;
+                            const loadingSection = getElementById('loading-section');
+                            const resultSection = getElementById('result-section');
+                            const originalText = extractBtn.textContent ?? 'Extract Context';
+                            
+                            extractBtn.disabled = true;
+                            extractBtn.textContent = '⏳ Extracting...';
                             
                             // Show loading section, hide result section
-                            if (loadingSection) {
-                                loadingSection.style.display = 'block';
-                            }
-                            if (resultSection) {
-                                resultSection.style.display = 'none';
-                            }
+                            loadingSection.style.display = 'block';
+                            resultSection.style.display = 'none';
                             
                             try {
                                 const result = await contextService.extractContext(node, prompt, depth);
                                 
                                 // Hide loading section and show result
-                                if (loadingSection) {
-                                    loadingSection.style.display = 'none';
-                                }
+                                loadingSection.style.display = 'none';
                                 
-                                const extractResult = document.getElementById('extract-result') as HTMLTextAreaElement;
-                                if (extractResult && resultSection) {
-                                    extractResult.value = result;
-                                    resultSection.style.display = 'block';
-                                }
+                                const extractResult = getElementById<HTMLTextAreaElement>('extract-result');
+                                extractResult.value = result;
+                                resultSection.style.display = 'block';
                                 
                                 // Re-enable button with new text
-                                if (extractBtn) {
-                                    extractBtn.disabled = false;
-                                    extractBtn.textContent = '🔄 Extract Again';
-                                }
+                                extractBtn.disabled = false;
+                                extractBtn.textContent = '🔄 Extract Again';
                                 
                                 // Prevent modal from closing by throwing a specific error that gets caught silently
                                 throw new Error('__KEEP_MODAL_OPEN__');
                                 
-                            } catch (error: any) {
+                            } catch (error: unknown) {
                                 // Hide loading section and re-enable button on error
-                                if (loadingSection) {
-                                    loadingSection.style.display = 'none';
-                                }
-                                if (extractBtn) {
-                                    extractBtn.disabled = false;
-                                    extractBtn.textContent = originalText;
-                                }
+                                loadingSection.style.display = 'none';
+                                extractBtn.disabled = false;
+                                extractBtn.textContent = originalText;
                                 
-                                if (error.message === '__KEEP_MODAL_OPEN__') {
+                                if (error instanceof Error && error.message === '__KEEP_MODAL_OPEN__') {
                                     throw error; // Keep modal open without logging error
                                 }
-                                alert('Error during extraction:\n\n' + error.message);
+                                const message = error instanceof Error ? error.message : String(error);
+                                alert('Error during extraction:\n\n' + message);
                                 throw error; // Prevent modal from closing on error
                             }
                         }
@@ -523,66 +522,56 @@ function setupExtractContextModal(projectManager: ProjectManager, node: Document
     const addToContextBtn = getElementById<HTMLButtonElement>('add-to-context-btn');
     
     // Set focus to the extract prompt input
-    extractPrompt?.focus();
+    extractPrompt.focus();
     
     // Preview functionality
-    previewBtn?.addEventListener('click', () => {
-        const depth = parseInt(extractDepth?.value || '0');
+    previewBtn.addEventListener('click', () => {
+        const depth = parseInt(extractDepth.value || '0');
         const contextService = projectManager.getContextExtractionService();
         const preview = contextService.getContentPreview(node, depth);
         
-        if (previewContent) {
-            previewContent.textContent = preview.summary;
-        }
-        if (previewContainer) {
-            previewContainer.style.display = 'block';
-        }
+        previewContent.textContent = preview.summary;
+        previewContainer.style.display = 'block';
     });
     
     // Copy result to clipboard
-    copyResultBtn?.addEventListener('click', async () => {
-        try {
-            if (extractResult) {
+    copyResultBtn.addEventListener('click', () => {
+        void (async () => {
+            try {
                 await navigator.clipboard.writeText(extractResult.value);
                 copyResultBtn.textContent = 'Copied!';
                 setTimeout(() => {
                     copyResultBtn.textContent = 'Copy to Clipboard';
                 }, 2000);
+            } catch {
+                alert('Failed to copy to clipboard');
             }
-        } catch (error) {
-            alert('Failed to copy to clipboard');
-        }
+        })();
     });
     
     // Add result to node context
-    addToContextBtn?.addEventListener('click', () => {
-        if (extractResult) {
-            // Traditional context extraction and editing removed - using conditional context system
-            
-            // Update the context textarea in the UI immediately
-            const contextTextarea = document.getElementById('node-context') as HTMLTextAreaElement;
-            if (contextTextarea) {
-                // contextTextarea update removed
-            }
-            
-            // Save project and refresh UI
-            void projectManager.saveToStorage();
-            
-            addToContextBtn.textContent = 'Added!';
-            setTimeout(() => {
-                addToContextBtn.textContent = 'Add to Node Context';
-            }, 1000);
-            
-            // Close modal handled by base modal now
-        }
+    addToContextBtn.addEventListener('click', () => {
+        // Traditional context extraction and editing removed - using conditional context system
+        
+        // Save project and refresh UI
+        void projectManager.saveToStorage();
+        
+        addToContextBtn.textContent = 'Added!';
+        setTimeout(() => {
+            addToContextBtn.textContent = 'Add to Node Context';
+        }, 1000);
+        
+        // Close modal handled by base modal now
     });
     
     // Enter key in prompt field triggers extract action
-    extractPrompt?.addEventListener('keydown', (e) => {
+    extractPrompt.addEventListener('keydown', (e) => {
         if (e.key === 'Enter') {
             // Find and click the extract button (now in modal actions)
-            const extractActionBtn = document.querySelector('[data-action-id="extract"]') as HTMLButtonElement;
-            extractActionBtn?.click();
+            const extractActionElement = document.querySelector('[data-action-id="extract"]');
+            if (extractActionElement instanceof HTMLButtonElement) {
+                extractActionElement.click();
+            }
         }
     });
 }
@@ -593,15 +582,11 @@ function setupExtractContextModal(projectManager: ProjectManager, node: Document
 export function openAILogModal() {
     renderAILogModal();
     const container = modalContainer();
-    if (container) {
-        container.style.display = 'flex';
-    }
+    container.style.display = 'flex';
 }
 
 function renderAILogModal() {
     const content = modalContent();
-    if (!content) return;
-
     content.innerHTML = `
         <style>
             .ai-log-modal {
@@ -844,24 +829,26 @@ function renderAILogModal() {
 }
 
 async function setupAILogModal() {
-    const loadingDiv = document.getElementById('log-loading')!;
-    const contentDiv = document.getElementById('log-content')!;
-    const clearBtn = document.getElementById('clear-log-btn')!;
-    const closeBtn = document.getElementById('close-log-modal-btn')!;
+    const loadingDiv = getElementById('log-loading');
+    const contentDiv = getElementById('log-content');
+    const clearBtn = getElementById<HTMLButtonElement>('clear-log-btn');
+    const closeBtn = getElementById<HTMLButtonElement>('close-log-modal-btn');
 
     closeBtn.addEventListener('click', closeGenericModal);
 
-    clearBtn.addEventListener('click', async () => {
-        if (confirm('Are you sure you want to clear all AI logs? This action cannot be undone.')) {
-            try {
-                const aiLogService = AILogService.getInstance();
-                await aiLogService.clearAllLogs();
-                await loadLogs(); // Reload logs after clearing
-            } catch (error) {
-                console.error('Failed to clear AI logs:', error);
-                alert('Failed to clear logs. Please try again.');
+    clearBtn.addEventListener('click', () => {
+        void (async () => {
+            if (confirm('Are you sure you want to clear all AI logs? This action cannot be undone.')) {
+                try {
+                    const aiLogService = AILogService.getInstance();
+                    await aiLogService.clearAllLogs();
+                    await loadLogs(); // Reload logs after clearing
+                } catch (error) {
+                    console.error('Failed to clear AI logs:', error);
+                    alert('Failed to clear logs. Please try again.');
+                }
             }
-        }
+        })();
     });
 
     const loadLogs = async () => {
@@ -957,20 +944,11 @@ async function setupAILogModal() {
 }
 
 function showLogOverlay(content: string, contentType: string): void {
-    // Define close function first
-    const closeLogOverlay = () => {
-        const existingOverlay = document.querySelector('.log-overlay');
-        if (existingOverlay) {
-            (existingOverlay as any).cleanup?.();
-            existingOverlay.remove();
-        }
-        delete (window as any).closeLogOverlay;
-    };
+    const existingOverlay = document.querySelector('.log-overlay');
+    if (existingOverlay) {
+        existingOverlay.remove();
+    }
 
-    // Make close function globally available
-    (window as any).closeLogOverlay = closeLogOverlay;
-
-    // Create overlay element
     const overlay = document.createElement('div');
     overlay.className = 'log-overlay';
     
@@ -980,13 +958,31 @@ function showLogOverlay(content: string, contentType: string): void {
         <div class="log-overlay-content">
             <div class="log-overlay-header">
                 <h3 class="log-overlay-title">${capitalizedType} Content</h3>
-                <button class="log-overlay-close" onclick="closeLogOverlay()">&times;</button>
+                <button class="log-overlay-close">&times;</button>
             </div>
             <div class="log-overlay-body">
                 <div class="log-overlay-text">${content}</div>
             </div>
         </div>
     `;
+
+    const closeButton = overlay.querySelector('.log-overlay-close');
+    if (!(closeButton instanceof HTMLButtonElement)) {
+        throw new Error('Log overlay close button not found');
+    }
+
+    const handleKeydown = (e: KeyboardEvent) => {
+        if (e.key === 'Escape') {
+            closeLogOverlay();
+        }
+    };
+
+    const closeLogOverlay = () => {
+        document.removeEventListener('keydown', handleKeydown);
+        overlay.remove();
+    };
+
+    closeButton.addEventListener('click', closeLogOverlay);
 
     // Close on background click
     overlay.addEventListener('click', (e) => {
@@ -995,19 +991,7 @@ function showLogOverlay(content: string, contentType: string): void {
         }
     });
 
-    // Close on Escape key
-    const handleKeydown = (e: KeyboardEvent) => {
-        if (e.key === 'Escape') {
-            closeLogOverlay();
-        }
-    };
-    
     document.addEventListener('keydown', handleKeydown);
-    
-    // Store cleanup function on the overlay element for later use
-    (overlay as any).cleanup = () => {
-        document.removeEventListener('keydown', handleKeydown);
-    };
 
     document.body.appendChild(overlay);
 }
@@ -1029,11 +1013,7 @@ function truncateText(text: string, maxLength: number): string {
 }
 
 export function openNodeChatModal(projectManager: ProjectManager, node: DocumentNode) {
-    // Store modal reference so action handlers can close it
-    const modalInstance: any = null;
-    
-    const content = {
-        content: `
+    const modalContentHtml = `
             <style>
                 .modal-content { max-width: 800px; }
                 .chat-section { margin-bottom: 1.5rem; }
@@ -1088,84 +1068,7 @@ export function openNodeChatModal(projectManager: ProjectManager, node: Document
                 <button id="cancel-btn" class="button button-secondary">Cancel</button>
                 <button id="start-chat-btn" class="button button-primary">Start Chat</button>
             </div>
-        `,
-        actions: [
-            {
-                id: 'cancel',
-                label: 'Cancel',
-                type: 'secondary' as const,
-                handler: async () => {
-                    // Explicitly close the modal
-                    if (modalInstance) {
-                        void modalInstance.close();
-                    }
-                }
-            },
-            {
-                id: 'start-chat',
-                label: 'Start Chat',
-                type: 'primary' as const,
-                handler: async () => {
-                    const chatDepth = document.getElementById('chat-depth') as HTMLSelectElement;
-                    if (chatDepth) {
-                        const depth = parseInt(chatDepth.value);
-                        
-                        try {
-                            const contextService = projectManager.getContextExtractionService();
-                            
-                            // Validate chat context parameters and show warnings if needed
-                            const validation = contextService.validateChatContextParameters(node, depth);
-                            
-                            if (validation.errors.length > 0) {
-                                alert('Validation errors:\n\n' + validation.errors.join('\n'));
-                                return; // Don't close modal on validation errors
-                            }
-                            
-                            // Show warnings and ask for confirmation
-                            if (validation.warnings.length > 0) {
-                                const warningMessage = 'Content Size Warnings:\n\n' + validation.warnings.join('\n') + '\n\nDo you want to proceed anyway?\n\nNote: Large contexts may result in higher costs and slower responses.';
-                                if (!confirm(warningMessage)) {
-                                    return; // Don't close modal if user cancels
-                                }
-                            }
-                            
-                            // Create the tree data structure (string representation for prompt)
-                            const treeData = contextService.createNodeTreeData(node, projectManager.rootNode, depth);
-                            
-                            // Create depth-limited node structure for roleplay functionality
-                            const depthLimitedNode = contextService.createDepthLimitedNodeStructure(node, depth);
-                            
-                            // Get the node chat system prompt
-                            const prompts = projectManager.getSettingsManager().getPrompts();
-                            const promptContext = PromptContextBuilder.forUI(projectManager.getSettingsManager(), {
-                                nodeData: treeData
-                            });
-                            // Create chat system prompt
-                            const activeProject = state.getActiveProject();
-                            if (!activeProject) {
-                                throw new Error('No active project for chat');
-                            }
-                            const settingsManager = activeProject.getSettingsManager();
-                            const expansionService = createPromptExpansionService(settingsManager);
-                            const systemPrompt = expansionService.expandPrompt(prompts.node_chat_system, promptContext);
-                            
-                            // Close the modal first
-                            if (modalInstance) {
-                                void modalInstance.close();
-                            }
-                            
-                            // Open the chat interface with depth-limited node structure
-                            void openNodeChatInterface(projectManager, systemPrompt, node.title, depthLimitedNode);
-                            
-                        } catch (error: any) {
-                            alert('Error preparing chat:\n\n' + error.message);
-                            throw error; // Re-throw to prevent modal closing on error
-                        }
-                    }
-                }
-            }
-        ]
-    };
+        `;
     
     // DON'T use showGenericModal to avoid triggering modal system's closeAll()
     // which would close XMLStoryModal and trigger unsaved changes warning
@@ -1184,7 +1087,7 @@ export function openNodeChatModal(projectManager: ProjectManager, node: Document
         max-height: 80vh; overflow-y: auto; padding: 2rem;
         box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
     `;
-    modalDiv.innerHTML = content.content;
+    modalDiv.innerHTML = modalContentHtml;
     modalOverlay.appendChild(modalDiv);
     document.body.appendChild(modalOverlay);
     
@@ -1194,86 +1097,83 @@ export function openNodeChatModal(projectManager: ProjectManager, node: Document
         }
     };
     
-    // Set focus to the depth selector
-    const chatDepth = document.getElementById('chat-depth') as HTMLSelectElement;
-    if (chatDepth) {
-        chatDepth.focus();
-    }
+    const chatDepth = getElementById<HTMLSelectElement>('chat-depth');
+    chatDepth.focus();
     
-    // Setup content preview functionality
-    const previewContentBtn = document.getElementById('preview-content-btn') as HTMLButtonElement;
-    const contentPreviewContainer = document.getElementById('content-preview-container');
-    const contentPreviewContent = document.getElementById('content-preview-content');
-    
-    if (previewContentBtn && contentPreviewContainer && contentPreviewContent) {
-        previewContentBtn.addEventListener('click', () => {
-            try {
-                const depth = parseInt(chatDepth.value);
-                const contextService = projectManager.getContextExtractionService();
-                const preview = contextService.getChatContentPreview(node, depth);
-                
-                contentPreviewContent.textContent = preview.summary;
-                contentPreviewContainer.style.display = 'block';
-            } catch (error: any) {
-                console.error('Error in content preview:', error);
-                alert('Error generating content preview: ' + error.message);
-            }
-        });
-    }
-    
-    // Setup action buttons
-    const cancelBtn = modalDiv.querySelector('#cancel-btn') ?? modalDiv.querySelector('button[id*="cancel"]');
-    const startChatBtn = modalDiv.querySelector('#start-chat-btn') ?? modalDiv.querySelector('button[id*="start"]');
-    
-    cancelBtn?.addEventListener('click', closeModal);
-    
-    startChatBtn?.addEventListener('click', async () => {
-        const depth = parseInt(chatDepth.value);
+    const previewContentBtn = getElementById<HTMLButtonElement>('preview-content-btn');
+    const contentPreviewContainer = getElementById('content-preview-container');
+    const contentPreviewContent = getElementById('content-preview-content');
+
+    previewContentBtn.addEventListener('click', () => {
         try {
+            const depth = parseInt(chatDepth.value);
             const contextService = projectManager.getContextExtractionService();
+            const preview = contextService.getChatContentPreview(node, depth);
             
-            // Validate chat context parameters and show warnings if needed
-            const validation = contextService.validateChatContextParameters(node, depth);
-            
-            if (validation.errors.length > 0) {
-                alert('Validation errors:\n\n' + validation.errors.join('\n'));
-                return;
-            }
-            
-            // Show warnings and ask for confirmation
-            if (validation.warnings.length > 0) {
-                const warningMessage = 'Content Size Warnings:\n\n' + validation.warnings.join('\n') + '\n\nDo you want to proceed anyway?\n\nNote: Large contexts may result in higher costs and slower responses.';
-                if (!confirm(warningMessage)) {
+            contentPreviewContent.textContent = preview.summary;
+            contentPreviewContainer.style.display = 'block';
+        } catch (error: unknown) {
+            console.error('Error in content preview:', error);
+            const message = error instanceof Error ? error.message : String(error);
+            alert('Error generating content preview: ' + message);
+        }
+    });
+    
+    const cancelBtn = getElementById<HTMLButtonElement>('cancel-btn');
+    const startChatBtn = getElementById<HTMLButtonElement>('start-chat-btn');
+    
+    cancelBtn.addEventListener('click', closeModal);
+    
+    startChatBtn.addEventListener('click', () => {
+        void (async () => {
+            const depth = parseInt(chatDepth.value);
+            try {
+                const contextService = projectManager.getContextExtractionService();
+                
+                // Validate chat context parameters and show warnings if needed
+                const validation = contextService.validateChatContextParameters(node, depth);
+                
+                if (validation.errors.length > 0) {
+                    alert('Validation errors:\n\n' + validation.errors.join('\n'));
                     return;
                 }
+                
+                // Show warnings and ask for confirmation
+                if (validation.warnings.length > 0) {
+                    const warningMessage = 'Content Size Warnings:\n\n' + validation.warnings.join('\n') + '\n\nDo you want to proceed anyway?\n\nNote: Large contexts may result in higher costs and slower responses.';
+                    if (!confirm(warningMessage)) {
+                        return;
+                    }
+                }
+                
+                // Create the tree data structure (string representation for prompt)
+                const treeData = contextService.createNodeTreeData(node, projectManager.rootNode, depth);
+                
+                // Create depth-limited node structure for roleplay functionality
+                const depthLimitedNode = contextService.createDepthLimitedNodeStructure(node, depth);
+                
+                // Get the node chat system prompt
+                const prompts = projectManager.getSettingsManager().getPrompts();
+                const promptContext = PromptContextBuilder.forUI(projectManager.getSettingsManager(), {
+                    nodeData: treeData
+                });
+                // Create chat system prompt
+                const activeProject = state.getActiveProject();
+                if (!activeProject) {
+                    throw new Error('No active project for chat');
+                }
+                const settingsManager = activeProject.getSettingsManager();
+                const expansionService = createPromptExpansionService(settingsManager);
+                const systemPrompt = expansionService.expandPrompt(prompts.node_chat_system, promptContext);
+                
+                closeModal();
+                await openNodeChatInterface(projectManager, systemPrompt, node.title, depthLimitedNode);
+                
+            } catch (error: unknown) {
+                const message = error instanceof Error ? error.message : String(error);
+                alert('Error preparing chat:\n\n' + message);
             }
-            
-            // Create the tree data structure (string representation for prompt)
-            const treeData = contextService.createNodeTreeData(node, projectManager.rootNode, depth);
-            
-            // Create depth-limited node structure for roleplay functionality
-            const depthLimitedNode = contextService.createDepthLimitedNodeStructure(node, depth);
-            
-            // Get the node chat system prompt
-            const prompts = projectManager.getSettingsManager().getPrompts();
-            const promptContext = PromptContextBuilder.forUI(projectManager.getSettingsManager(), {
-                nodeData: treeData
-            });
-            // Create chat system prompt
-            const activeProject = state.getActiveProject();
-            if (!activeProject) {
-                throw new Error('No active project for chat');
-            }
-            const settingsManager = activeProject.getSettingsManager();
-            const expansionService = createPromptExpansionService(settingsManager);
-            const systemPrompt = expansionService.expandPrompt(prompts.node_chat_system, promptContext);
-            
-            closeModal();
-            void openNodeChatInterface(projectManager, systemPrompt, node.title, depthLimitedNode);
-            
-        } catch (error: any) {
-            alert('Error preparing chat:\n\n' + error.message);
-        }
+        })();
     });
     
     // ESC key and click outside to close

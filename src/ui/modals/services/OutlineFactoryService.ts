@@ -172,6 +172,7 @@ export class OutlineFactoryService {
     
     if (saved) {
       const { timestamp, ...config } = saved;
+      void timestamp;
       return config;
     }
     

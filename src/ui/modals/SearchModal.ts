@@ -335,9 +335,14 @@ export class SearchModal extends BaseModal {
 
             for (const result of nodeResults) {
                 const highlightedParagraph = this.highlightMatch(result.paragraph, result.matchStart, result.matchLength);
-                const versionInfo = result.contentType === 'conditional'
-                    ? 'Conditional (this node)'
-                    : (result.version.tags.has('master') ? 'Master' : Array.from(result.version.tags).join(', '));
+                let versionInfo: string;
+                if (result.contentType === 'conditional') {
+                    versionInfo = 'Conditional (this node)';
+                } else if (result.version.tags.has('master')) {
+                    versionInfo = 'Master';
+                } else {
+                    versionInfo = Array.from(result.version.tags).join(', ');
+                }
                 
                 html += `
                     <div class="result-paragraph" data-node-id="${node.id}" data-version-id="${result.version.id}">
@@ -365,8 +370,11 @@ export class SearchModal extends BaseModal {
         // Add click handlers for result paragraphs
         this.resultsContainer!.querySelectorAll('.result-paragraph').forEach(element => {
             element.addEventListener('click', (e) => {
-                const nodeId: string | undefined = (e.currentTarget as HTMLElement).dataset['nodeId'];
-                this.openNodeInspector(nodeId!);
+                const nodeId = (e.currentTarget as HTMLElement).dataset['nodeId'];
+                if (!nodeId) {
+                    throw new Error('Search result missing node id');
+                }
+                void this.openNodeInspector(nodeId);
             });
         });
     }
@@ -400,12 +408,10 @@ export class SearchModal extends BaseModal {
             return node;
         }
 
-        if (node.children) {
-            for (const child of node.children) {
-                const found = this.findNodeById(child, targetId);
-                if (found) {
-                    return found;
-                }
+        for (const child of node.children) {
+            const found = this.findNodeById(child, targetId);
+            if (found) {
+                return found;
             }
         }
 
@@ -431,14 +437,13 @@ export class SearchModal extends BaseModal {
         let current: DocumentNode | null = node;
         
         // Build path by walking up through parent IDs
-        while (current && current.parentId) {
-            const parent: DocumentNode | null = this.findNodeById(this.rootNode!, current.parentId);
-            if (parent) {
-                path.unshift(parent.title || 'Untitled');
-                current = parent;
-            } else {
+        while (current.parentId) {
+            const parent = this.findNodeById(this.rootNode!, current.parentId);
+            if (!parent) {
                 break;
             }
+            path.unshift(parent.title || 'Untitled');
+            current = parent;
         }
         
         return path.length > 0 ? path.join(' > ') : 'Root';

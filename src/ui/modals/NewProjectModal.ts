@@ -53,13 +53,13 @@ export class NewProjectModal extends BaseModal {
         // Initialize components
         const manualConfig: ManualProjectCreatorConfig = {
             onCreate: (title: string, template: ProjectTemplate) => {
-                this.handleProjectCreated(title, template);
+                void this.handleProjectCreated(title, template);
             }
         };
 
         const aiConfig: AIProjectCreatorConfig = {
             onCreate: (title: string, template: ProjectTemplate, aiData?: unknown) => {
-                this.handleProjectCreated(title, template, aiData);
+                void this.handleProjectCreated(title, template, aiData);
             },
             settingsManager: this.settingsManager
         };
@@ -70,7 +70,7 @@ export class NewProjectModal extends BaseModal {
         
         const guidedConfig: GuidedOutlineCreatorConfig = {
             onCreate: (title: string, template: ProjectTemplate, aiData?: unknown) => {
-                this.handleProjectCreated(title, template, aiData);
+                void this.handleProjectCreated(title, template, aiData);
             },
             settingsManager: this.settingsManager
         };
@@ -88,12 +88,12 @@ export class NewProjectModal extends BaseModal {
         this.hasRPGLiteSessions = sessions.length > 0;
     }
 
-    protected override async createModal(): Promise<void> {
+    protected override createModal(): void {
         // Check for RPGLite sessions before creating modal
-        await this.checkRPGLiteSessions();
+        void this.checkRPGLiteSessions();
         
         // Now call parent's createModal which will call our render()
-        await super.createModal();
+        super.createModal();
     }
 
     public override render(): HTMLElement {
@@ -315,7 +315,7 @@ export class NewProjectModal extends BaseModal {
         this.setupTabSwitching(container);
         
         // Render initial tab content
-        this.renderTabContent(container);
+        void this.renderTabContent(container);
 
         return container;
     }
@@ -324,12 +324,14 @@ export class NewProjectModal extends BaseModal {
         const tabButtons = container.querySelectorAll('.tab-btn');
         
         tabButtons.forEach(button => {
-            button.addEventListener('click', async (e) => {
-                const target = e.target as HTMLElement;
+            button.addEventListener('click', (e) => {
+                const target = e.currentTarget;
+                if (!(target instanceof HTMLElement)) {
+                    return;
+                }
                 const tab = target.getAttribute('data-tab') as TabType;
-                
-                if (tab && tab !== this.activeTab) {
-                    await this.switchTab(tab, container);
+                if (tab !== this.activeTab) {
+                    void this.switchTab(tab, container);
                 }
             });
         });
@@ -358,9 +360,10 @@ export class NewProjectModal extends BaseModal {
     }
 
     private async renderTabContent(container: HTMLElement): Promise<void> {
-        const contentContainer = container.querySelector('#tab-content-container') as HTMLElement;
-        
-        if (!contentContainer) return;
+        const contentContainer = container.querySelector('#tab-content-container');
+        if (!(contentContainer instanceof HTMLElement)) {
+            throw new Error('Tab content container not found');
+        }
         
         // Clear existing content
         contentContainer.innerHTML = '';
@@ -368,12 +371,10 @@ export class NewProjectModal extends BaseModal {
         if (this.activeTab === 'outline') {
             // Render OutlineFactory component directly to the container
             this.outlineFactory = new OutlineFactory(contentContainer);
-            this.outlineFactory.render().then(() => {
-                // Listen for outline generation completion
-                contentContainer.addEventListener('outline-generated', async (event: Event) => {
-                    const customEvent = event as CustomEvent;
-                    const result = customEvent.detail as OutlineGenerationResult;
-                    await this.handleOutlineGenerationResult(result);
+            void this.outlineFactory.render().then(() => {
+                contentContainer.addEventListener('outline-generated', (event: Event) => {
+                    const customEvent = event as CustomEvent<OutlineGenerationResult>;
+                    void this.handleOutlineGenerationResult(customEvent.detail);
                 });
             });
         } else if (this.activeTab === 'guided') {
@@ -383,12 +384,12 @@ export class NewProjectModal extends BaseModal {
             this.guidedCreator.setupEventListeners(contentContainer);
             
             // Set up cancel event handler
-            contentContainer.addEventListener('guided-cancel', async () => this.close());
+            contentContainer.addEventListener('guided-cancel', () => { void this.close(); });
         } else if (this.activeTab === 'rpglite') {
             // Render RPGLiteSessionCreator component
             const rpgliteConfig: RPGLiteSessionCreatorConfig = {
                 onCreate: (title: string, template: ProjectTemplate, aiData?: unknown) => {
-                    this.handleProjectCreated(title, template, aiData);
+                    void this.handleProjectCreated(title, template, aiData);
                 }
             };
             this.rpgliteCreator = new RPGLiteSessionCreator(rpgliteConfig);
@@ -397,7 +398,7 @@ export class NewProjectModal extends BaseModal {
             this.rpgliteCreator.setupEventListeners(contentContainer);
             
             // Set up cancel event handler
-            contentContainer.addEventListener('rpglite-cancel', async () => this.close());
+            contentContainer.addEventListener('rpglite-cancel', () => { void this.close(); });
         } else {
             // Generate content for manual/ai tabs
             const content = this.activeTab === 'manual' 
@@ -411,8 +412,8 @@ export class NewProjectModal extends BaseModal {
             activeCreator.setupEventListeners(contentContainer);
             
             // Set up cancel event handlers
-            contentContainer.addEventListener('manual-cancel', async () => this.close());
-            contentContainer.addEventListener('ai-cancel', async () => this.close());
+            contentContainer.addEventListener('manual-cancel', () => { void this.close(); });
+            contentContainer.addEventListener('ai-cancel', () => { void this.close(); });
         }
         
         // Store reference for cleanup

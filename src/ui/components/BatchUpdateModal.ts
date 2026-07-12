@@ -156,7 +156,7 @@ export class BatchUpdateModal {
         buttonBar.style.gap = '0.7em';
         buttonBar.style.marginBottom = '1.2em';
         buttonBar.style.alignItems = 'center';
-        (this.rootNode.template || []).forEach((levelName, idx) => {
+        this.rootNode.template.forEach((levelName, idx) => {
             const btn = document.createElement('button');
             btn.textContent = `Toggle all ${this.getPluralLevelName(levelName)}`;
             btn.style.padding = '0.5em 1.3em';
@@ -405,7 +405,7 @@ export class BatchUpdateModal {
             this.runButton.style.fontWeight = '500';
             this.runButton.style.fontSize = '1em';
             this.runButton.style.transition = 'background 0.2s';
-            this.runButton.addEventListener('click', async () => this.handleRun());
+            this.runButton.addEventListener('click', () => { void this.handleRun(); });
             actionsSection.appendChild(this.runButton);
             
             controlsContainer.appendChild(actionsSection);
@@ -528,8 +528,7 @@ export class BatchUpdateModal {
             fieldUpdates.forEach(fu => {
                 const nodeTitle = selectedNodes.find(n => 
                     (fu.field === 'title' && n.title === originalString) ||
-                    (fu.field === 'content' && n.content === originalString) ||
-                    false // Context field removed - using conditional context system
+                    (fu.field === 'content' && n.content === originalString)
                 )?.title ?? 'Unknown';
                 console.log(`    - ${fu.field} from "${nodeTitle}"`);
             });
@@ -551,7 +550,9 @@ export class BatchUpdateModal {
             if (this.shouldAbort) break;
             
             const originalString = uniqueStrings[i];
-            if (!originalString) continue; // Skip if undefined
+            if (originalString === undefined) {
+                throw new Error('Batch update encountered undefined string key');
+            }
             
             const progress = `(${i + 1}/${uniqueStrings.length})`;
             
@@ -563,9 +564,6 @@ export class BatchUpdateModal {
                     throw new Error('No active project found - cannot perform batch update');
                 }
                 const settingsManager = activeProject.getSettingsManager();
-                if (!settingsManager) {
-                    throw new Error('Active project has no SettingsManager - cannot perform batch update');
-                }
                 
                 const promptContext = PromptContextBuilder.forPrompt(
                     settingsManager,
@@ -587,9 +585,7 @@ export class BatchUpdateModal {
                 this.appendLog(`✅ Completed ${progress}`, 'success', `Updated to: "${processedString.substring(0, 100)}${processedString.length > 100 ? '...' : ''}"`);
                 
             } catch (error) {
-                if (!this.shouldAbort) {
-                    this.appendLog(`❌ Failed ${progress}`, 'error', `Error: ${error instanceof Error ? error.message : String(error)}`);
-                }
+                this.appendLog(`❌ Failed ${progress}`, 'error', `Error: ${error instanceof Error ? error.message : String(error)}`);
                 // Keep original string as fallback
                 processingMap[originalString] = originalString;
             }
@@ -676,9 +672,7 @@ export class BatchUpdateModal {
                 }
                 
             } catch (error) {
-                if (!this.shouldAbort) {
-                    this.appendLog(`❌ ${node.title}`, 'error', error instanceof Error ? error.message : String(error));
-                }
+                this.appendLog(`❌ ${node.title}`, 'error', error instanceof Error ? error.message : String(error));
             }
         }
         
@@ -716,9 +710,7 @@ export class BatchUpdateModal {
                     this.appendLog(`⚠️ ${node.title}`, 'error', `Failed to create new version (duplicate tags?)`);
                 }
             } catch (error) {
-                if (!this.shouldAbort) {
-                    this.appendLog(`❌ ${node.title}`, 'error', error instanceof Error ? error.message : String(error));
-                }
+                this.appendLog(`❌ ${node.title}`, 'error', error instanceof Error ? error.message : String(error));
             }
         }
         this.tree.highlightNode('');
@@ -784,28 +776,16 @@ export class BatchUpdateModal {
                 // Phase 2: Process strings
                 const processingMap = await this.processStrings(stringMap, instruction);
                 
-                if (this.shouldAbort) {
-                    this.appendLog(`⚠️ Batch Update Aborted`, 'error', 'Operation was stopped by user request.');
-                    return;
-                }
-                
                 this.appendLog(`✅ Phase 2 Complete`, 'success', `Processed ${Object.keys(processingMap).length} strings`);
                 
                 // Phase 3: Apply updates
                 await this.applyProcessedStrings(stringMap, processingMap, customBatchTag || this.batchTag);
             }
             
-            if (this.shouldAbort) {
-                this.appendLog(`⚠️ Batch Update Aborted`, 'error', 'Operation was stopped by user request.');
-                return;
-            }
-            
             this.appendLog(`🎉 Batch ${justCopyMode ? 'Copy' : 'Update'} Complete`, 'success', `Successfully processed all selected nodes. New versions created with 'batch' tag.`);
             
         } catch (error) {
-            if (!this.shouldAbort) {
-                this.appendLog(`❌ Batch Update Failed`, 'error', error instanceof Error ? error.message : String(error));
-            }
+            this.appendLog(`❌ Batch Update Failed`, 'error', error instanceof Error ? error.message : String(error));
         } finally {
             // Reset UI state
             this.isRunning = false;
@@ -853,7 +833,7 @@ export class BatchUpdateModal {
                 
                 // Update the main GUI tree
                 const { renderNodeDetails } = await import('../project-ui');
-                renderNodeDetails();
+                void renderNodeDetails();
             }
         } catch (error) {
             console.error('Failed to persist node changes:', error);

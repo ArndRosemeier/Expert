@@ -56,7 +56,7 @@ export class ContextExtractionService {
         const contentParts: string[] = [];
         
         // Always include the current node's content if it exists
-        if (node.content && node.content.trim()) {
+        if (node.content.trim()) {
             const levelName = node.template[node.level] ?? `Level ${node.level}`;
             contentParts.push(`${levelName}: "${node.title}"\n---\n${node.content}\n---\n`);
         }
@@ -102,8 +102,8 @@ export class ContextExtractionService {
      */
     public getContentPreview(node: DocumentNode, depth: number = 0): { nodeCount: number, contentLength: number, summary: string } {
         const nodes = this.collectNodesAtDepth(node, depth);
-        const nodesWithContent = nodes.filter(n => n.content && n.content.trim());
-        const totalContentLength = nodesWithContent.reduce((sum, n) => sum + (n.content?.length || 0), 0);
+        const nodesWithContent = nodes.filter(n => n.content.trim());
+        const totalContentLength = nodesWithContent.reduce((sum, n) => sum + n.content.length, 0);
         
         let summary = `Analysis would include:\n`;
         summary += `- ${nodesWithContent.length} nodes with content\n`;
@@ -114,7 +114,7 @@ export class ContextExtractionService {
             summary += `Nodes to be analyzed:\n`;
             nodesWithContent.forEach(n => {
                 const levelName = n.template[n.level] ?? `Level ${n.level}`;
-                summary += `- ${levelName}: "${n.title}" (${n.content?.length || 0} chars)\n`;
+                summary += `- ${levelName}: "${n.title}" (${n.content.length} chars)\n`;
             });
         } else {
             summary += `No nodes with content found at depth ${depth}.`;
@@ -220,14 +220,14 @@ export class ContextExtractionService {
         
         // For the root node (the one chat started with), include content only (context removed)
         if (isRootNode && currentDepth === 0) {
-            if (node.content && node.content.trim()) {
+            if (node.content.trim()) {
                 nodeInfo += `\n${prefix}  Content: ${node.content}`;
             } else {
                 nodeInfo += `\n${prefix}  [No content]`;
             }
         } else {
             // For child nodes, include full content
-            if (node.content && node.content.trim()) {
+            if (node.content.trim()) {
                 nodeInfo += `\n${prefix}  Content: ${node.content}`;
             } else {
                 nodeInfo += `\n${prefix}  [No content]`;
@@ -255,7 +255,7 @@ export class ContextExtractionService {
      */
     public getChatTreePreview(node: DocumentNode, depth: number): { nodeCount: number, summary: string } {
         const nodes = this.collectNodesAtDepth(node, depth);
-        const nodesWithContent = nodes.filter(n => n.content && n.content.trim());
+        const nodesWithContent = nodes.filter(n => n.content.trim());
         
         let summary = `Tree Structure Preview:\n\n`;
         summary += `Starting from: "${node.title}"\n`;
@@ -286,17 +286,17 @@ export class ContextExtractionService {
         
         // For root node, include both context and content
         // Traditional context length calculation removed
-        if (node.content && node.content.trim()) {
+        if (node.content.trim()) {
             totalContentLength += node.content.length;
         }
         
         // For child nodes, include only content
         const childNodes = nodes.slice(1); // Skip root node as we already counted it
-        const childNodesWithContent = childNodes.filter(n => n.content && n.content.trim());
-        totalContentLength += childNodesWithContent.reduce((sum, n) => sum + (n.content?.length || 0), 0);
+        const childNodesWithContent = childNodes.filter(n => n.content.trim());
+        totalContentLength += childNodesWithContent.reduce((sum, n) => sum + n.content.length, 0);
         
         // Total nodes with content (including root if it has context or content)
-        const rootHasContent = (node.content && node.content.trim());
+        const rootHasContent = node.content.trim().length > 0;
         const totalNodesWithContent = (rootHasContent ? 1 : 0) + childNodesWithContent.length;
         
         let summary = `Chat Context Analysis:\n\n`;
@@ -310,7 +310,7 @@ export class ContextExtractionService {
         if (rootHasContent) {
             summary += `Root node "${node.title}":\n`;
             // Traditional context summary removed
-            if (node.content && node.content.trim()) {
+            if (node.content.trim()) {
                 summary += `- Content: ${node.content.length.toLocaleString()} chars\n`;
             }
             summary += `\n`;
@@ -320,7 +320,7 @@ export class ContextExtractionService {
             summary += `Child nodes content:\n`;
             childNodesWithContent.forEach(n => {
                 const levelName = n.template[n.level] ?? `Level ${n.level}`;
-                summary += `- ${levelName}: "${n.title}" (${n.content?.length?.toLocaleString() || 0} chars)\n`;
+                summary += `- ${levelName}: "${n.title}" (${n.content.length.toLocaleString()} chars)\n`;
             });
         }
         
@@ -381,7 +381,7 @@ export class ContextExtractionService {
         const parts: string[] = [];
         
         // Add current node
-        const hasContent = node.content && node.content.trim();
+        const hasContent = node.content.trim().length > 0;
         const levelName = node.template[node.level] ?? `Level ${node.level}`;
         parts.push(`${prefix}${levelName}: "${node.title}" ${hasContent ? '✓' : '○'}`);
         

@@ -55,7 +55,7 @@ export class HierarchicalImportService {
    */
   public async segmentByTemplate(text: string, template: ProjectTemplate, hooks?: ImportProgressHooks): Promise<SegmentedSpan[]> {
     const levels = template.hierarchyLevels;
-    if (!levels || levels.length === 0) {
+    if (levels.length === 0) {
       throw new Error('Template has no hierarchy levels');
     }
 

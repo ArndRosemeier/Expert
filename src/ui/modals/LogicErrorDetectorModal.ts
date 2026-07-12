@@ -256,7 +256,7 @@ export class LogicErrorDetectorModal extends BaseModal {
     private countLeafNodes(node: DocumentNode): number {
         let count = 0;
         const traverse = (currentNode: DocumentNode) => {
-            if (!currentNode.children || currentNode.children.length === 0) {
+            if (currentNode.children.length === 0) {
                 count++;
             } else {
                 for (const child of currentNode.children) {
@@ -265,10 +265,8 @@ export class LogicErrorDetectorModal extends BaseModal {
             }
         };
         
-        if (node.children) {
-            for (const child of node.children) {
-                traverse(child);
-            }
+        for (const child of node.children) {
+            traverse(child);
         }
         
         return count;
@@ -699,9 +697,9 @@ export class LogicErrorDetectorModal extends BaseModal {
      */
     private setupConfigurationEventListeners(): void {
         // Severity slider
-        const severitySlider = document.getElementById('severity-slider') as HTMLInputElement;
+        const severitySlider = document.getElementById('severity-slider');
         const severityValue = document.getElementById('severity-value');
-        if (severitySlider && severityValue) {
+        if (severitySlider instanceof HTMLInputElement && severityValue) {
             severitySlider.addEventListener('input', (e) => {
                 const target = e.target as HTMLInputElement;
                 this.detectionConfig.minimumSeverity = parseInt(target.value);
@@ -717,7 +715,7 @@ export class LogicErrorDetectorModal extends BaseModal {
         }
 
         // Error type checkboxes
-        const errorTypeCheckboxes = document.querySelectorAll('.error-type-checkbox') as NodeListOf<HTMLInputElement>;
+        const errorTypeCheckboxes = document.querySelectorAll('.error-type-checkbox');
         errorTypeCheckboxes.forEach(checkbox => {
             checkbox.addEventListener('change', (e) => {
                 const target = e.target as HTMLInputElement;
@@ -734,8 +732,8 @@ export class LogicErrorDetectorModal extends BaseModal {
         });
 
         // Include empty leaves checkbox
-        const includeEmptyCheckbox = document.getElementById('include-empty-checkbox') as HTMLInputElement;
-        if (includeEmptyCheckbox) {
+        const includeEmptyCheckbox = document.getElementById('include-empty-checkbox');
+        if (includeEmptyCheckbox instanceof HTMLInputElement) {
             includeEmptyCheckbox.addEventListener('change', (e) => {
                 const target = e.target as HTMLInputElement;
                 this.detectionConfig.includeEmptyLeaves = target.checked;
@@ -747,26 +745,22 @@ export class LogicErrorDetectorModal extends BaseModal {
         // Start analysis button
         const startAnalysisBtn = document.getElementById('start-analysis-btn');
         if (startAnalysisBtn) {
-            startAnalysisBtn.addEventListener('click', async () => {
-                // Immediately show loading state
-                this.modalState = 'results';
-                this.isLoading = true;
-                this.updateModalContent();
-                
-                // Small delay to ensure UI updates before heavy computation
-                await new Promise(resolve => setTimeout(resolve, 50));
-                
-                await this.startAnalysis();
-            });
+            startAnalysisBtn.addEventListener('click', () => { void this.handleStartAnalysis(); });
         }
 
         // Cancel button
         const cancelBtn = document.getElementById('cancel-config-btn');
         if (cancelBtn) {
-            cancelBtn.addEventListener('click', () => {
-                this.close();
-            });
+            cancelBtn.addEventListener('click', () => { void this.close(); });
         }
+    }
+
+    private async handleStartAnalysis(): Promise<void> {
+        this.modalState = 'results';
+        this.isLoading = true;
+        this.updateModalContent();
+        await new Promise(resolve => setTimeout(resolve, 50));
+        await this.startAnalysis();
     }
 
     /**
@@ -861,15 +855,17 @@ export class LogicErrorDetectorModal extends BaseModal {
         const description = `${error.type.replace(/_/g, ' ').toUpperCase()}: ${error.description}`;
         
         // Add the todo to the parent node with full logic error details
-        const logicErrorData = {
+        const logicErrorData: {
+            type: LogicError['type'];
+            severity: number;
+            justification: string;
+            suggestedFix?: string;
+        } = {
             type: error.type,
             severity: error.severity,
-            justification: error.justification
-        } as const;
-        
-        if (error.suggestedFix) {
-            (logicErrorData as any).suggestedFix = error.suggestedFix;
-        }
+            justification: error.justification,
+            ...(error.suggestedFix !== undefined ? { suggestedFix: error.suggestedFix } : {})
+        };
         
         this.parentNode.addTodo(description, relatedNodes, logicErrorData);
         

@@ -18,14 +18,10 @@ export class GenericModal extends SimpleGenericModal {
         // For simplicity, we'll recreate the modal with new content
         // This is cleaner than trying to update DOM in place
         if (this.isOpen()) {
-            const wasOpen = true;
             void this.close().then(() => {
-                if (wasOpen) {
-                    // Create new modal with updated content
-                    const newConfig = { ...this.config, content };
-                    const newModal = new GenericModal(newConfig, this.hooks);
-                    void newModal.open();
-                }
+                const newConfig = { ...this.config, content };
+                const newModal = new GenericModal(newConfig, this.hooks);
+                void newModal.open();
             });
         }
     }
@@ -84,8 +80,7 @@ export function showAlert(
                     id: 'ok',
                     label: 'OK',
                     type: 'primary',
-                    handler: async () => {
-                        // Modal will close automatically when the action completes
+                    handler: () => {
                         onClose?.();
                     }
                 }
@@ -115,7 +110,7 @@ export function showConfirm(
                     id: 'cancel',
                     label: 'Cancel',
                     type: 'outline',
-                    handler: async () => {
+                    handler: () => {
                         onCancel?.();
                     }
                 },
@@ -123,7 +118,7 @@ export function showConfirm(
                     id: 'confirm',
                     label: 'Confirm',
                     type: 'primary',
-                    handler: async () => {
+                    handler: () => {
                         onConfirm?.();
                     }
                 }

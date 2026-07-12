@@ -37,7 +37,7 @@ export class ManualModal extends BaseModal {
         container.innerHTML += this.getManualHTML();
         
         // Make methods available globally for button clicks
-        (window as any).manualModal = this;
+        window.manualModal = this;
         
         return container;
     }
@@ -382,16 +382,21 @@ export class ManualModal extends BaseModal {
     private setupManualEvents(): void {
         // Setup search functionality
         setTimeout(() => {
-            const searchInput = document.getElementById('manualSearchInput') as HTMLInputElement;
-            if (searchInput) {
-                let searchTimeout: NodeJS.Timeout;
-                searchInput.addEventListener('input', (e) => {
-                    clearTimeout(searchTimeout);
-                    searchTimeout = setTimeout(() => {
-                        this.performSearch((e.target as HTMLInputElement).value);
-                    }, 300);
-                });
+            const searchInput = document.getElementById('manualSearchInput');
+            if (!(searchInput instanceof HTMLInputElement)) {
+                return;
             }
+
+            let searchTimeout: ReturnType<typeof setTimeout>;
+            searchInput.addEventListener('input', (e) => {
+                clearTimeout(searchTimeout);
+                searchTimeout = setTimeout(() => {
+                    const target = e.target;
+                    if (target instanceof HTMLInputElement) {
+                        this.performSearch(target.value);
+                    }
+                }, 300);
+            });
             
             // Setup keyboard shortcuts
             document.addEventListener('keydown', this.handleKeyDown.bind(this));
@@ -491,18 +496,17 @@ export class ManualModal extends BaseModal {
     }
 
     private addAppFeatureLinks(html: string): string {
-        // Add interactive links for app features mentioned in the manual
-        const featureMap: Record<string, () => void> = {
-            'Settings Modal': () => this.openAppFeature('settings'),
-            'New Project': () => this.openAppFeature('newProject'),
-            'Import Project': () => this.openAppFeature('importProject'),
-            'Manage Templates': () => this.openAppFeature('manageTemplates'),
-            'Comprehensive Export': () => this.openAppFeature('comprehensiveExport'),
-        };
+        const featureNames = [
+            'Settings Modal',
+            'New Project',
+            'Import Project',
+            'Manage Templates',
+            'Comprehensive Export',
+        ];
 
         let processedHtml = html;
         
-        for (const featureName of Object.keys(featureMap)) {
+        for (const featureName of featureNames) {
             const regex = new RegExp(`\\b${featureName}\\b`, 'g');
             processedHtml = processedHtml.replace(regex, 
                 `<a href="#" class="app-feature-link" onclick="window.manualModal.openAppFeature('${featureName.toLowerCase().replace(/\s+/g, '')}'); return false;">
@@ -519,25 +523,27 @@ export class ManualModal extends BaseModal {
             switch (feature) {
                 case 'settings':
                 case 'settingsmodal':
-                    const { openSettingsModal } = await import('./ModalFactory');
-                    openSettingsModal();
-                    this.close();
+                    {
+                        const { openSettingsModal } = await import('./ModalFactory');
+                        openSettingsModal();
+                        await this.close();
+                    }
                     break;
                 case 'newproject':
                     document.getElementById('newProjectBtn')?.click();
-                    this.close();
+                    await this.close();
                     break;
                 case 'importproject':
                     document.getElementById('importProjectBtn')?.click();
-                    this.close();
+                    await this.close();
                     break;
                 case 'managetemplates':
                     document.getElementById('manageTemplatesBtn')?.click();
-                    this.close();
+                    await this.close();
                     break;
                 case 'comprehensiveexport':
                     document.getElementById('comprehensiveExportBtn')?.click();
-                    this.close();
+                    await this.close();
                     break;
                 default:
                     console.log(`Unknown feature: ${feature}`);
@@ -598,7 +604,7 @@ export class ManualModal extends BaseModal {
         
         if (!query) {
             // Clear highlights - reload content
-            this.loadManual();
+            void this.loadManual();
             return;
         }
 
@@ -627,9 +633,11 @@ export class ManualModal extends BaseModal {
             switch (e.key) {
                 case 'f':
                     e.preventDefault();
-                    const searchInput = document.getElementById('manualSearchInput') as HTMLInputElement;
-                    if (searchInput) {
-                        searchInput.focus();
+                    {
+                        const searchInput = document.getElementById('manualSearchInput');
+                        if (searchInput instanceof HTMLInputElement) {
+                            searchInput.focus();
+                        }
                     }
                     break;
                 case 'p':
@@ -641,7 +649,7 @@ export class ManualModal extends BaseModal {
         
         if (e.key === 'Escape' && e.target !== document.querySelector('.manual-search-input')) {
             // Only close on escape if not typing in search
-            this.close();
+            void this.close();
         }
     }
 
@@ -787,8 +795,8 @@ Instructions:
     protected override cleanup(): void {
         super.cleanup();
         // Remove global reference
-        if ((window as any).manualModal === this) {
-            delete (window as any).manualModal;
+        if (window.manualModal === this) {
+            delete window.manualModal;
         }
         
         // Remove keyboard listener

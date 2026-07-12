@@ -133,9 +133,7 @@ export class TaskModelEditor {
     private async handleModelPurposeChange(select: HTMLSelectElement): Promise<void> {
         const taskType = select.dataset['task'] as keyof AllTaskModelConfigs;
         const nodeType = select.dataset['nodeType'] as 'outline' | 'prose';
-        const newPurpose = select.value;
-
-        if (!taskType || !nodeType) return;
+        const newPurpose = select.value as (typeof MODEL_PURPOSES)[number]['key'];
 
         try {
             // Get current config
@@ -172,7 +170,7 @@ export class TaskModelEditor {
         if (row) {
             const display = row.querySelector('.current-model-display');
             if (display) {
-                display.textContent = this.taskModelService.getCurrentModelName(purpose as any);
+                display.textContent = this.taskModelService.getCurrentModelName(purpose as (typeof MODEL_PURPOSES)[number]['key']);
             }
         }
     }

@@ -11,10 +11,6 @@ import { SettingsManager } from '../SettingsManager';
 import { QualityCriterion } from '../types';
 import { formatCriteriaAsJson } from '../ProjectUtils';
 
-interface ProjectGenerationOptions {
-    // Options for project generation - concepts are always detailed
-}
-
 export interface AIGenerationResponse {
     Title?: string;   // Extracted project title from AI response
     Content: string;  // Project concept and structure
@@ -38,10 +34,9 @@ export class AIProjectGenerator {
      * Generate a complete project structure from natural language description
      */
     public async generateProjectStructure(
-        description: string, 
-        options: ProjectGenerationOptions
+        description: string
     ): Promise<AIGenerationResponse> {
-        const prompt = this.buildProjectGenerationPrompt(description, options);
+        const prompt = this.buildProjectGenerationPrompt(description);
         
         try {
             // Use the creator model for project generation
@@ -78,7 +73,7 @@ export class AIProjectGenerator {
     /**
      * Build the sophisticated prompt for project generation using PromptManager
      */
-    private buildProjectGenerationPrompt(description: string, _options: ProjectGenerationOptions): string {
+    private buildProjectGenerationPrompt(description: string): string {
         const prompts = this.settingsManager.getPrompts();
         const promptTemplate = prompts.ai_project_generation;
         
@@ -129,12 +124,17 @@ export class AIProjectGenerator {
             // Use structured data
             console.log('✅ Successfully parsed AI response with method:', parsedContent.metadata['parseMethod']);
             console.log('✅ Extracted title:', parsedContent.metadata['title']);
-            return {
-                Title: parsedContent.metadata['title'] ?? undefined,
+            const titleMeta = parsedContent.metadata['title'];
+            const title = typeof titleMeta === 'string' ? titleMeta : undefined;
+            const response: AIGenerationResponse = {
                 Content: parsedContent.content,
                 Template: parsedContent.template,
                 Context: parsedContent.context
             };
+            if (title !== undefined) {
+                response.Title = title;
+            }
+            return response;
         } else {
             // Log the complete AI response for debugging
             console.error('❌ AI PROJECT GENERATION FAILED - FULL RESPONSE:');
@@ -164,16 +164,11 @@ export class AIProjectGenerator {
             errors.push('Content section is missing or empty');
         }
 
-        if (!response.Template) {
-            errors.push('Template section is missing');
-        } else {
-            if (!response.Template.name) {
-                errors.push('Template name is missing');
-            }
-            if (!Array.isArray(response.Template.hierarchyLevels) || response.Template.hierarchyLevels.length === 0) {
-                errors.push('Template hierarchy levels are missing or invalid');
-            }
-            // scaffoldingDocuments removed
+        if (!response.Template.name) {
+            errors.push('Template name is missing');
+        }
+        if (!Array.isArray(response.Template.hierarchyLevels) || response.Template.hierarchyLevels.length === 0) {
+            errors.push('Template hierarchy levels are missing or invalid');
         }
 
         if (!response.Context || response.Context.trim().length === 0) {

@@ -58,7 +58,7 @@ export class LogicOutlineFixerModal extends BaseModal {
         this.logicChildService = new LogicChildFixerService(openRouterClient, settingsManager);
 
         // Collect affected nodes from todos
-        await this.collectAffectedNodes();
+        this.collectAffectedNodes();
 
         await super.open();
         this.setupEventListeners();
@@ -67,18 +67,16 @@ export class LogicOutlineFixerModal extends BaseModal {
     /**
      * Collect affected nodes from todo list
      */
-    private async collectAffectedNodes(): Promise<void> {
+    private collectAffectedNodes(): void {
         const todos = this.node.getIncompleteTodos();
         const nodeIds = new Set<string>();
         
         todos.forEach(todo => {
-            if (todo.relatedNodes) {
-                todo.relatedNodes.forEach(ref => {
-                    if (ref.id !== 'unknown') {
-                        nodeIds.add(ref.id);
-                    }
-                });
-            }
+            todo.relatedNodes.forEach(ref => {
+                if (ref.id !== 'unknown') {
+                    nodeIds.add(ref.id);
+                }
+            });
         });
 
         // Find actual node objects
@@ -386,10 +384,8 @@ export class LogicOutlineFixerModal extends BaseModal {
                 </p>
                 
                 ${todos.map((todo, index) => {
-                    const affectedCount = todo.relatedNodes ? todo.relatedNodes.length : 0;
-                    const nodeNames = todo.relatedNodes ? 
-                        todo.relatedNodes.map(ref => ref.title).join(', ') : 
-                        'Unknown nodes';
+                    const affectedCount = todo.relatedNodes.length;
+                    const nodeNames = todo.relatedNodes.map(ref => ref.title).join(', ');
                     
                     return `
                         <div class="problem-option" data-todo-id="${todo.id}">
@@ -824,7 +820,7 @@ export class LogicOutlineFixerModal extends BaseModal {
                 <h4 style="margin: 20px 0 15px 0; color: #333;">📝 Fixed Nodes</h4>
                                  ${fixedNodes.map(nodeId => {
                      const result = this.childFixResults.get(nodeId)!;
-                     const node = this.findNodeById(this.projectManager.rootNode, nodeId)!;
+                     const node = this.findNodeById(this.projectManager.rootNode, nodeId);
                     const diffResult = DiffTool.compare(result.originalContent, result.fixedContent);
                     const diffSummary = DiffTool.getSummary(diffResult);
                     
@@ -874,36 +870,40 @@ export class LogicOutlineFixerModal extends BaseModal {
      * Setup event listeners
      */
     private setupEventListeners(): void {
-        this.element!.addEventListener('click', async (e: Event) => {
-            const target = e.target as HTMLElement;
-            
-            if (target.id === 'fix-parent-btn') {
-                this.modalState = 'parent-loading';
-                this.updateContent();
-                await this.generateParentFix();
-            } else if (target.id === 'fix-children-btn' && !target.hasAttribute('disabled')) {
-                this.modalState = 'problem-selection';
-                this.updateContent();
-                this.setupProblemSelectionListeners();
-            } else if (target.id === 'problem-back-btn') {
-                this.modalState = 'choice';
-                this.updateContent();
-            } else if (target.id === 'problem-proceed-btn' && !target.hasAttribute('disabled')) {
-                await this.selectProblemAndShowTruthSelection();
-            } else if (target.id === 'truth-back-btn') {
-                this.modalState = 'problem-selection';
-                this.updateContent();
-                this.setupProblemSelectionListeners();
-            } else if (target.id === 'truth-proceed-btn' && !target.hasAttribute('disabled')) {
-                await this.startChildFix();
-            } else if (target.id === 'retry-single-btn') {
-                await this.retrySingleNodeFix();
-            } else if (target.id === 'apply-single-btn') {
-                await this.applySingleNodeFix();
-            }
+        this.element!.addEventListener('click', (e: Event) => {
+            void this.handleModalClick(e);
         });
 
 
+    }
+
+    private async handleModalClick(e: Event): Promise<void> {
+        const target = e.target as HTMLElement;
+
+        if (target.id === 'fix-parent-btn') {
+            this.modalState = 'parent-loading';
+            this.updateContent();
+            await this.generateParentFix();
+        } else if (target.id === 'fix-children-btn' && !target.hasAttribute('disabled')) {
+            this.modalState = 'problem-selection';
+            this.updateContent();
+            this.setupProblemSelectionListeners();
+        } else if (target.id === 'problem-back-btn') {
+            this.modalState = 'choice';
+            this.updateContent();
+        } else if (target.id === 'problem-proceed-btn' && !target.hasAttribute('disabled')) {
+            await this.selectProblemAndShowTruthSelection();
+        } else if (target.id === 'truth-back-btn') {
+            this.modalState = 'problem-selection';
+            this.updateContent();
+            this.setupProblemSelectionListeners();
+        } else if (target.id === 'truth-proceed-btn' && !target.hasAttribute('disabled')) {
+            await this.startChildFix();
+        } else if (target.id === 'retry-single-btn') {
+            await this.retrySingleNodeFix();
+        } else if (target.id === 'apply-single-btn') {
+            await this.applySingleNodeFix();
+        }
     }
 
     /**
@@ -941,9 +941,7 @@ export class LogicOutlineFixerModal extends BaseModal {
      */
     private updateContent(): void {
         const content = this.element!.querySelector('.modal-content') as HTMLElement;
-        if (content) {
-            content.innerHTML = this.renderModalContent();
-        }
+        content.innerHTML = this.renderModalContent();
     }
 
     /**
@@ -1014,15 +1012,19 @@ export class LogicOutlineFixerModal extends BaseModal {
         const retryBtn = this.element!.querySelector('#retry-parent-btn') as HTMLButtonElement;
         const applyBtn = this.element!.querySelector('#apply-parent-btn') as HTMLButtonElement;
         
-        retryBtn.addEventListener('click', async () => {
-            this.modalState = 'parent-loading';
-            this.updateContent();
-            await this.generateParentFix();
+        retryBtn.addEventListener('click', () => {
+            void this.retryParentFix();
         });
         
-        applyBtn.addEventListener('click', async () => {
-            await this.applyParentFix();
+        applyBtn.addEventListener('click', () => {
+            void this.applyParentFix();
         });
+    }
+
+    private async retryParentFix(): Promise<void> {
+        this.modalState = 'parent-loading';
+        this.updateContent();
+        await this.generateParentFix();
     }
 
     /**
@@ -1043,16 +1045,20 @@ export class LogicOutlineFixerModal extends BaseModal {
         const retryBtn = this.element!.querySelector('#retry-child-btn') as HTMLButtonElement;
         const applyBtn = this.element!.querySelector('#apply-child-btn') as HTMLButtonElement;
         
-        retryBtn.addEventListener('click', async () => {
-            this.modalState = 'child-loading';
-            this.childFixResults.clear();
-            this.updateContent();
-            await this.processChildFixes();
+        retryBtn.addEventListener('click', () => {
+            void this.retryChildFixes();
         });
         
-        applyBtn.addEventListener('click', async () => {
-            await this.applyChildFixes();
+        applyBtn.addEventListener('click', () => {
+            void this.applyChildFixes();
         });
+    }
+
+    private async retryChildFixes(): Promise<void> {
+        this.modalState = 'child-loading';
+        this.childFixResults.clear();
+        this.updateContent();
+        await this.processChildFixes();
     }
 
     /**
@@ -1073,7 +1079,7 @@ export class LogicOutlineFixerModal extends BaseModal {
         );
         
         this.childFixResults.set(nodeToFix.id, {
-            originalContent: nodeToFix.content!,
+            originalContent: nodeToFix.content,
             fixedContent: result.fixedContent,
             problemsSolved: result.problemsSolved,
             explanation: result.explanation
@@ -1116,7 +1122,7 @@ export class LogicOutlineFixerModal extends BaseModal {
         // Persistence is handled by saveToStorage above
         console.log('✅ Parent fix applied and saved');
 
-        this.close();
+        void this.close();
     }
 
     /**
@@ -1156,7 +1162,7 @@ export class LogicOutlineFixerModal extends BaseModal {
             this.setupProblemSelectionListeners();
         } else {
             console.log('🎉 All problems fixed, closing modal');
-            this.close();
+            void this.close();
         }
     }
 
@@ -1230,7 +1236,7 @@ export class LogicOutlineFixerModal extends BaseModal {
         
         // Build list of nodes affected by this specific problem
         this.problemAffectedNodes = [];
-        if (!this.selectedTodo.relatedNodes) {
+        if (this.selectedTodo.relatedNodes.length === 0) {
             throw new Error(`Selected todo ${this.selectedTodo.id} has no related nodes`);
         }
         
@@ -1283,7 +1289,7 @@ export class LogicOutlineFixerModal extends BaseModal {
         
         // Store as a "child fix" result for consistent processing
         this.childFixResults.set(nodeToFix.id, {
-            originalContent: nodeToFix.content!,
+            originalContent: nodeToFix.content,
             fixedContent: result.fixedContent,
             problemsSolved: result.problemsSolved,
             explanation: result.explanation

@@ -120,7 +120,14 @@ export class CoherenceLog {
         
         entries.forEach(entry => {
             const severity = entry.contradiction.severity;
-            const severityRange = severity >= 8 ? 'high' : severity >= 5 ? 'medium' : 'low';
+            let severityRange: string;
+            if (severity >= 8) {
+                severityRange = 'high';
+            } else if (severity >= 5) {
+                severityRange = 'medium';
+            } else {
+                severityRange = 'low';
+            }
             severityBreakdown[severityRange] = (severityBreakdown[severityRange] ?? 0) + 1;
             
             reasonBreakdown[entry.reason] = (reasonBreakdown[entry.reason] ?? 0) + 1;
@@ -152,8 +159,7 @@ export class CoherenceLog {
      * Save coherence log to project storage
      * TODO: Implement proper project storage integration
      */
-    public async saveToProject(projectId: string): Promise<void> {
-        // TODO: Implement saving coherence log to project storage
+    public saveToProject(projectId: string): void {
         console.log('📝 Saving coherence log to project:', projectId);
     }
     
@@ -161,8 +167,7 @@ export class CoherenceLog {
      * Load coherence log from project storage
      * TODO: Implement proper project storage integration
      */
-    public async loadFromProject(projectId: string): Promise<void> {
-        // TODO: Implement loading coherence log from project storage
+    public loadFromProject(projectId: string): void {
         console.log('📖 Loading coherence log from project:', projectId);
     }
     

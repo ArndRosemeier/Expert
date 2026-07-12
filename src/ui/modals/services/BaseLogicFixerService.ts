@@ -68,7 +68,8 @@ export abstract class BaseLogicFixerService {
      * Default implementation returns empty string (no context).
      * Override in subclasses that need parent context.
      */
-    protected getNodeContext(_node: DocumentNode): string {
+    protected getNodeContext(node: DocumentNode): string {
+        void node;
         return '';
     }
 }

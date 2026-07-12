@@ -135,45 +135,67 @@ export interface SettingsProfile {
     taskModelConfigs?: import('./services/TaskModelService').AllTaskModelConfigs; // Task-based model configurations
 }
 
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+    return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+interface StoredCriterionShape {
+    name?: unknown;
+    goal?: unknown;
+    outline?: unknown;
+    leaf?: unknown;
+    description?: unknown;
+}
+
+interface StoredProfileShape {
+    criteria?: unknown;
+    maxIterations?: unknown;
+    selectedModels?: unknown;
+    webSearchEnabled?: unknown;
+    selectedProviders?: unknown;
+    contextExtractionPrompt?: unknown;
+    language?: unknown;
+    version?: unknown;
+    taskModelConfigs?: unknown;
+}
+
+function isValidStoredCriterion(criterion: unknown): boolean {
+    if (!isPlainObject(criterion)) return false;
+    const c = criterion as StoredCriterionShape;
+    return (
+        typeof c.name === 'string' &&
+        typeof c.goal === 'number' &&
+        (c.outline === undefined || typeof c.outline === 'boolean') &&
+        (c.leaf === undefined || typeof c.leaf === 'boolean') &&
+        (c.description === undefined || typeof c.description === 'string')
+    );
+}
+
+function isValidStoredProfile(profile: unknown): boolean {
+    if (!isPlainObject(profile)) return false;
+    const p = profile as StoredProfileShape;
+
+    if (p.criteria !== undefined) {
+        if (!Array.isArray(p.criteria)) return false;
+        if (!p.criteria.every(isValidStoredCriterion)) return false;
+    }
+
+    if (typeof p.maxIterations !== 'number') return false;
+    if (!isPlainObject(p.selectedModels)) return false;
+    if (p.webSearchEnabled !== undefined && !isPlainObject(p.webSearchEnabled)) return false;
+    if (p.selectedProviders !== undefined && !isPlainObject(p.selectedProviders)) return false;
+    if (p.contextExtractionPrompt !== undefined && typeof p.contextExtractionPrompt !== 'string') return false;
+    if (p.language !== undefined && typeof p.language !== 'string') return false;
+    if (p.version !== undefined && typeof p.version !== 'string') return false;
+    if (p.taskModelConfigs !== undefined && !isPlainObject(p.taskModelConfigs)) return false;
+
+    return true;
+}
+
 function areValidSettingsProfiles(data: unknown): data is Record<string, SettingsProfile> {
-    if (typeof data !== 'object' || data === null) return false;
+    if (!isPlainObject(data)) return false;
 
-    const maybeRecord = data as Record<string, unknown>;
-    return Object.values(maybeRecord).every((profile: unknown) => {
-        if (typeof profile !== 'object' || profile === null) return false;
-        const p = profile as Partial<SettingsProfile> & { [k: string]: unknown };
-
-        // criteria (optional)
-        if (p.criteria !== undefined) {
-            if (!Array.isArray(p.criteria)) return false;
-            const allCriteriaValid = p.criteria.every((criterion: unknown) => {
-                if (typeof criterion !== 'object' || criterion === null) return false;
-                const c = criterion as { name?: unknown; goal?: unknown; outline?: unknown; leaf?: unknown; description?: unknown };
-                return (
-                    typeof c.name === 'string' &&
-                    typeof c.goal === 'number' &&
-                    (c.outline === undefined || typeof c.outline === 'boolean') &&
-                    (c.leaf === undefined || typeof c.leaf === 'boolean') &&
-                    (c.description === undefined || typeof c.description === 'string')
-                );
-            });
-            if (!allCriteriaValid) return false;
-        }
-
-        // required fields
-        if (typeof p.maxIterations !== 'number') return false;
-        if (typeof p.selectedModels !== 'object' || p.selectedModels === null) return false;
-
-        // optional objects
-        if (p.webSearchEnabled !== undefined && (typeof p.webSearchEnabled !== 'object' || p.webSearchEnabled === null)) return false;
-        if (p.selectedProviders !== undefined && (typeof p.selectedProviders !== 'object' || p.selectedProviders === null)) return false;
-        if (p.contextExtractionPrompt !== undefined && typeof p.contextExtractionPrompt !== 'string') return false;
-        if ((p as any).language !== undefined && typeof (p as any).language !== 'string') return false;
-        if (p.version !== undefined && typeof p.version !== 'string') return false;
-        if (p.taskModelConfigs !== undefined && (typeof p.taskModelConfigs !== 'object' || p.taskModelConfigs === null)) return false;
-
-        return true;
-    });
+    return Object.values(data).every(isValidStoredProfile);
 }
 
 export class SettingsManager {
@@ -198,7 +220,7 @@ export class SettingsManager {
      * Get the singleton instance (async version for proper initialization)
      */
     public static async getInstance(): Promise<SettingsManager> {
-        if (SettingsManager.instance && SettingsManager.instance.initialized) {
+        if (SettingsManager.instance?.initialized) {
             return SettingsManager.instance;
         }
 
@@ -267,74 +289,76 @@ export class SettingsManager {
                 // simply brought up to date here.
                 let hasDefaultCriteria = false;
                 
-                Object.keys(this.profiles).forEach(profileName => {
+                for (const profileName of Object.keys(this.profiles)) {
                     const profile = this.profiles[profileName];
-                    if (profile) {
-                        // Always bring the profile up to the current version.
-                        profile.version = currentVersion;
-                        
-                        // Handle criteria - add defaults if missing, detect if existing are default
-                        if (!profile.criteria) {
-                            // Missing criteria is expected after cleanup - just populate with defaults
-                            profile.criteria = DEFAULT_CRITERIA;
-                        } else if (this.isKnownDefaultCriteria(profile.criteria)) {
-                            // Stored criteria match the current OR a previous default set, which
-                            // means the user never customized them. Adopt the current defaults
-                            // (upgrading any outdated default set) and let save strip them so
-                            // future default changes keep propagating automatically.
-                            profile.criteria = DEFAULT_CRITERIA;
-                            hasDefaultCriteria = true;
-                        } else {
-                            // Customized criteria are kept as-is, but drop any metric
-                            // criterion whose metric type was retired so evaluation
-                            // never hits an unregistered type.
-                            profile.criteria = this.sanitizeCriteria(profile.criteria);
-                        }
-                        
-                        // Add default context extraction prompt and web search preferences to existing profiles that don't have them
-                        if (!profile.contextExtractionPrompt) {
-                            profile.contextExtractionPrompt = DEFAULT_CONTEXT_EXTRACTION_PROMPT;
-                        }
-                        profile.webSearchEnabled ??= {};
-                        // Add default task model configs to existing profiles that don't have them
-                        profile.taskModelConfigs ??= {
-                                coherence_analysis: {
-                                    outline: 'creator' as const,
-                                    prose: 'prose' as const
-                                },
-                                fix_contradiction: {
-                                    outline: 'creator' as const,
-                                    prose: 'prose' as const
-                                },
-                                text_polishing: {
-                                    outline: 'creator' as const,
-                                    prose: 'prose' as const
-                                },
-                                // context_adjustment removed - traditional context system removed
-                                context_rating: {
-                                    outline: 'creator' as const,
-                                    prose: 'prose' as const
-                                },
-                                logic_error_analysis: {
-                                    outline: 'rater' as const,
-                                    prose: 'rater' as const
-                                },
-                                logic_child_fix: {
-                                    outline: 'creator' as const,
-                                    prose: 'creator' as const
-                                }
-                            };
-                        
-
+                    if (!profile) {
+                        throw new Error(`Profile "${profileName}" is missing from loaded settings`);
                     }
-                });
+                    // Always bring the profile up to the current version.
+                    profile.version = currentVersion;
+
+                    // Handle criteria - add defaults if missing, detect if existing are default
+                    if (!profile.criteria) {
+                        // Missing criteria is expected after cleanup - just populate with defaults
+                        profile.criteria = DEFAULT_CRITERIA;
+                    } else if (this.isKnownDefaultCriteria(profile.criteria)) {
+                        // Stored criteria match the current OR a previous default set, which
+                        // means the user never customized them. Adopt the current defaults
+                        // (upgrading any outdated default set) and let save strip them so
+                        // future default changes keep propagating automatically.
+                        profile.criteria = DEFAULT_CRITERIA;
+                        hasDefaultCriteria = true;
+                    } else {
+                        // Customized criteria are kept as-is, but drop any metric
+                        // criterion whose metric type was retired so evaluation
+                        // never hits an unregistered type.
+                        profile.criteria = this.sanitizeCriteria(profile.criteria);
+                    }
+
+                    // Add default context extraction prompt and web search preferences to existing profiles that don't have them
+                    if (!profile.contextExtractionPrompt) {
+                        profile.contextExtractionPrompt = DEFAULT_CONTEXT_EXTRACTION_PROMPT;
+                    }
+                    const storedProfile = profile as SettingsProfile & {
+                        webSearchEnabled?: Record<string, boolean> | null;
+                        taskModelConfigs?: SettingsProfile['taskModelConfigs'] | null;
+                    };
+                    storedProfile.webSearchEnabled ??= {};
+                    storedProfile.taskModelConfigs ??= {
+                        coherence_analysis: {
+                            outline: 'creator' as const,
+                            prose: 'prose' as const
+                        },
+                        fix_contradiction: {
+                            outline: 'creator' as const,
+                            prose: 'prose' as const
+                        },
+                        text_polishing: {
+                            outline: 'creator' as const,
+                            prose: 'prose' as const
+                        },
+                        // context_adjustment removed - traditional context system removed
+                        context_rating: {
+                            outline: 'creator' as const,
+                            prose: 'prose' as const
+                        },
+                        logic_error_analysis: {
+                            outline: 'rater' as const,
+                            prose: 'rater' as const
+                        },
+                        logic_child_fix: {
+                            outline: 'creator' as const,
+                            prose: 'creator' as const
+                        }
+                    };
+                }
                 
                 // Clean up default criteria immediately to prevent old defaults from overriding new system criteria
                 if (hasDefaultCriteria) {
                     
                     
                     // Re-save to storage with smart criteria logic (but keep full profiles in memory)
-                    await this.saveProfiles(true);
+                    await this.saveProfiles();
                 } else {
                     // Save the updated profiles with the new field
                     await this.saveProfiles();
@@ -605,10 +629,10 @@ export class SettingsManager {
             // from overriding new system prompts in future versions
             const modifiedPrompts: Partial<OrchestratorPrompts> = {};
             
-            for (const [key, value] of Object.entries(prompts)) {
-                const defaultValue = defaultPrompts[key as keyof OrchestratorPrompts];
-                if (value !== defaultValue) {
-                    (modifiedPrompts as any)[key] = value;
+            for (const key of Object.keys(prompts) as (keyof OrchestratorPrompts)[]) {
+                const value = prompts[key];
+                if (value !== defaultPrompts[key]) {
+                    modifiedPrompts[key] = value;
                 }
             }
             
@@ -643,7 +667,7 @@ export class SettingsManager {
         // Store profile in memory with criteria always populated for immediate use
         // Deep copy to prevent cross-profile contamination
         const profileToSave: SettingsProfile = {
-            selectedModels: { ...(profile.selectedModels || {}) },
+            selectedModels: { ...profile.selectedModels },
             selectedProviders: { ...(profile.selectedProviders ?? {}) },
             webSearchEnabled: { ...(profile.webSearchEnabled ?? {}) },
             criteria: profile.criteria ? [...profile.criteria] : [...DEFAULT_CRITERIA],
@@ -781,7 +805,13 @@ export class SettingsManager {
 
 
 
-    private async saveProfiles(_isCleanupOperation: boolean = false): Promise<void> {
+    private omitCriteriaForStorage(profile: SettingsProfile): SettingsProfile {
+        const profileWithoutCriteria = { ...profile };
+        delete profileWithoutCriteria.criteria;
+        return profileWithoutCriteria;
+    }
+
+    private async saveProfiles(): Promise<void> {
         try {
             const storage = await this.storageService;
             
@@ -789,20 +819,17 @@ export class SettingsManager {
             // from overriding new system criteria in future versions
             const profilesForStorage: Record<string, SettingsProfile> = {};
             
-            Object.entries(this.profiles).forEach(([profileName, profile]) => {
-                if (profile) {
-                    const isDefaultCriteria = this.areDefaultCriteria(profile.criteria ?? DEFAULT_CRITERIA);
-                    
-                    if (isDefaultCriteria) {
-                        // Remove criteria from storage version - they'll be populated from defaults on load
-                        const { criteria, ...profileWithoutCriteria } = profile;
-                        profilesForStorage[profileName] = profileWithoutCriteria as SettingsProfile;
-                    } else {
-                        // Keep custom criteria in storage
-                        profilesForStorage[profileName] = profile;
-                    }
+            for (const [profileName, profile] of Object.entries(this.profiles)) {
+                const isDefaultCriteria = this.areDefaultCriteria(profile.criteria ?? DEFAULT_CRITERIA);
+
+                if (isDefaultCriteria) {
+                    // Remove criteria from storage version - they'll be populated from defaults on load
+                    profilesForStorage[profileName] = this.omitCriteriaForStorage(profile);
+                } else {
+                    // Keep custom criteria in storage
+                    profilesForStorage[profileName] = profile;
                 }
-            });
+            }
             
             await storage.set(SETTINGS_PROFILES_KEY, profilesForStorage);
         } catch (error) {
@@ -906,10 +933,8 @@ export class SettingsManager {
             await this.saveProfile(profileName, importedProfile);
 
             // Import prompts (merge with existing ones)
-            if (data.prompts && typeof data.prompts === 'object') {
-                const mergedPrompts = { ...this.prompts, ...(data.prompts as Partial<OrchestratorPrompts>) };
-                await this.savePrompts(mergedPrompts);
-            }
+            const mergedPrompts = { ...this.prompts, ...(data.prompts as Partial<OrchestratorPrompts>) };
+            await this.savePrompts(mergedPrompts);
 
             return { 
                 success: true, 
@@ -930,29 +955,7 @@ export class SettingsManager {
      * Validates the structure of a single profile object
      */
     private static validateProfileStructure(profile: unknown): profile is SettingsProfile {
-        if (typeof profile !== 'object' || profile === null) return false;
-        const p = profile as Partial<SettingsProfile> & { [k: string]: unknown };
-        if (typeof p.maxIterations !== 'number') return false;
-        if (typeof p.selectedModels !== 'object' || p.selectedModels === null) return false;
-        if (p.criteria !== undefined) {
-            if (!Array.isArray(p.criteria)) return false;
-            const ok = p.criteria.every((c: unknown) => {
-                if (typeof c !== 'object' || c === null) return false;
-                const cc = c as { name?: unknown; goal?: unknown; outline?: unknown; leaf?: unknown; description?: unknown };
-                return (
-                    typeof cc.name === 'string' &&
-                    typeof cc.goal === 'number' &&
-                    (cc.outline === undefined || typeof cc.outline === 'boolean') &&
-                    (cc.leaf === undefined || typeof cc.leaf === 'boolean') &&
-                    (cc.description === undefined || typeof cc.description === 'string')
-                );
-            });
-            if (!ok) return false;
-        }
-        if (p.selectedProviders !== undefined && (typeof p.selectedProviders !== 'object' || p.selectedProviders === null)) return false;
-        if (p.webSearchEnabled !== undefined && (typeof p.webSearchEnabled !== 'object' || p.webSearchEnabled === null)) return false;
-        if (p.contextExtractionPrompt !== undefined && typeof p.contextExtractionPrompt !== 'string') return false;
-        return true;
+        return isValidStoredProfile(profile);
     }
 
 

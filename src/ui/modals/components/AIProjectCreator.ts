@@ -39,7 +39,7 @@ export class AIProjectCreator {
         // Phase 2: Will pass the actual OpenRouter client
         this.generationService = new ProjectGenerationService(undefined, config.settingsManager);
         // Load cached prompts
-        this.loadCachedPrompts();
+        void this.loadCachedPrompts();
     }
 
     public render(): string {
@@ -281,26 +281,19 @@ export class AIProjectCreator {
         const generateBtn = container.querySelector('#ai-generate-btn') as HTMLButtonElement;
         const cancelBtn = container.querySelector('#ai-cancel-btn') as HTMLButtonElement;
         
-        if (generateBtn) {
-            const generateHandler = async () => this.handleGenerate();
-            generateBtn.addEventListener('click', generateHandler);
-            this.cleanupHandlers.push(() => { generateBtn.removeEventListener('click', generateHandler); });
-        }
+        const generateHandler = () => { void this.handleGenerate(); };
+        generateBtn.addEventListener('click', generateHandler);
+        this.cleanupHandlers.push(() => { generateBtn.removeEventListener('click', generateHandler); });
         
-        if (cancelBtn) {
-            const cancelHandler = () => { this.handleCancel(); };
-            cancelBtn.addEventListener('click', cancelHandler);
-            this.cleanupHandlers.push(() => { cancelBtn.removeEventListener('click', cancelHandler); });
-        }
+        const cancelHandler = () => { this.handleCancel(); };
+        cancelBtn.addEventListener('click', cancelHandler);
+        this.cleanupHandlers.push(() => { cancelBtn.removeEventListener('click', cancelHandler); });
 
         // Upgrade description textarea to enhanced UniversalTextEditor
         const originalDescriptionTextarea = container.querySelector('#ai-project-description') as HTMLTextAreaElement;
-        if (originalDescriptionTextarea) {
-            this.descriptionEditor = UniversalTextEditor.replace(originalDescriptionTextarea, {
-                mode: 'enhanced'  // Enable AI features and text transformation
-            });
-            // Auto-resize is handled automatically by UniversalTextEditor
-        }
+        this.descriptionEditor = UniversalTextEditor.replace(originalDescriptionTextarea, {
+            mode: 'enhanced'  // Enable AI features and text transformation
+        });
 
         // Setup prompt dropdown functionality
         this.setupPromptDropdownListeners(container);
@@ -343,9 +336,7 @@ export class AIProjectCreator {
                         progressElement.textContent = progress.message || '';
                     }
                     
-                    if (progressFill) {
-                        progressFill.style.width = `${progress.progress}%`;
-                    }
+                    progressFill.style.width = `${progress.progress}%`;
                 }
             );
             
@@ -387,7 +378,7 @@ export class AIProjectCreator {
     }
 
     private getDescription(): string {
-        return this.descriptionEditor?.value?.trim() ?? '';
+        return this.descriptionEditor?.value.trim() ?? '';
     }
 
     private getGenerationOptions(): ProjectGenerationOptions {
@@ -401,28 +392,18 @@ export class AIProjectCreator {
         const progressSection = this.container?.querySelector('#ai-generation-progress') as HTMLElement;
         const generateBtn = this.container?.querySelector('#ai-generate-btn') as HTMLButtonElement;
         
-        if (progressSection) {
-            progressSection.style.display = 'block';
-        }
-        
-        if (generateBtn) {
-            generateBtn.disabled = true;
-            generateBtn.textContent = 'Generating...';
-        }
+        progressSection.style.display = 'block';
+        generateBtn.disabled = true;
+        generateBtn.textContent = 'Generating...';
     }
 
     private hideProgress(): void {
         const progressSection = this.container?.querySelector('#ai-generation-progress') as HTMLElement;
         const generateBtn = this.container?.querySelector('#ai-generate-btn') as HTMLButtonElement;
         
-        if (progressSection) {
-            progressSection.style.display = 'none';
-        }
-        
-        if (generateBtn) {
-            generateBtn.disabled = false;
-            generateBtn.textContent = '🚀 Generate Project Structure';
-        }
+        progressSection.style.display = 'none';
+        generateBtn.disabled = false;
+        generateBtn.textContent = '🚀 Generate Project Structure';
     }
 
     private handleCancel(): void {
@@ -572,7 +553,7 @@ export class AIProjectCreator {
                 e.stopPropagation();
                 const confirmDelete = confirm(`Delete this prompt?\n\n"${this.abbreviatePrompt(prompt)}"`);
                 if (confirmDelete) {
-                    this.removePromptFromCache(prompt);
+                    void this.removePromptFromCache(prompt);
                 }
             });
 
@@ -607,8 +588,6 @@ export class AIProjectCreator {
     private setupPromptDropdownListeners(container: HTMLElement): void {
         const button = container.querySelector('#saved-prompts-btn') as HTMLButtonElement;
         const menu = container.querySelector('#prompts-dropdown-menu') as HTMLElement;
-
-        if (!button || !menu) return;
 
         // Handle button click to toggle dropdown
         button.addEventListener('click', (e) => {

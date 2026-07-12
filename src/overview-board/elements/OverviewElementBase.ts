@@ -1,6 +1,5 @@
 // Base class for Overview Board elements - extends IdeaBoard patterns
-import type { Point, Size } from '../../idea-board/types/BoardTypes';
-import type { Viewport } from '../../idea-board/rendering/Viewport';
+import type { Point, Size, Viewport, ElementData } from '../../idea-board/types/BoardTypes';
 import type { 
   OverviewElement, 
   CloudType, 
@@ -8,6 +7,8 @@ import type {
   CloudTheme 
 } from '../types/GraphTypes';
 import type { EventData, CharacterData, PlaceData } from '../types/OverviewTypes';
+
+type CloudThemeEntry = CloudTheme[CloudType];
 
 export abstract class OverviewElementBase implements OverviewElement {
   public id: string;
@@ -54,7 +55,7 @@ export abstract class OverviewElementBase implements OverviewElement {
       return data.significance; // EventData or PlaceData
     } else {
       // CharacterData - determine significance from role
-      const characterData = data as CharacterData;
+      const characterData = data;
       return characterData.role === 'protagonist' || characterData.role === 'antagonist' ? 'major' : 'minor';
     }
   }
@@ -62,7 +63,7 @@ export abstract class OverviewElementBase implements OverviewElement {
   /**
    * Create element style from cloud theme
    */
-  private createStyleFromTheme(cloudTheme: any): ElementStyle {
+  private createStyleFromTheme(cloudTheme: CloudThemeEntry): ElementStyle {
     return {
       backgroundColor: cloudTheme.backgroundColor,
       borderColor: cloudTheme.borderColor,
@@ -213,28 +214,31 @@ export abstract class OverviewElementBase implements OverviewElement {
   /**
    * Serialize element data
    */
-  public serialize(): any {
+  public serialize(): ElementData {
     return {
       id: this.id,
       type: this.type,
-      cloudType: this.cloudType,
       position: this.position,
       size: this.size,
-      significance: this.significance,
-      connections: this.connections,
-      data: this.data
+      content: this.getDescription(),
+      style: {
+        backgroundColor: this.style.backgroundColor,
+        textColor: this.style.textColor,
+        fontSize: this.style.fontSize
+      },
+      metadata: {
+        created: new Date(),
+        lastEdited: new Date()
+      }
     };
   }
 
   /**
    * Deserialize element data
    */
-  public deserialize(data: any): void {
+  public deserialize(data: ElementData): void {
     this.position = data.position;
     this.size = data.size;
-    this.significance = data.significance;
-    this.connections = data.connections ?? [];
-    this.data = data.data;
   }
 
   // State management methods

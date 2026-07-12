@@ -10,6 +10,25 @@ import { ModalConfig } from './types/ModalTypes';
 import { createElement } from './core/modal-utils';
 import { AI_ASSISTANT_EMOJI } from '../../constants';
 
+interface SaveFilePickerWindow extends Window {
+    showSaveFilePicker(options: {
+        suggestedName: string;
+        types: Array<{ description: string; accept: Record<string, string[]> }>;
+    }): Promise<FileSystemFileHandle>;
+}
+
+function categoryStatusIcon(status: string): string {
+    if (status === 'available') return '✅';
+    if (status === 'empty') return '⚪';
+    return '❌';
+}
+
+function categoryStatusText(status: string): string {
+    if (status === 'available') return 'Ready';
+    if (status === 'empty') return 'Empty';
+    return 'Error';
+}
+
 export interface ComprehensiveExportModalConfig extends ModalConfig {
     // No specific config needed for comprehensive export
 }
@@ -125,25 +144,25 @@ export class ComprehensiveExportModal extends BaseModal {
         this.exportButton = createElement('button', {
             classes: ['button', 'button-primary'],
             content: '📦 Create Backup ZIP'
-        }) as HTMLButtonElement;
+        });
 
         this.importButton = createElement('button', {
             classes: ['button', 'button-success'],
             content: '📥 Import Backup ZIP'
-        }) as HTMLButtonElement;
+        });
 
 
 
         const cancelButton = createElement('button', {
             classes: ['button', 'button-secondary'],
             content: 'Cancel'
-        }) as HTMLButtonElement;
+        });
 
         // Event listeners
-        this.exportButton.addEventListener('click', async () => this.handleExport());
-        this.importButton.addEventListener('click', async () => this.handleImport());
+        this.exportButton.addEventListener('click', () => { void this.handleExport(); });
+        this.importButton.addEventListener('click', () => { void this.handleImport(); });
 
-        cancelButton.addEventListener('click', async () => this.close());
+        cancelButton.addEventListener('click', () => { void this.close(); });
 
         footer.appendChild(cancelButton);
         footer.appendChild(this.importButton);
@@ -166,10 +185,8 @@ export class ComprehensiveExportModal extends BaseModal {
             let summaryHTML = '<h3>📊 Export Summary</h3><div class="summary-grid">';
             
             summary.categories.forEach(category => {
-                const statusIcon = category.status === 'available' ? '✅' : 
-                                 category.status === 'empty' ? '⚪' : '❌';
-                const statusText = category.status === 'available' ? 'Ready' : 
-                                 category.status === 'empty' ? 'Empty' : 'Error';
+                const statusIcon = categoryStatusIcon(category.status);
+                const statusText = categoryStatusText(category.status);
                 
                 summaryHTML += `
                     <div class="summary-item summary-item-${category.status}">
@@ -208,16 +225,17 @@ export class ComprehensiveExportModal extends BaseModal {
      * Handles the export action
      */
     private async handleExport(): Promise<void> {
-        if (!this.exportButton || this.isLoading) return;
+        const exportButton = this.exportButton;
+        if (!exportButton || this.isLoading) return;
 
         this.isLoading = true;
-        this.exportButton.disabled = true;
-        this.exportButton.textContent = '📁 Choose save location...';
+        exportButton.disabled = true;
+        exportButton.textContent = '📁 Choose save location...';
 
         try {
             // CRITICAL: Get file handle immediately while we still have user gesture
             // The File System Access API requires direct user interaction
-            let fileHandle: any = null;
+            let fileHandle: FileSystemFileHandle | null = null;
             const hasFileSystemAPI = 'showSaveFilePicker' in window;
             
             if (hasFileSystemAPI) {
@@ -225,7 +243,7 @@ export class ComprehensiveExportModal extends BaseModal {
                     const timestamp = new Date().toISOString().split('T')[0];
                     const filename = `expert-app-complete-backup-${timestamp}.zip`;
                     
-                    fileHandle = await (window as any).showSaveFilePicker({
+                    fileHandle = await (window as unknown as SaveFilePickerWindow).showSaveFilePicker({
                         suggestedName: filename,
                         types: [{
                             description: 'Expert Application Backup',
@@ -235,8 +253,8 @@ export class ComprehensiveExportModal extends BaseModal {
                 } catch (error) {
                     // User cancelled or picker failed
                     this.isLoading = false;
-                    this.exportButton.disabled = false;
-                    this.exportButton.textContent = '💾 Export All Data';
+                    exportButton.disabled = false;
+                    exportButton.textContent = '💾 Export All Data';
                     
                     if (error instanceof Error && error.name === 'AbortError') {
                         console.log('Export cancelled by user');
@@ -250,7 +268,7 @@ export class ComprehensiveExportModal extends BaseModal {
                 }
             }
 
-            this.exportButton.textContent = '⏳ Creating backup...';
+            exportButton.textContent = '⏳ Creating backup...';
             
             const result = await ComprehensiveExportService.createComprehensiveBackup(fileHandle);
             
@@ -270,7 +288,7 @@ export class ComprehensiveExportModal extends BaseModal {
                 }
                 
                 // Close modal after short delay
-                void void setTimeout(() => {
+                setTimeout(() => {
                     void this.close();
                 }, 3000);
                 
@@ -295,10 +313,8 @@ export class ComprehensiveExportModal extends BaseModal {
             
         } finally {
             this.isLoading = false;
-            if (this.exportButton) {
-                this.exportButton.disabled = false;
-                this.exportButton.textContent = '📦 Create Backup ZIP';
-            }
+            exportButton.disabled = false;
+            exportButton.textContent = '📦 Create Backup ZIP';
         }
     }
 
@@ -306,7 +322,8 @@ export class ComprehensiveExportModal extends BaseModal {
      * Handles the import action
      */
     private async handleImport(): Promise<void> {
-        if (!this.importButton || this.isLoading) return;
+        const importButton = this.importButton;
+        if (!importButton || this.isLoading) return;
 
         try {
             // Show file picker dialog
@@ -317,8 +334,8 @@ export class ComprehensiveExportModal extends BaseModal {
             }
 
             this.isLoading = true;
-            this.importButton.disabled = true;
-            this.importButton.textContent = '⏳ Analyzing backup...';
+            importButton.disabled = true;
+            importButton.textContent = '⏳ Analyzing backup...';
 
             // Get import summary to show what will be imported
             const summary = await ComprehensiveImportService.getImportSummary(file);
@@ -364,7 +381,7 @@ export class ComprehensiveExportModal extends BaseModal {
             }
 
             // Perform the import
-            this.importButton.textContent = '⏳ Importing data...';
+            importButton.textContent = '⏳ Importing data...';
             
             const result = await ComprehensiveImportService.importComprehensiveBackup(file);
             
@@ -410,10 +427,8 @@ export class ComprehensiveExportModal extends BaseModal {
             
         } finally {
             this.isLoading = false;
-            if (this.importButton) {
-                this.importButton.disabled = false;
-                this.importButton.textContent = '📥 Import Backup ZIP';
-            }
+            importButton.disabled = false;
+            importButton.textContent = '📥 Import Backup ZIP';
         }
     }
 

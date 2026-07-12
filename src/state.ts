@@ -51,7 +51,8 @@ export const initializeLanguageSync = () => {
  * Handle language change from settings - DECOUPLED: only changes global default
  * No longer automatically syncs to active project
  */
-export const handleLanguageChange = (_newLanguage: string) => {
+export const handleLanguageChange = (newLanguage: string) => {
+    void newLanguage;
     // Language change now only affects the global default setting
     // Projects maintain their own language settings independently
     // Use "Set Project Language" button to explicitly copy global to project

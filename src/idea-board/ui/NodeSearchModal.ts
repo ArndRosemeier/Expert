@@ -45,7 +45,7 @@ export class NodeSearchModal extends BaseModal {
   /**
    * Initialize node data from the active project or all projects
    */
-  private async initializeNodes(): Promise<void> {
+  private initializeNodes(): void {
     this.allNodes = [];
 
     if (this.searchScope === 'all-projects') {
@@ -134,7 +134,7 @@ export class NodeSearchModal extends BaseModal {
           transition: border-color 0.2s;
         `
       }
-    }) as HTMLInputElement;
+    });
 
     // Focus and border effects
     this.searchInput.addEventListener('focus', () => {
@@ -423,7 +423,7 @@ export class NodeSearchModal extends BaseModal {
    * Override the open method to initialize nodes
    */
   public override async open(): Promise<void> {
-    await this.initializeNodes();
+    this.initializeNodes();
     await super.open();
     
     // Focus the search input after opening

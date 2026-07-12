@@ -133,18 +133,15 @@ export class LogicErrorDetectionService {
         const traverse = (currentNode: DocumentNode) => {
             if (this.isLeafNode(currentNode)) {
                 leaves.push(currentNode);
-            } else if (currentNode.children) {
+            } else if (currentNode.children.length > 0) {
                 for (const child of currentNode.children) {
                     traverse(child);
                 }
             }
         };
         
-        // Start from children of the parent node, not the parent itself
-        if (node.children) {
-            for (const child of node.children) {
-                traverse(child);
-            }
+        for (const child of node.children) {
+            traverse(child);
         }
         
         return leaves;
@@ -154,14 +151,14 @@ export class LogicErrorDetectionService {
      * Check if a node is a leaf (has no children or only empty children)
      */
     private isLeafNode(node: DocumentNode): boolean {
-        if (!node.children || node.children.length === 0) {
+        if (node.children.length === 0) {
             return true;
         }
         
         // Also consider nodes with only empty children as leaves
         return node.children.every(child => 
-            (!child.children || child.children.length === 0) && 
-            (!child.content || child.content.trim().length === 0)
+            child.children.length === 0 && 
+            child.content.trim().length === 0
         );
     }
 
@@ -264,7 +261,7 @@ export class LogicErrorDetectionService {
 
             const parsed: LogicErrorAIResponse = JSON.parse(jsonMatch[0]);
             
-            if (!parsed.errors || !Array.isArray(parsed.errors)) {
+            if (!Array.isArray(parsed.errors)) {
                 console.warn('Invalid errors array in AI response');
                 return [];
             }

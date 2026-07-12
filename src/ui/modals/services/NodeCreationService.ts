@@ -75,7 +75,7 @@ export class NodeCreationService implements INodeCreationService {
 
         try {
             // Get the creator model from the profile's selected models
-            const creatorModel = profile.selectedModels?.['creator'];
+            const creatorModel = profile.selectedModels['creator'];
             if (!creatorModel) {
                 throw new Error('No creator model configured in the active profile');
             }
@@ -116,10 +116,10 @@ export class NodeCreationService implements INodeCreationService {
             const draftContent = `Draft: ${draft}`;
             // If draft was AI-generated, track the creator model
             const profile = this.settingsManager.getLastUsedProfile();
-            const creatorModel = profile?.selectedModels?.['creator'];
+            const creatorModel = profile?.selectedModels['creator'];
             
             // Create a separate draft version instead of updating master
-            const metadata: { [key: string]: any } = {};
+            const metadata: Record<string, string> = {};
             if (creatorModel) {
                 metadata['creatorModel'] = creatorModel;
             }
@@ -169,17 +169,25 @@ export class NodeCreationService implements INodeCreationService {
     /**
      * Parse JSON response from AI
      */
-    private parseJsonResponse(content: string): any[] {
+    private parseJsonResponse(content: string): unknown[] {
         try {
             // Try to find JSON array in the response
             const jsonMatch = content.match(/\[[\s\S]*\]/);
             if (jsonMatch) {
-                return JSON.parse(jsonMatch[0]);
+                const parsed: unknown = JSON.parse(jsonMatch[0]);
+                if (!Array.isArray(parsed)) {
+                    throw new Error('Expected JSON array in AI response');
+                }
+                return parsed;
             }
             
             // If no array found, try parsing the entire content
-            return JSON.parse(content);
-        } catch (error) {
+            const parsed: unknown = JSON.parse(content);
+            if (!Array.isArray(parsed)) {
+                throw new Error('Expected JSON array in AI response');
+            }
+            return parsed;
+        } catch {
             throw new Error('Invalid JSON response from AI model');
         }
     }
@@ -187,7 +195,7 @@ export class NodeCreationService implements INodeCreationService {
     /**
      * Validate AI suggestions
      */
-    private validateSuggestions(suggestions: any[], expectedCount: number): NodeSuggestion[] {
+    private validateSuggestions(suggestions: unknown[], expectedCount: number): NodeSuggestion[] {
         if (!Array.isArray(suggestions)) {
             throw new Error('AI response is not an array');
         }
@@ -195,16 +203,18 @@ export class NodeCreationService implements INodeCreationService {
         const validSuggestions: NodeSuggestion[] = [];
         
         for (const suggestion of suggestions) {
-            if (suggestion && 
-                typeof suggestion.title === 'string' && 
-                typeof suggestion.draft === 'string' &&
-                suggestion.title.trim() !== '' &&
-                suggestion.draft.trim() !== '') {
+            if (typeof suggestion === 'object' && suggestion !== null) {
+                const record = suggestion as Record<string, unknown>;
+                if (typeof record['title'] === 'string' && 
+                typeof record['draft'] === 'string' &&
+                record['title'].trim() !== '' &&
+                record['draft'].trim() !== '') {
                 
                 validSuggestions.push({
-                    title: suggestion.title.trim(),
-                    draft: suggestion.draft.trim()
+                    title: record['title'].trim(),
+                    draft: record['draft'].trim()
                 });
+            }
             }
         }
 

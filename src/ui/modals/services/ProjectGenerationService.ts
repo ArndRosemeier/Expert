@@ -113,13 +113,8 @@ export class ProjectGenerationService {
         }
 
         try {
-            // Convert request to AI generator format - concepts are always detailed now
-            const aiOptions = { detailedOutline: true };
-            
-            // Generate with AI
             const aiResponse = await this.aiGenerator.generateProjectStructure(
-                request.description, 
-                aiOptions
+                request.description
             );
 
             // Continue progress

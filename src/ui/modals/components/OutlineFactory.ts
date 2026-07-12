@@ -202,11 +202,9 @@ export class OutlineFactory {
   private bindElements(): void {
     // Upgrade ideas textarea to enhanced UniversalTextEditor
     const originalIdeasTextarea = this.container.querySelector('#ideas-textarea') as HTMLTextAreaElement;
-    if (originalIdeasTextarea) {
-      this.ideasTextarea = UniversalTextEditor.replace(originalIdeasTextarea, {
-        mode: 'enhanced'  // Enable AI features and text transformation
-      });
-    }
+    this.ideasTextarea = UniversalTextEditor.replace(originalIdeasTextarea, {
+      mode: 'enhanced'  // Enable AI features and text transformation
+    });
     this.resetButton = this.container.querySelector('#reset-button') as HTMLButtonElement;
     this.generateButton = this.container.querySelector('#generate-button') as HTMLButtonElement;
     this.validationMessage = this.container.querySelector('#validation-message') as HTMLElement;
@@ -525,13 +523,13 @@ export class OutlineFactory {
     });
     
     // Reset button
-    this.resetButton!.addEventListener('click', async () => {
-      await this.resetToDefaults();
+    this.resetButton!.addEventListener('click', () => {
+      void this.resetToDefaults();
     });
     
     // Generate button
-    this.generateButton!.addEventListener('click', async () => {
-      await this.handleGenerate();
+    this.generateButton!.addEventListener('click', () => {
+      void this.handleGenerate();
     });
   }
   
@@ -638,8 +636,8 @@ export class OutlineFactory {
   
   private debouncedSave(): void {
     clearTimeout(this.saveTimeout!);
-    this.saveTimeout = window.setTimeout(async () => {
-      await this.service.saveConfiguration(this.config);
+    this.saveTimeout = window.setTimeout(() => {
+      void this.service.saveConfiguration(this.config);
     }, this.SAVE_DEBOUNCE_MS);
   }
   

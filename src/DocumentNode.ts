@@ -1,5 +1,15 @@
 import { LoopHistoryItem } from './LoopOrchestrator';
 import { Rating } from './types/RatingTypes';
+import type {
+    ContentVersionMetadata,
+    DocumentNodeJSONInput,
+    LastGenerationParameters,
+    SerializedConditionalContextItemJSON,
+    SerializedContentVersionJSON,
+    SerializedGenerationSessionJSON,
+    SerializedTodoItemJSON,
+} from './types/DocumentNodeTypes';
+import type { CachedOverviewAnalysis, CharacterData, EventData, PlaceData } from './overview-board/types/OverviewTypes';
 import { v4 as uuidv4 } from 'uuid';
 import { getContextItems, parseSectionTitles } from './ContextFormat';
 import { generateNewContextID } from './ContextIDGenerator';
@@ -81,13 +91,6 @@ export interface TodoItem {
 /**
  * Generation parameters that are remembered per node
  */
-interface LastGenerationParameters {
-    draftLevel: number;
-    contentLevel: number;
-    coherenceLevel: number;
-    autofixSeverity: number;
-    deterministicChildCreation?: boolean;
-}
 
 /**
  * Represents a single version of node content with tags and metadata.
@@ -100,7 +103,7 @@ export interface ContentVersion {
     timestamp: Date;
     ratings?: Rating[];
     creatorModel?: string;
-    metadata?: { [key: string]: any };
+    metadata?: ContentVersionMetadata;
     /**
      * Optional user-provided name for an explicit snapshot version. When set, it
      * is used as the version's display label in the inspector. Round-trips via
@@ -170,7 +173,7 @@ export class DocumentNode {
     currentGenerationSession: GenerationSession | null = null;
 
     // --- Overview Board Cache ---
-    overviewBoardCache: Map<string, any> = new Map(); // CachedOverviewAnalysis by layer name
+    overviewBoardCache: Map<string, CachedOverviewAnalysis> = new Map();
 
     // --- Generation Parameters Cache ---
     lastGenerationParameters: LastGenerationParameters | null = null;
@@ -275,7 +278,7 @@ export class DocumentNode {
         
         // Check if the master version has draft tag
         const masterVersion = this.getMasterVersion();
-        if (masterVersion && masterVersion.tags.has('draft')) {
+        if (masterVersion?.tags.has('draft')) {
             return 'Draft';
         }
         
@@ -313,7 +316,7 @@ export class DocumentNode {
     /**
      * Static method to restore from JSON with legacy compatibility.
      */
-    static fromJSON(data: any): DocumentNode {
+    static fromJSON(data: DocumentNodeJSONInput): DocumentNode {
         // Always use a non-empty string for title
         const safeTitle = (typeof data.title === 'string' && data.title.trim()) ? data.title : 'Untitled';
         
@@ -326,11 +329,26 @@ export class DocumentNode {
         // aligned with `template` by AssertFlatTemplateCopy on load.
         node.layerLengths = Array.isArray(data.layerLengths) ? data.layerLengths : [];
         node.collapsed = data.collapsed ?? false;
-        node.generationPrompt = data.generationPrompt;
+        node.generationPrompt = data.generationPrompt ?? null;
         node.isPromptGenerating = false; // Always reset transient state on load
         node.generationHistory = data.generationHistory ?? [];
         node.isGenerating = false; // Always reset transient state on load
-        node.generationSessions = data.generationSessions ?? [];
+        node.generationSessions = (data.generationSessions ?? []).map((session) => ({
+            sessionId: session.sessionId,
+            startTime: new Date(session.startTime),
+            ...(session.endTime !== undefined ? { endTime: new Date(session.endTime) } : {}),
+            originalPrompt: session.originalPrompt,
+            iterations: session.iterations.map((iteration) => ({
+                iteration: iteration.iteration,
+                content: iteration.content,
+                ratings: iteration.ratings,
+                wasChosen: iteration.wasChosen,
+                timestamp: new Date(iteration.timestamp),
+            })),
+            finalIterationNumber: session.finalIterationNumber,
+            success: session.success,
+            totalIterationsAttempted: session.totalIterationsAttempted,
+        }));
         
         // MIGRATION: Check for legacy context migration BEFORE processing anything else
         const hasNoConditionalContext = !data.conditionalContextItems || data.conditionalContextItems.length === 0;
@@ -339,13 +357,11 @@ export class DocumentNode {
         
         if (hasNoConditionalContext && isRootNode && data.versions && Array.isArray(data.versions)) {
             // Look for legacy context in raw version data before it gets processed
-            const rawMasterVersion = data.versions.find((v: any) => {
+            const rawMasterVersion = data.versions.find((v: SerializedContentVersionJSON) => {
                 if (Array.isArray(v.tags)) {
                     return v.tags.includes('master');
-                } else if (v.tags && typeof v.tags === 'object') {
-                    return v.tags.master ?? Object.values(v.tags).includes('master');
                 }
-                return false;
+                return v.tags['master'] === true || Object.values(v.tags).includes('master');
             });
             
             if (rawMasterVersion?.context) {
@@ -370,103 +386,137 @@ export class DocumentNode {
         // Restore overview board cache - FAIL LOUDLY on corruption
         if (data.overviewBoardCache && Array.isArray(data.overviewBoardCache)) {
             node.overviewBoardCache = new Map();
-            for (const [layerName, cachedData] of data.overviewBoardCache) {
-                // FAIL LOUDLY: Don't silently skip null/undefined cache data
-                if (!cachedData) {
+            for (const [layerName, rawEntry] of data.overviewBoardCache) {
+                if (!rawEntry || typeof rawEntry !== 'object') {
                     throw new Error(`❌ CACHE CORRUPTION: Null cache data for layer "${layerName}" during project load`);
                 }
-                
-                // FAIL LOUDLY: Validate required cache structure
-                if (!cachedData.timestamp || !cachedData.data || !cachedData.analyzedNodeIds) {
-                    throw new Error(`❌ CACHE CORRUPTION: Missing required fields in cache for layer "${layerName}". Found: ${Object.keys(cachedData)}`);
+                const cachedRecord = rawEntry as Record<string, unknown>;
+                const rawTimestamp = cachedRecord['timestamp'];
+                const rawData = cachedRecord['data'];
+                const analyzedNodeIds = cachedRecord['analyzedNodeIds'];
+                const sourceNodeId = cachedRecord['sourceNodeId'];
+                const cacheLayerName = cachedRecord['layerName'];
+
+                if (rawTimestamp === undefined || rawTimestamp === null || rawData === undefined || rawData === null || analyzedNodeIds === undefined) {
+                    throw new Error(`❌ CACHE CORRUPTION: Missing required fields in cache for layer "${layerName}". Found: ${Object.keys(cachedRecord)}`);
                 }
-                
-                // FAIL LOUDLY: Validate timestamp conversion
+                if (!Array.isArray(analyzedNodeIds)) {
+                    throw new Error(`❌ CACHE CORRUPTION: analyzedNodeIds must be an array for layer "${layerName}"`);
+                }
+                if (typeof sourceNodeId !== 'string') {
+                    throw new Error(`❌ CACHE CORRUPTION: sourceNodeId must be a string for layer "${layerName}"`);
+                }
+
                 let timestamp: Date;
                 try {
-                    timestamp = new Date(cachedData.timestamp);
+                    timestamp = new Date(rawTimestamp as string | number | Date);
                     if (isNaN(timestamp.getTime())) {
-                        throw new Error(`Invalid timestamp: ${cachedData.timestamp}`);
+                        throw new Error(`Invalid timestamp: ${String(rawTimestamp)}`);
                     }
                 } catch (error) {
-                    throw new Error(`❌ CACHE CORRUPTION: Invalid timestamp in cache for layer "${layerName}": ${cachedData.timestamp}. Error: ${error}`);
+                    throw new Error(`❌ CACHE CORRUPTION: Invalid timestamp in cache for layer "${layerName}": ${String(rawTimestamp)}. Error: ${error}`);
                 }
-                cachedData.timestamp = timestamp;
-                
-                // FAIL LOUDLY: Validate data structure exists
-                if (!cachedData.data || typeof cachedData.data !== 'object') {
-                    throw new Error(`❌ CACHE CORRUPTION: Invalid data structure in cache for layer "${layerName}". Expected object, got: ${typeof cachedData.data}`);
+
+                if (typeof rawData !== 'object') {
+                    throw new Error(`❌ CACHE CORRUPTION: Invalid data structure in cache for layer "${layerName}". Expected object, got: ${typeof rawData}`);
                 }
-                
-                // FAIL LOUDLY: Validate lastUpdated timestamp
-                if (cachedData.data.lastUpdated) {
+                const dataRecord = rawData as Record<string, unknown>;
+
+                let lastUpdated: Date;
+                const rawLastUpdated = dataRecord['lastUpdated'];
+                if (rawLastUpdated !== undefined && rawLastUpdated !== null) {
                     try {
-                        const lastUpdated = new Date(cachedData.data.lastUpdated);
+                        lastUpdated = new Date(rawLastUpdated as string | number | Date);
                         if (isNaN(lastUpdated.getTime())) {
-                            throw new Error(`Invalid lastUpdated timestamp: ${cachedData.data.lastUpdated}`);
+                            throw new Error(`Invalid lastUpdated timestamp: ${String(rawLastUpdated)}`);
                         }
-                        cachedData.data.lastUpdated = lastUpdated;
                     } catch (error) {
-                        throw new Error(`❌ CACHE CORRUPTION: Invalid lastUpdated timestamp in cache for layer "${layerName}": ${cachedData.data.lastUpdated}. Error: ${error}`);
+                        throw new Error(`❌ CACHE CORRUPTION: Invalid lastUpdated timestamp in cache for layer "${layerName}": ${String(rawLastUpdated)}. Error: ${error}`);
                     }
+                } else {
+                    lastUpdated = timestamp;
                 }
-                
-                // FAIL LOUDLY: Restore Map objects with strict validation
-                ['events', 'characters', 'places'].forEach(mapName => {
-                    const mapData = cachedData.data[mapName];
-                    if (mapData && !mapData.has) { // Not already a Map
-                        try {
-                            if (Array.isArray(mapData)) {
-                                // Validate array format
-                                if (!mapData.every(item => Array.isArray(item) && item.length === 2)) {
-                                    throw new Error(`Invalid array format for ${mapName}: expected [key, value] pairs`);
-                                }
-                                const restoredMap = new Map(mapData);
-                                
-                                // FAIL LOUDLY: Validate that array properties in the data remain arrays
-                                for (const [key, value] of restoredMap.entries()) {
-                                    const item = value as any; // Cast for cache validation
-                                    if (mapName === 'events') {
-                                        if (!Array.isArray(item.connectedCharacters)) {
-                                            throw new Error(`Event ${key} connectedCharacters is not an array: ${typeof item.connectedCharacters}`);
-                                        }
-                                        if (!Array.isArray(item.connectedPlaces)) {
-                                            throw new Error(`Event ${key} connectedPlaces is not an array: ${typeof item.connectedPlaces}`);
-                                        }
-                                    } else if (mapName === 'characters') {
-                                        if (!Array.isArray(item.aliases)) {
-                                            throw new Error(`Character ${key} aliases is not an array: ${typeof item.aliases}`);
-                                        }
-                                        if (!Array.isArray(item.connectedEvents)) {
-                                            throw new Error(`Character ${key} connectedEvents is not an array: ${typeof item.connectedEvents}`);
-                                        }
-                                        if (!Array.isArray(item.connectedPlaces)) {
-                                            throw new Error(`Character ${key} connectedPlaces is not an array: ${typeof item.connectedPlaces}`);
-                                        }
-                                    } else if (mapName === 'places') {
-                                        if (!Array.isArray(item.connectedEvents)) {
-                                            throw new Error(`Place ${key} connectedEvents is not an array: ${typeof item.connectedEvents}`);
-                                        }
-                                        if (!Array.isArray(item.connectedCharacters)) {
-                                            throw new Error(`Place ${key} connectedCharacters is not an array: ${typeof item.connectedCharacters}`);
-                                        }
-                                    }
-                                }
-                                
-                                cachedData.data[mapName] = restoredMap;
-                            } else if (typeof mapData === 'object') {
-                                // Fallback to object format
-                                cachedData.data[mapName] = new Map(Object.entries(mapData));
-                            } else {
-                                throw new Error(`Invalid ${mapName} data type: ${typeof mapData}`);
+
+                const restoreOverviewMap = <T extends EventData | CharacterData | PlaceData>(
+                    mapName: 'events' | 'characters' | 'places',
+                    validateEntry: (key: string, value: T) => void,
+                ): Map<string, T> => {
+                    const mapData = dataRecord[mapName];
+                    if (!mapData) {
+                        return new Map<string, T>();
+                    }
+                    if (typeof mapData === 'object' && 'has' in mapData && typeof (mapData as Map<string, T>).has === 'function') {
+                        return mapData as Map<string, T>;
+                    }
+                    try {
+                        if (Array.isArray(mapData)) {
+                            if (!mapData.every(item => Array.isArray(item) && item.length === 2)) {
+                                throw new Error(`Invalid array format for ${mapName}: expected [key, value] pairs`);
                             }
-                        } catch (error) {
-                            throw new Error(`❌ CACHE CORRUPTION: Failed to restore ${mapName} Map for layer "${layerName}": ${error}`);
+                            const restoredMap = new Map(mapData as [string, T][]);
+                            for (const [key, value] of restoredMap.entries()) {
+                                validateEntry(key, value);
+                            }
+                            return restoredMap;
                         }
+                        if (typeof mapData === 'object') {
+                            return new Map(Object.entries(mapData as Record<string, T>));
+                        }
+                        throw new Error(`Invalid ${mapName} data type: ${typeof mapData}`);
+                    } catch (error) {
+                        throw new Error(`❌ CACHE CORRUPTION: Failed to restore ${mapName} Map for layer "${layerName}": ${error}`);
+                    }
+                };
+
+                const events = restoreOverviewMap<EventData>('events', (key, item) => {
+                    if (!Array.isArray(item.connectedCharacters)) {
+                        throw new Error(`Event ${key} connectedCharacters is not an array: ${typeof item.connectedCharacters}`);
+                    }
+                    if (!Array.isArray(item.connectedPlaces)) {
+                        throw new Error(`Event ${key} connectedPlaces is not an array: ${typeof item.connectedPlaces}`);
                     }
                 });
-                
-                node.overviewBoardCache.set(layerName, cachedData);
+                const characters = restoreOverviewMap<CharacterData>('characters', (key, item) => {
+                    if (!Array.isArray(item.aliases)) {
+                        throw new Error(`Character ${key} aliases is not an array: ${typeof item.aliases}`);
+                    }
+                    if (!Array.isArray(item.connectedEvents)) {
+                        throw new Error(`Character ${key} connectedEvents is not an array: ${typeof item.connectedEvents}`);
+                    }
+                    if (!Array.isArray(item.connectedPlaces)) {
+                        throw new Error(`Character ${key} connectedPlaces is not an array: ${typeof item.connectedPlaces}`);
+                    }
+                });
+                const places = restoreOverviewMap<PlaceData>('places', (key, item) => {
+                    if (!Array.isArray(item.connectedEvents)) {
+                        throw new Error(`Place ${key} connectedEvents is not an array: ${typeof item.connectedEvents}`);
+                    }
+                    if (!Array.isArray(item.connectedCharacters)) {
+                        throw new Error(`Place ${key} connectedCharacters is not an array: ${typeof item.connectedCharacters}`);
+                    }
+                });
+
+                const layerNameValue = typeof cacheLayerName === 'string' ? cacheLayerName : layerName;
+                const sourceNodes = dataRecord['sourceNodes'];
+                if (!Array.isArray(sourceNodes) || !sourceNodes.every((id): id is string => typeof id === 'string')) {
+                    throw new Error(`❌ CACHE CORRUPTION: sourceNodes must be a string array for layer "${layerName}"`);
+                }
+
+                const restoredCache: CachedOverviewAnalysis = {
+                    layerName: layerNameValue,
+                    timestamp,
+                    data: {
+                        layerName: layerNameValue,
+                        sourceNodes,
+                        lastUpdated,
+                        events,
+                        characters,
+                        places,
+                    },
+                    analyzedNodeIds,
+                    sourceNodeId,
+                };
+                node.overviewBoardCache.set(layerName, restoredCache);
             }
         } else {
             node.overviewBoardCache = new Map();
@@ -485,30 +535,31 @@ export class DocumentNode {
                 throw new Error('❌ CONDITIONAL CONTEXT CORRUPTION: conditionalContextItems must be an array');
             }
 
-            node.conditionalContextItems = data.conditionalContextItems.map((raw: any) => {
+            node.conditionalContextItems = data.conditionalContextItems.map((raw) => {
                 if (!raw || typeof raw !== 'object') {
                     throw new Error('❌ CONDITIONAL CONTEXT CORRUPTION: context item must be an object');
                 }
-                if (typeof raw.id !== 'string' || !raw.id) {
+                const itemRecord = raw as SerializedConditionalContextItemJSON;
+                if (typeof itemRecord.id !== 'string' || !itemRecord.id) {
                     throw new Error('❌ CONDITIONAL CONTEXT CORRUPTION: context item missing valid id');
                 }
-                if (typeof raw.text !== 'string') {
-                    throw new Error(`❌ CONDITIONAL CONTEXT CORRUPTION: context item ${raw.id} missing text`);
+                if (typeof itemRecord.text !== 'string') {
+                    throw new Error(`❌ CONDITIONAL CONTEXT CORRUPTION: context item ${itemRecord.id} missing text`);
                 }
-                if (raw.keywords !== undefined) {
-                    if (!Array.isArray(raw.keywords) || !raw.keywords.every((k: any) => typeof k === 'string')) {
-                        throw new Error(`❌ CONDITIONAL CONTEXT CORRUPTION: context item ${raw.id} keywords must be an array of strings`);
+                if (itemRecord.keywords !== undefined) {
+                    if (!Array.isArray(itemRecord.keywords) || !itemRecord.keywords.every((k: string) => typeof k === 'string')) {
+                        throw new Error(`❌ CONDITIONAL CONTEXT CORRUPTION: context item ${itemRecord.id} keywords must be an array of strings`);
                     }
                 }
 
                 // Old saves carried `conditions`/`logic` (a since-removed text-condition
                 // system); those fields are intentionally ignored on load.
                 const item: ConditionalContextItem = {
-                    id: raw.id,
-                    text: raw.text,
-                    keywords: Array.isArray(raw.keywords) ? raw.keywords.slice() : [],
-                    childScope: DocumentNode.parseChildScope(raw.childScope, raw.id),
-                    leavesOnly: raw.leavesOnly === true
+                    id: itemRecord.id,
+                    text: itemRecord.text,
+                    keywords: Array.isArray(itemRecord.keywords) ? itemRecord.keywords.slice() : [],
+                    childScope: DocumentNode.parseChildScope(itemRecord.childScope, itemRecord.id),
+                    leavesOnly: itemRecord.leavesOnly === true
                 };
                 return item;
             });
@@ -521,26 +572,18 @@ export class DocumentNode {
         // Restore versions
         if (data.versions && Array.isArray(data.versions)) {
             // New format: restore versions directly
-            node.versions = data.versions.map((v: any) => {
+            node.versions = data.versions.map((v: SerializedContentVersionJSON) => {
                 // Handle tags conversion
                 let tags: Set<string>;
                 if (Array.isArray(v.tags)) {
                     tags = new Set(v.tags);
-                } else if (v.tags && typeof v.tags === 'object') {
-                    // Handle case where tags might be stored as an object or Set-like structure
-                    if (v.tags instanceof Set) {
-                        tags = v.tags;
-                    } else {
-                        // Try to extract values if it's an object with numeric keys (serialized Set)
-                        const tagValues = Object.values(v.tags).filter(tag => typeof tag === 'string');
-                        tags = new Set(tagValues as string[]);
-                    }
                 } else {
-                    tags = new Set(['master']); // Fallback to master tag
+                    const tagValues = Object.values(v.tags).filter((tag): tag is string => typeof tag === 'string');
+                    tags = new Set(tagValues);
                 }
                 
-                // Remove legacy context field from versions during migration
-                const { context, ...cleanVersion } = v;
+                const cleanVersion = { ...v };
+                delete cleanVersion.context;
                 
                 return {
                     ...cleanVersion,
@@ -558,7 +601,7 @@ export class DocumentNode {
             const mainTitle = data.title ?? safeTitle;
             
             if (mainContent || mainTitle !== 'Untitled') {
-                const masterMetadata: { [key: string]: any } = {};
+                const masterMetadata: ContentVersionMetadata = {};
                 
                 // Preserve legacy creatorModel if it exists
                 if (data.creatorModel) {
@@ -577,9 +620,8 @@ export class DocumentNode {
             
             // 2. Convert legacy generationSessions to versions
             if (data.generationSessions && Array.isArray(data.generationSessions)) {
-                data.generationSessions.forEach((session: any) => {
-                    if (session.iterations && Array.isArray(session.iterations)) {
-                        session.iterations.forEach((iteration: any) => {
+                data.generationSessions.forEach((session: SerializedGenerationSessionJSON) => {
+                    session.iterations.forEach((iteration) => {
                             const tags = new Set(['generated', `iteration${iteration.iteration}`, 'legacy']);
                             
                             // Mark winner iterations
@@ -587,9 +629,9 @@ export class DocumentNode {
                                 tags.add('generatedWinner');
                             }
                             
-                            const iterationMetadata: { [key: string]: any } = {
+                            const iterationMetadata: ContentVersionMetadata = {
                                 sessionId: session.sessionId,
-                                ratings: iteration.ratings ?? []
+                                ratings: iteration.ratings
                             };
                             
                             // If this was the chosen iteration, it might have been the master
@@ -600,10 +642,11 @@ export class DocumentNode {
                                 content: iteration.content,
                                 title: mainTitle,
                                 tags: tags,
-                                timestamp: new Date(iteration.timestamp ?? session.startTime),
+                                timestamp: new Date(iteration.timestamp),
                                 metadata: iterationMetadata
                             });
-                            } else if (iteration.wasChosen && iteration.content === mainContent) {
+                            } else {
+                                // iteration.wasChosen && iteration.content === mainContent
                                 // Update the master version with generation metadata
                                 const masterVersion = node.versions.find(v => v.tags.has('master'));
                                 if (masterVersion) {
@@ -612,7 +655,6 @@ export class DocumentNode {
                                 }
                             }
                         });
-                    }
                 });
             }
             
@@ -631,7 +673,7 @@ export class DocumentNode {
         
         // Restore todos
         if (data.todos && Array.isArray(data.todos)) {
-            node.todos = data.todos.map((todo: any) => ({
+            node.todos = data.todos.map((todo: SerializedTodoItemJSON) => ({
                 ...todo,
                 timestamp: new Date(todo.timestamp)
             }));
@@ -639,7 +681,7 @@ export class DocumentNode {
         
         // Restore children
         if (data.children && Array.isArray(data.children)) {
-            node.children = data.children.map((child: any) => DocumentNode.fromJSON(child));
+            node.children = data.children.map((child) => DocumentNode.fromJSON(child));
         }
         
         return node;
@@ -667,7 +709,8 @@ export class DocumentNode {
 
     get creatorModel(): string | null {
         const masterVersion = this.getMasterVersion();
-        return masterVersion?.metadata?.['creatorModel'] ?? null;
+        const model = masterVersion?.metadata?.['creatorModel'];
+        return typeof model === 'string' ? model : null;
     }
 
     // --- Version Management Methods ---
@@ -684,6 +727,31 @@ export class DocumentNode {
      */
     getAllVersions(): ContentVersion[] {
         return [...this.versions];
+    }
+
+    /**
+     * Replaces all versions from an exported/imported JSON snapshot.
+     */
+    importVersionsFromExport(rawVersions: Array<{
+        id: string;
+        content: string;
+        title: string;
+        tags: string[];
+        timestamp: string | number | Date;
+        ratings?: Rating[];
+        creatorModel?: string;
+        metadata?: Record<string, unknown>;
+    }>): void {
+        this.versions = rawVersions.map((versionData) => ({
+            id: versionData.id,
+            content: versionData.content,
+            title: versionData.title,
+            tags: new Set(versionData.tags),
+            timestamp: new Date(versionData.timestamp),
+            ...(versionData.ratings ? { ratings: [...versionData.ratings] } : {}),
+            ...(versionData.creatorModel ? { creatorModel: versionData.creatorModel } : {}),
+            ...(versionData.metadata ? { metadata: { ...versionData.metadata } } : {}),
+        }));
     }
 
     /**
@@ -717,7 +785,7 @@ export class DocumentNode {
      */
     isQualityApproved(): boolean {
         const masterVersion = this.getMasterVersion();
-        return masterVersion !== null && masterVersion.tags.has('qualityApproved');
+        return masterVersion?.tags.has('qualityApproved') ?? false;
     }
 
     /**
@@ -767,7 +835,7 @@ export class DocumentNode {
      * @param ratings Optional ratings array
      * @returns The ID of the created version, or null if no version was created
      */
-    addVersion(tags: string[], fields?: { title?: string, content?: string }, metadata?: { [key: string]: any }, ratings?: Rating[]): string | null {
+    addVersion(tags: string[], fields?: { title?: string, content?: string }, metadata?: ContentVersionMetadata, ratings?: Rating[]): string | null {
         const tagSet = new Set(tags);
         
         // Check if a version with this exact tag combination already exists
@@ -793,22 +861,22 @@ export class DocumentNode {
         const defaultContent = masterVersion.content;
         
         // Check if we should replace an empty master version
-        const masterIsEmpty = masterVersion && masterVersion.content.trim() === '';
+        const masterIsEmpty = masterVersion.content.trim() === '';
         const newContentIsReal = fields?.content && fields.content.trim() !== '';
         const isGenerationIteration = tags.includes('generated') && tags.some(tag => tag.startsWith('iteration'));
         const shouldReplaceMaster = masterIsEmpty && newContentIsReal && !isGenerationIteration;
         
         // If no master version exists and this is the first version with actual content,
         // automatically make it master (unless it's a generation iteration)
-        const shouldBeMaster = !masterVersion || shouldReplaceMaster;
+        const shouldBeMaster = shouldReplaceMaster;
         
-        if (shouldBeMaster && !isGenerationIteration) {
+        if (shouldBeMaster) {
             tagSet.add('master');
         }
         
         // If replacing empty master, remove it first
         if (shouldReplaceMaster) {
-            const masterIndex = this.versions.findIndex(v => v.id === masterVersion!.id);
+            const masterIndex = this.versions.findIndex(v => v.id === masterVersion.id);
             if (masterIndex !== -1) {
                 this.versions.splice(masterIndex, 1);
             }
@@ -1016,7 +1084,7 @@ export class DocumentNode {
             tags.push(modelTag);
         }
         
-        const metadata: { [key: string]: any } = {};
+        const metadata: ContentVersionMetadata = {};
         if (model) {
             metadata['creatorModel'] = model;
         }
@@ -1296,6 +1364,39 @@ export class DocumentNode {
         );
     }
 
+    /**
+     * Collects every ID on this node that participates in context-ID uniqueness
+     * scanning: the node id, version ids, conditional context item ids, generation
+     * session ids, and todo ids.
+     */
+    public collectAllContextIds(): string[] {
+        const ids: string[] = [this.id];
+        for (const version of this.versions) {
+            ids.push(version.id);
+        }
+        for (const item of this.conditionalContextItems) {
+            ids.push(item.id);
+        }
+        for (const session of this.generationSessions) {
+            ids.push(session.sessionId);
+        }
+        for (const todo of this.todos) {
+            ids.push(todo.id);
+        }
+        return ids;
+    }
+
+    /**
+     * Renames a conditional context item id in place (used when normalizing legacy ids).
+     */
+    public renameConditionalContextItemId(oldId: string, newId: string): void {
+        const item = this.conditionalContextItems.find(i => i.id === oldId);
+        if (!item) {
+            throw new Error(`Conditional context item not found: ${oldId}`);
+        }
+        item.id = newId;
+    }
+
     // ---------------- Conditional Context API ----------------
 
     public getConditionalContextItems(): ConditionalContextItem[] {
@@ -1455,7 +1556,7 @@ export class DocumentNode {
         // Build the chain root -> ... -> this node. Each entry owns context items
         // whose structural scope is evaluated relative to its own direct children.
         const chain = DocumentNode.findPathFromRoot(root, this.id);
-        if (!chain || chain.length === 0) {
+        if (!chain.length) {
             throw new Error(`Cannot assemble conditional context: node ${this.id} not found under provided root`);
         }
         const results: ConditionalContextItem[] = [];
@@ -1576,21 +1677,22 @@ export class DocumentNode {
     /**
      * Validate/normalize a ChildScope coming from JSON or an update call.
      */
-    private static parseChildScope(raw: any, itemId: string): ChildScope {
+    private static parseChildScope(raw: unknown, itemId: string): ChildScope {
         if (raw === undefined || raw === null) {
             return { mode: 'all', titles: [] };
         }
         if (typeof raw !== 'object') {
             throw new Error(`❌ CONDITIONAL CONTEXT CORRUPTION: item ${itemId} childScope must be an object`);
         }
-        if (raw.mode !== 'all' && raw.mode !== 'include' && raw.mode !== 'exclude') {
-            throw new Error(`❌ CONDITIONAL CONTEXT CORRUPTION: item ${itemId} childScope has invalid mode: ${raw.mode}`);
+        const scope = raw as Record<string, unknown>;
+        if (scope['mode'] !== 'all' && scope['mode'] !== 'include' && scope['mode'] !== 'exclude') {
+            throw new Error(`❌ CONDITIONAL CONTEXT CORRUPTION: item ${itemId} childScope has invalid mode: ${String(scope['mode'])}`);
         }
-        const titles = raw.titles === undefined ? [] : raw.titles;
-        if (!Array.isArray(titles) || !titles.every((t: any) => typeof t === 'string')) {
+        const titles = scope['titles'] === undefined ? [] : scope['titles'];
+        if (!Array.isArray(titles) || !titles.every((t: unknown) => typeof t === 'string')) {
             throw new Error(`❌ CONDITIONAL CONTEXT CORRUPTION: item ${itemId} childScope.titles must be an array of strings`);
         }
-        return { mode: raw.mode, titles: titles.slice() };
+        return { mode: scope['mode'], titles: titles.slice() };
     }
 
     private static findPathFromRoot(root: DocumentNode, targetId: string): DocumentNode[] {
@@ -1613,7 +1715,7 @@ export class DocumentNode {
      */
     public static getPathFromRoot(root: DocumentNode, targetId: string): DocumentNode[] {
         const chain = DocumentNode.findPathFromRoot(root, targetId);
-        if (!chain || chain.length === 0) {
+        if (!chain.length) {
             throw new Error(`Cannot build path: node ${targetId} not found under provided root`);
         }
         return chain;
@@ -1641,7 +1743,7 @@ export class DocumentNode {
      */
     public getPath(root: DocumentNode): string {
         const chain = DocumentNode.findPathFromRoot(root, this.id);
-        if (!chain || chain.length === 0) {
+        if (!chain.length) {
             throw new Error(`Cannot build path: node ${this.id} not found under provided root`);
         }
         const parts = chain.map((n) => {

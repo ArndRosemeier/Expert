@@ -244,7 +244,7 @@ export class ReaderEditManager {
     private async fillPrompt(promptTemplate: string, context: EditContext): Promise<string> {
         try {
             // Build prompt context for centralized expansion
-            const placeholders = await this.buildPlaceholders(context.node);
+            const placeholders = this.buildPlaceholders(context.node);
             const promptContext = PromptContextBuilder.forNode(context.node, this.projectManager.getSettingsManager());
             
             // Add legacy placeholders to custom context
@@ -285,7 +285,7 @@ export class ReaderEditManager {
     /**
      * Build placeholders for a node manually (since PromptService doesn't expose this)
      */
-    private async buildPlaceholders(node: DocumentNode): Promise<Record<string, string>> {
+    private buildPlaceholders(node: DocumentNode): Record<string, string> {
         const treeService = this.projectManager.getTreeService();
         const contextService = this.projectManager.getContextService();
         
@@ -347,13 +347,13 @@ export class ReaderEditManager {
     /**
      * Get available placeholders for prompt building UI
      */
-    public async getAvailablePlaceholders(node?: DocumentNode): Promise<Record<string, string>> {
+    public getAvailablePlaceholders(node?: DocumentNode): Record<string, string> {
         const placeholders: Record<string, string> = {
             'selected': '[Selected text in the reader]'
         };
         
         if (node) {
-            const nodePlaceholders = await this.buildPlaceholders(node);
+            const nodePlaceholders = this.buildPlaceholders(node);
             Object.assign(placeholders, nodePlaceholders);
         } else {
             // Default placeholders when no specific node

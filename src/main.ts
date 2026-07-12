@@ -257,7 +257,7 @@ async function startApplication(): Promise<void> {
         
         // Setup debug utilities for prompt verification
         const { SettingsModal } = await import('./ui/modals/SettingsModal');
-        SettingsModal.setupDebugUtilities();
+        await SettingsModal.setupDebugUtilities();
     } catch (error) {
         console.error('❌ Failed to start application:', error);
         alert('Failed to start the application. Please refresh the page and try again.');
@@ -265,4 +265,4 @@ async function startApplication(): Promise<void> {
 }
 
 // Expose startApplication to global scope for debugging purposes
-(window as any).startApplication = startApplication; 
+window.startApplication = startApplication; 

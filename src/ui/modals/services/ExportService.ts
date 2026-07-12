@@ -2,9 +2,10 @@
  * Service for handling document export functionality
  */
 
-import { DocumentNode } from '../../../DocumentNode';
+import { ContentVersion, DocumentNode, GenerationSession } from '../../../DocumentNode';
+import { LoopHistoryItem } from '../../../LoopOrchestrator';
 import { ProjectManager } from '../../../ProjectManager';
-import { IExportService, ExportConfig, ExportResult, NodeExportData, ExportScope, ExportFormat } from '../types/ExportTypes';
+import { IExportService, ExportConfig, ExportResult, NodeExportData, ExportScope, ExportFormat, ContentVersionExportData } from '../types/ExportTypes';
 import { sanitizeFilename, escapeHtml, formatContentAsHtml } from '../core/modal-utils';
 import { FileDownloadService, FileDownloadResult } from '../../../utils/FileDownloadService';
 
@@ -30,6 +31,21 @@ interface ContentNode {
     content: string;
     children: ContentNode[];
     isLeaf: boolean;
+}
+
+interface RootNodeReimportExport {
+    title: string;
+    content: string;
+    generationPrompt?: string;
+    level: number;
+    template: string[];
+    children: NodeExportData[];
+    creatorModel?: string;
+    generationHistory?: LoopHistoryItem[];
+    generationSessions?: GenerationSession[];
+    conditionalContextItems?: NodeExportData['conditionalContextItems'];
+    versions?: ContentVersionExportData[];
+    collapsed: boolean;
 }
 
 
@@ -205,63 +221,38 @@ export class ExportService implements IExportService {
      * Exports node data for reimport purposes
      */
     private exportNodeForReimport(node: DocumentNode): string {
-        const exportObject: any = {
+        const exportObject: RootNodeReimportExport = {
             title: node.title,
             content: node.content,
-            // context removed - using conditional context system
-            generationPrompt: node.generationPrompt ?? undefined,
             level: node.level,
-            template: node.template,  // Include template in root node for reimport
+            template: node.template,
             children: node.children.map(child => this.exportNodeForReimportRecursive(child)),
-            // Generation metadata for root node
-            creatorModel: node.creatorModel ?? undefined,
-            generationHistory: (node.generationHistory && node.generationHistory.length > 0) ? node.generationHistory : undefined,
-            generationSessions: (node.generationSessions && node.generationSessions.length > 0) ? node.generationSessions : undefined
+            collapsed: node.collapsed
         };
 
-        // Export node-level conditional context items
-        const ccItems = node.getConditionalContextItems();
-        if (ccItems && ccItems.length > 0) {
-            exportObject.conditionalContextItems = ccItems.map(i => ({
-                id: i.id,
-                text: i.text,
-                keywords: Array.isArray(i.keywords) ? i.keywords.slice() : undefined,
-                childScope: i.childScope ? { mode: i.childScope.mode, titles: i.childScope.titles.slice() } : undefined,
-                leavesOnly: i.leavesOnly === true
-            }));
+        if (node.generationPrompt !== null) {
+            exportObject.generationPrompt = node.generationPrompt;
+        }
+        if (node.creatorModel !== null) {
+            exportObject.creatorModel = node.creatorModel;
+        }
+        if (node.generationHistory.length > 0) {
+            exportObject.generationHistory = node.generationHistory;
+        }
+        if (node.generationSessions.length > 0) {
+            exportObject.generationSessions = node.generationSessions;
         }
 
-        // Enhanced: Export complete version and tagging system for root node
+        const conditionalContextItems = this.mapConditionalContextForExport(node);
+        if (conditionalContextItems) {
+            exportObject.conditionalContextItems = conditionalContextItems;
+        }
+
         const allVersions = node.getAllVersions();
-        if (allVersions && allVersions.length > 0) {
-            exportObject.versions = allVersions.map(version => {
-                const exportVersion: any = {
-                    id: version.id,
-                    content: version.content,
-                    title: version.title,
-                    // context removed - using conditional context system
-                    tags: Array.from(version.tags), // Convert Set to Array for JSON
-                    timestamp: version.timestamp.toISOString() // Convert Date to ISO string
-                };
-                
-                // Only add optional properties if they exist
-                if (version.ratings && version.ratings.length > 0) {
-                    exportVersion.ratings = [...version.ratings];
-                }
-                if (version.creatorModel) {
-                    exportVersion.creatorModel = version.creatorModel;
-                }
-                if (version.metadata && Object.keys(version.metadata).length > 0) {
-                    exportVersion.metadata = { ...version.metadata };
-                }
-                
-                return exportVersion;
-            });
+        if (allVersions.length > 0) {
+            exportObject.versions = allVersions.map(version => this.mapVersionForExport(version));
         }
 
-        // Export UI state for root node
-        exportObject.collapsed = node.collapsed;
-        
         return JSON.stringify(exportObject, null, 2);
     }
 
@@ -295,57 +286,73 @@ export class ExportService implements IExportService {
         if (node.creatorModel) {
             data.creatorModel = node.creatorModel;
         }
-        if (node.generationHistory && node.generationHistory.length > 0) {
+        if (node.generationHistory.length > 0) {
             data.generationHistory = node.generationHistory;
         }
-        if (node.generationSessions && node.generationSessions.length > 0) {
+        if (node.generationSessions.length > 0) {
             data.generationSessions = node.generationSessions;
         }
 
-        // Enhanced: Export complete version and tagging system
         const allVersions = node.getAllVersions();
-        if (allVersions && allVersions.length > 0) {
-            data.versions = allVersions.map(version => {
-                const exportVersion: any = {
-                    id: version.id,
-                    content: version.content,
-                    title: version.title,
-                    // context removed - using conditional context system
-                    tags: Array.from(version.tags), // Convert Set to Array for JSON
-                    timestamp: version.timestamp.toISOString() // Convert Date to ISO string
-                };
-                
-                // Only add optional properties if they exist
-                if (version.ratings && version.ratings.length > 0) {
-                    exportVersion.ratings = [...version.ratings];
-                }
-                if (version.creatorModel) {
-                    exportVersion.creatorModel = version.creatorModel;
-                }
-                if (version.metadata && Object.keys(version.metadata).length > 0) {
-                    exportVersion.metadata = { ...version.metadata };
-                }
-                
-                return exportVersion;
-            });
+        if (allVersions.length > 0) {
+            data.versions = allVersions.map(version => this.mapVersionForExport(version));
         }
 
-        // Export node-level conditional context items
-        const ccItems = node.getConditionalContextItems();
-        if (ccItems && ccItems.length > 0) {
-            (data as any).conditionalContextItems = ccItems.map(i => ({
-                id: i.id,
-                text: i.text,
-                keywords: Array.isArray(i.keywords) ? i.keywords.slice() : undefined,
-                childScope: i.childScope ? { mode: i.childScope.mode, titles: i.childScope.titles.slice() } : undefined,
-                leavesOnly: i.leavesOnly === true
-            }));
+        const conditionalContextItems = this.mapConditionalContextForExport(node);
+        if (conditionalContextItems) {
+            data.conditionalContextItems = conditionalContextItems;
         }
 
         // Export UI state
         data.collapsed = node.collapsed;
 
         return data;
+    }
+
+    private mapVersionForExport(version: ContentVersion): ContentVersionExportData {
+        const exportVersion: ContentVersionExportData = {
+            id: version.id,
+            content: version.content,
+            title: version.title,
+            tags: Array.from(version.tags),
+            timestamp: version.timestamp.toISOString()
+        };
+
+        if (version.ratings && version.ratings.length > 0) {
+            exportVersion.ratings = [...version.ratings];
+        }
+        if (version.creatorModel) {
+            exportVersion.creatorModel = version.creatorModel;
+        }
+        if (version.metadata && Object.keys(version.metadata).length > 0) {
+            exportVersion.metadata = { ...version.metadata };
+        }
+
+        return exportVersion;
+    }
+
+    private mapConditionalContextForExport(node: DocumentNode): NodeExportData['conditionalContextItems'] {
+        const ccItems = node.getConditionalContextItems();
+        if (ccItems.length === 0) {
+            return undefined;
+        }
+
+        return ccItems.map(item => {
+            const entry: NonNullable<NodeExportData['conditionalContextItems']>[number] = {
+                id: item.id,
+                text: item.text
+            };
+            if (item.keywords && item.keywords.length > 0) {
+                entry.keywords = item.keywords.slice();
+            }
+            if (item.childScope) {
+                entry.childScope = { mode: item.childScope.mode, titles: item.childScope.titles.slice() };
+            }
+            if (item.leavesOnly === true) {
+                entry.leavesOnly = true;
+            }
+            return entry;
+        });
     }
 
     /**
@@ -383,7 +390,7 @@ export class ExportService implements IExportService {
     private exportAllLayers(node: DocumentNode, format: ExportFormat, config?: ExportConfig, projectManager?: ProjectManager): string {
         switch (format) {
             case ExportFormat.HTML:
-                return this.generateHtmlHierarchy(node, 1, config, projectManager);
+                return this.generateHtmlHierarchy(node, 1, config);
             case ExportFormat.Markdown:
                 return this.generateMarkdownHierarchy(node, 1, config, projectManager);
             case ExportFormat.Plain:
@@ -475,7 +482,7 @@ export class ExportService implements IExportService {
     /**
      * Generates HTML hierarchy for a node tree
      */
-    private generateHtmlHierarchy(node: DocumentNode, level: number = 1, config?: ExportConfig, _projectManager?: ProjectManager): string {
+    private generateHtmlHierarchy(node: DocumentNode, level: number = 1, config?: ExportConfig): string {
         if (level === 1) {
             const includeToc = config?.includeHtmlToc ?? false;
             
@@ -552,7 +559,7 @@ export class ExportService implements IExportService {
 
         // Traditional context section removed
 
-        if (node.content && node.content.trim()) {
+        if (node.content.trim()) {
             html += `
         <div class="content">${formatContentAsHtml(node.content)}</div>`;
         }
@@ -661,7 +668,7 @@ export class ExportService implements IExportService {
             
             // Add leaf nodes to the current level
             for (const node of nodeGroup) {
-                if (node.content && node.content.trim()) {
+                if (node.content.trim()) {
                     const includeNodeTitle = this.shouldIncludeTitle(node.level, config);
                     
                     if (includeNodeTitle) {
@@ -798,7 +805,7 @@ export class ExportService implements IExportService {
             
             // Add leaf nodes to the current level
             for (const node of nodeGroup) {
-                if (node.content && node.content.trim()) {
+                if (node.content.trim()) {
                     const includeNodeTitle = this.shouldIncludeTitle(node.level, config);
                     
                     if (includeNodeTitle) {
@@ -871,7 +878,7 @@ export class ExportService implements IExportService {
         let plain = '';
         
         // Smart title handling: detect if this is an empty parent container
-        const isEmptyParent = !node.content?.trim() && node.children.length > 0;
+        const isEmptyParent = !node.content.trim() && node.children.length > 0;
         const shouldMergeTitle = isEmptyParent && node.children.length === 1;
         
         if (shouldMergeTitle) {
@@ -899,7 +906,7 @@ export class ExportService implements IExportService {
             }
             
             // Render child content
-            if (child.content && child.content.trim()) {
+            if (child.content.trim()) {
                 // HTML
                 html += `
     <div class="node-content">
@@ -957,7 +964,7 @@ export class ExportService implements IExportService {
             }
             
             // Render the node content if it exists
-            if (node.content && node.content.trim()) {
+            if (node.content.trim()) {
                 // HTML
                 html += `
     <div class="node-content">
@@ -1045,7 +1052,7 @@ export class ExportService implements IExportService {
             }
         } else {
             // Fallback to the old method if no project manager available
-            if (node.template && node.level > 0) {
+            if (node.level > 0) {
                 for (let i = 0; i < node.level; i++) {
                     const templateLevel = node.template[i];
                     if (templateLevel) {
@@ -1086,15 +1093,11 @@ export class ExportService implements IExportService {
         const includeTitle = this.shouldIncludeTitle(level - 1, config); // level is 1-based here, convert to 0-based
         
         if (includeTitle) {
-        const headingPrefix = '#'.repeat(level);
+            const headingPrefix = '#'.repeat(level);
             markdown += `${headingPrefix} ${node.title}\n\n`;
         }
 
-        if (false) { // Traditional context check removed
-            // Traditional context markdown removed
-        }
-
-        if (node.content && node.content.trim()) {
+        if (node.content.trim()) {
             markdown += `${node.content}\n\n`;
         }
 
@@ -1133,11 +1136,7 @@ export class ExportService implements IExportService {
             text += `${indent}${node.title}\n`;
         }
 
-        if (false) { // Traditional context check removed
-            // Traditional context text export removed
-        }
-
-        if (node.content && node.content.trim()) {
+        if (node.content.trim()) {
             const contentLines = node.content.split('\n');
             for (const line of contentLines) {
                 text += `${indent}  ${line}\n`;

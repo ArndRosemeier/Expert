@@ -54,7 +54,7 @@ export class WorkingEpubGenerator {
     private extractContentFromNode(node: DocumentNode): string {
         console.log('[WorkingEpubGenerator] Extracting content from node:', node.title);
         console.log('[WorkingEpubGenerator] Raw node content:', node.content);
-        console.log('[WorkingEpubGenerator] Content length:', node.content?.length || 0);
+        console.log('[WorkingEpubGenerator] Content length:', node.content.length);
         
         if (!node.content || node.content.trim() === '') {
             console.log('[WorkingEpubGenerator] No content found, using placeholder');
@@ -105,8 +105,8 @@ export class WorkingEpubGenerator {
         // Shallow tree (e.g. Book -> Scene): the only structural node is the root,
         // which would collapse the whole book into one chapter again. Split each
         // leaf into its own chapter instead.
-        if (chapters.length === 1 && chapters[0]!.node) {
-            const source = chapters[0]!.node!;
+        if (chapters.length === 1 && chapters[0]?.node) {
+            const source = chapters[0].node;
             const leaves = source.children.filter(c => c.isLeaf && this.hasText(c));
             if (leaves.length > 1) {
                 chapters.length = 0;
@@ -145,7 +145,8 @@ export class WorkingEpubGenerator {
             .join('\n    <p class="scene-break">* * *</p>\n    ');
     }
 
-    async generate(node: DocumentNode, config: ExportConfig, _projectManager?: ProjectManager): Promise<Blob> {
+    async generate(node: DocumentNode, config: ExportConfig, projectManager?: ProjectManager): Promise<Blob> {
+        void projectManager;
         console.log('[WorkingEpubGenerator] Starting EPUB generation for:', node.title);
         console.log('[WorkingEpubGenerator] Scope:', config.scope);
 

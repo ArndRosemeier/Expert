@@ -205,7 +205,7 @@ export class PromptManagementService {
                 id: `prompt-${promptKey}`,
                 value: this.prompts[promptKey]
             }
-        }) as HTMLTextAreaElement;
+        });
 
         textarea.value = this.prompts[promptKey];
         
@@ -267,7 +267,7 @@ export class PromptManagementService {
         });
 
         resetButton.addEventListener('click', () => {
-            this.revertToDefaults();
+            void this.revertToDefaults();
         });
 
         container.appendChild(showModifiedButton);

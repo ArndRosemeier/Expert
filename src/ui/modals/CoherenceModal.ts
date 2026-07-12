@@ -68,8 +68,8 @@ export class CoherenceModal extends BaseModal {
             console.error('Could not find modal content container to update results');
             // Fallback: close and reopen modal with results
             console.log('CoherenceModal: Using fallback - closing and reopening modal');
-            this.close().then(() => {
-                this.openWithData(result, this.parentNode!);
+            void this.close().then(() => {
+                void this.openWithData(result, this.parentNode!);
             });
         }
     }
@@ -638,25 +638,25 @@ export class CoherenceModal extends BaseModal {
         // Close button handler for results modal
         const closeModalBtn = document.getElementById('close-coherence-modal-btn');
         if (closeModalBtn) {
-            closeModalBtn.addEventListener('click', async () => this.close());
+            closeModalBtn.addEventListener('click', () => { void this.close(); });
         }
 
         // Copy to clipboard handler
         const copyBtn = document.getElementById('copy-coherence-results');
         if (copyBtn) {
-            copyBtn.addEventListener('click', async () => this.copyToClipboard());
+            copyBtn.addEventListener('click', () => { void this.copyToClipboard(); });
         }
 
         // Fix buttons handlers
         const fixButtons = document.querySelectorAll('.fix-btn');
         fixButtons.forEach(btn => {
-            btn.addEventListener('click', async (e) => {
+            btn.addEventListener('click', (e) => {
                 const button = e.target as HTMLButtonElement;
                 const childId = button.dataset['childId'];
                 const contradictionIndex = parseInt(button.dataset['contradictionIndex'] ?? '0');
                 
                 if (childId && this.analysisResult) {
-                    await this.handleFixContradiction(childId, contradictionIndex, button);
+                    void this.handleFixContradiction(childId, contradictionIndex, button);
                 }
             });
         });
@@ -731,8 +731,8 @@ export class CoherenceModal extends BaseModal {
         
         // Update the button state only if applied
         if (isApplied) {
-            const button = contradictionItem.querySelector('.fix-btn') as HTMLButtonElement;
-            if (button) {
+            const button = contradictionItem.querySelector('.fix-btn');
+            if (button instanceof HTMLButtonElement) {
                 button.textContent = '✅ Applied!';
                 button.classList.remove('button-warning', 'button-secondary');
                 button.classList.add('button-success');
@@ -752,10 +752,10 @@ export class CoherenceModal extends BaseModal {
             const newBtn = btn.cloneNode(true) as HTMLButtonElement;
             btn.parentNode?.replaceChild(newBtn, btn);
             
-            newBtn.addEventListener('click', async (e) => {
+            newBtn.addEventListener('click', (e) => {
                 const button = e.target as HTMLButtonElement;
                 const contradictionIndex = parseInt(button.dataset['contradictionIndex'] ?? '0');
-                await this.applyFix(contradictionIndex, button);
+                void this.applyFix(contradictionIndex, button);
             });
         });
 
@@ -801,7 +801,7 @@ export class CoherenceModal extends BaseModal {
                 childNode = projectRoot.findDescendantById(contradiction.offending_child_id) ?? undefined;
             } else {
                 // Final fallback to old logic
-                childNode = this.parentNode?.children.find(child => child.id === contradiction.offending_child_id);
+                childNode = this.parentNode.children.find(child => child.id === contradiction.offending_child_id);
             }
         }
         
@@ -851,7 +851,7 @@ export class CoherenceModal extends BaseModal {
             // Refresh the main UI to show the updated content
             try {
                 const { renderNodeDetails } = await import('../project-ui');
-                renderNodeDetails();
+                void renderNodeDetails();
                 console.log('✅ Main UI refreshed after applying coherence fix');
             } catch (refreshError) {
                 console.warn('⚠️ Failed to refresh main UI after applying fix:', refreshError);
@@ -891,8 +891,8 @@ export class CoherenceModal extends BaseModal {
             }
             
             // Reset the fix button
-            const fixButton = contradictionItem.querySelector('.fix-btn') as HTMLButtonElement;
-            if (fixButton) {
+            const fixButton = contradictionItem.querySelector('.fix-btn');
+            if (fixButton instanceof HTMLButtonElement) {
                 fixButton.textContent = '🔧 Generate Fix';
                 fixButton.classList.remove('button-secondary', 'button-success');
                 fixButton.classList.add('button-warning');
@@ -945,18 +945,12 @@ export class CoherenceModal extends BaseModal {
                 actualParentNode = projectRoot.findDescendantById(contradiction.parentNodeId) ?? undefined;
             } else {
                 // Single-parent mode: use the modal's parent node (but validate it exists in project)
-                if (this.parentNode?.id) {
-                    actualParentNode = projectRoot.findDescendantById(this.parentNode.id) ?? this.parentNode;
-                } else {
-                    actualParentNode = this.parentNode || undefined;
-                }
+                actualParentNode = projectRoot.findDescendantById(this.parentNode.id) ?? this.parentNode;
             }
         } else {
             // Fallback to old logic if no project root available
-            actualParentNode = this.parentNode || undefined;
-            if (this.parentNode && this.parentNode.children) {
+            actualParentNode = this.parentNode;
             childNode = this.parentNode.children.find(child => child.id === childId);
-            }
         }
         
         if (!childNode || !actualParentNode) {
@@ -1052,7 +1046,7 @@ export class CoherenceModal extends BaseModal {
         try {
             const { renderMultiProjectTree, renderNodeDetails } = await import('../project-ui');
             renderMultiProjectTree(); // Updates tree titles and coherence icons
-            renderNodeDetails();      // Updates details panel content
+            void renderNodeDetails(); // Updates details panel content
             console.log('✅ Main UI refreshed after coherence check');
         } catch (refreshError) {
             console.warn('⚠️ Failed to refresh main UI after coherence check:', refreshError);
@@ -1084,15 +1078,13 @@ export class CoherenceModal extends BaseModal {
             
             // Tag children from all analyzed parent nodes
             for (const parentNode of this.analysisResult.analyzedNodes) {
-                if (parentNode.children) {
                 for (const childNode of parentNode.children) {
                     const masterVersion = childNode.getMasterVersion();
-                        if (masterVersion && masterVersion.tags) {
+                    if (masterVersion) {
                         masterVersion.tags.add('consistent_to_parent');
                         masterVersion.timestamp = new Date();
                         taggedCount++;
                         console.log(`🏷️ Tagged "${childNode.title}" (parent: "${parentNode.title}") as consistent_to_parent`);
-                        }
                     }
                 }
             }
@@ -1104,18 +1096,14 @@ export class CoherenceModal extends BaseModal {
             let taggedCount = 0;
             
             // Tag all children's master versions
-            if (this.parentNode.children) {
             for (const childNode of this.parentNode.children) {
                 const masterVersion = childNode.getMasterVersion();
-                    if (masterVersion && masterVersion.tags) {
-                    // Add the consistent_to_parent tag
+                if (masterVersion) {
                     masterVersion.tags.add('consistent_to_parent');
-                    masterVersion.timestamp = new Date(); // Update timestamp
+                    masterVersion.timestamp = new Date();
                     taggedCount++;
-    
                 } else {
                     console.warn(`⚠️ No master version found for child node "${childNode.title}"`);
-                    }
                 }
             }
             

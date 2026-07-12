@@ -217,7 +217,7 @@ export class RedundancyDetectorModal extends BaseModal {
      * Render the configuration screen
      */
     private renderConfigurationScreen(): string {
-        const childCount = this.parentNode.children?.length || 0;
+        const childCount = this.parentNode.children.length;
         
         return `
             <div class="modal-header">
@@ -660,9 +660,37 @@ export class RedundancyDetectorModal extends BaseModal {
         `;
     }
 
-    /**
-     * Render individual redundancy item
-     */
+    private renderDeletionTitle(isDeleted: boolean, isAboveThreshold: boolean, title: string): string {
+        if (isDeleted) {
+            return `🗑️ Deleted:  "${title}"`;
+        }
+        if (isAboveThreshold) {
+            return `⚠️ Suggested Deletion:  "${title}"`;
+        }
+        return `📊 Similarity Detected:  "${title}"`;
+    }
+
+    private renderDeletionActions(isDeleted: boolean, isAboveThreshold: boolean, redundancy: RedundancyDetection, index: number): string {
+        if (isDeleted) {
+            return '<span style="color: #666; font-style: italic;">Node has been deleted</span>';
+        }
+        if (isAboveThreshold) {
+            return `
+                <button class="delete-node-btn btn btn-danger" data-node-id="${redundancy.nodeToDelete.id}" style="margin-right: 10px;">
+                    🗑️ Delete This Node
+                </button>
+                <button class="keep-both-btn btn btn-secondary" data-index="${index}">
+                    Keep Both Nodes
+                </button>
+            `;
+        }
+        return `
+            <div style="background: #f0f0f0; padding: 10px; border-radius: 6px; color: #666; font-style: italic;">
+                📊 Below deletion threshold - shown for analysis insight only
+            </div>
+        `;
+    }
+
     private renderRedundancyItem(redundancy: RedundancyDetection, index: number): string {
         const isDeleted = this.deletedNodes.has(redundancy.nodeToDelete.id);
         const actualThreshold = this.analysisResult?.thresholdUsed ?? this.currentThreshold;
@@ -676,12 +704,7 @@ export class RedundancyDetectorModal extends BaseModal {
                     <div style="display: flex; justify-content: between; align-items: center;">
                         <div>
                             <h4 style="margin: 0 0 5px 0; color: ${isAboveThreshold ? '#d32f2f' : '#f57c00'};">
-                                ${isDeleted 
-                                    ? '🗑️ Deleted:' 
-                                    : isAboveThreshold 
-                                        ? '⚠️ Suggested Deletion:' 
-                                        : '📊 Similarity Detected:'
-                                }  "${redundancy.nodeToDelete.title}"
+                                ${this.renderDeletionTitle(isDeleted, isAboveThreshold, redundancy.nodeToDelete.title)}
                             </h4>
                             <p style="margin: 0; color: #666; font-size: 0.9em;">
                                 Redundancy Score: <strong style="color: ${isAboveThreshold ? '#d32f2f' : '#f57c00'};">${redundancy.redundancyScore}%</strong> 
@@ -715,23 +738,7 @@ export class RedundancyDetectorModal extends BaseModal {
                     </div>
                     
                                                 <div class="actions" style="text-align: center;">
-                                ${isDeleted 
-                                    ? `<span style="color: #666; font-style: italic;">Node has been deleted</span>`
-                                    : isAboveThreshold 
-                                        ? `
-                                            <button class="delete-node-btn btn btn-danger" data-node-id="${redundancy.nodeToDelete.id}" style="margin-right: 10px;">
-                                                🗑️ Delete This Node
-                                            </button>
-                                            <button class="keep-both-btn btn btn-secondary" data-index="${index}">
-                                                Keep Both Nodes
-                                            </button>
-                                        `
-                                        : `
-                                            <div style="background: #f0f0f0; padding: 10px; border-radius: 6px; color: #666; font-style: italic;">
-                                                📊 Below deletion threshold - shown for analysis insight only
-                                            </div>
-                                        `
-                                }
+                                ${this.renderDeletionActions(isDeleted, isAboveThreshold, redundancy, index)}
                             </div>
                 </div>
             </div>
@@ -751,9 +758,13 @@ export class RedundancyDetectorModal extends BaseModal {
         console.log(`Found ${deleteButtons.length} delete buttons for node ${nodeId}`);
         
         deleteButtons.forEach((button, index) => {
-            const redundancyItem = button.closest('.redundancy-item') as HTMLElement;
-            if (redundancyItem) {
-                console.log(`Updating redundancy item ${index + 1}`);
+            const redundancyItem = button.closest('.redundancy-item');
+            if (!(redundancyItem instanceof HTMLElement)) {
+                console.log(`No redundancy item found for button ${index + 1}`);
+                return;
+            }
+
+            console.log(`Updating redundancy item ${index + 1}`);
                 
                 // Update the item to show it's deleted
                 redundancyItem.style.opacity = '0.5';
@@ -771,9 +782,6 @@ export class RedundancyDetectorModal extends BaseModal {
                     headerTitle.textContent = headerTitle.textContent?.replace('⚠️ Suggested Deletion:', '🗑️ Deleted:') ?? '';
                     console.log(`Updated header for item ${index + 1}`);
                 }
-            } else {
-                console.log(`No redundancy item found for button ${index + 1}`);
-            }
         });
         
         if (deleteButtons.length === 0) {
@@ -861,120 +869,115 @@ export class RedundancyDetectorModal extends BaseModal {
      * Set up event listeners for configuration screen
      */
     private setupConfigurationEventListeners(): void {
-        // Threshold slider
-        const thresholdSlider = document.getElementById('threshold-slider') as HTMLInputElement;
+        const thresholdSlider = document.getElementById('threshold-slider');
         const thresholdValue = document.getElementById('threshold-value');
-        if (thresholdSlider && thresholdValue) {
-            thresholdSlider.addEventListener('input', (e) => {
-                const target = e.target as HTMLInputElement;
-                this.currentThreshold = parseInt(target.value);
-                thresholdValue.textContent = `${this.currentThreshold}%`;
-                
-                // Update the description text
-                const description = document.querySelector('.threshold-setting p');
-                if (description) {
-                    description.innerHTML = `Only nodes with <strong>${this.currentThreshold}%+</strong> redundancy will be marked for deletion.
-                        Lower values show more similarities but may be less actionable.`;
-                }
-            });
+        if (!(thresholdSlider instanceof HTMLInputElement) || !thresholdValue) {
+            throw new Error('Redundancy configuration threshold controls not found');
         }
+        thresholdSlider.addEventListener('input', (e) => {
+            const target = e.target as HTMLInputElement;
+            this.currentThreshold = parseInt(target.value);
+            thresholdValue.textContent = `${this.currentThreshold}%`;
+            
+            const description = document.querySelector('.threshold-setting p');
+            if (description) {
+                description.innerHTML = `Only nodes with <strong>${this.currentThreshold}%+</strong> redundancy will be marked for deletion.
+                    Lower values show more similarities but may be less actionable.`;
+            }
+        });
 
-        // Show all checkbox
-        const showAllCheckbox = document.getElementById('show-all-checkbox') as HTMLInputElement;
-        if (showAllCheckbox) {
-            showAllCheckbox.addEventListener('change', (e) => {
-                const target = e.target as HTMLInputElement;
-                this.showAllResults = target.checked;
-            });
+        const showAllCheckbox = document.getElementById('show-all-checkbox');
+        if (!(showAllCheckbox instanceof HTMLInputElement)) {
+            throw new Error('Redundancy configuration show-all checkbox not found');
         }
+        showAllCheckbox.addEventListener('change', (e) => {
+            const target = e.target as HTMLInputElement;
+            this.showAllResults = target.checked;
+        });
 
-        // Start analysis button
         const analyzeBtn = document.getElementById('start-analysis-btn');
-        if (analyzeBtn) {
-            analyzeBtn.addEventListener('click', async () => {
-                await this.startAnalysis();
-            });
+        if (!analyzeBtn) {
+            throw new Error('Redundancy configuration start-analysis button not found');
         }
+        analyzeBtn.addEventListener('click', () => {
+            void this.startAnalysis();
+        });
 
-        // Cancel button
         const cancelBtn = document.getElementById('cancel-config-btn');
-        if (cancelBtn) {
-            cancelBtn.addEventListener('click', () => {
-                this.close();
-            });
+        if (!cancelBtn) {
+            throw new Error('Redundancy configuration cancel button not found');
         }
+        cancelBtn.addEventListener('click', () => {
+            void this.close();
+        });
 
-        // Recursive mode checkbox
-        const recursiveModeCheckbox = document.getElementById('recursive-mode-checkbox') as HTMLInputElement;
-        if (recursiveModeCheckbox) {
-            recursiveModeCheckbox.addEventListener('change', (e) => {
-                const target = e.target as HTMLInputElement;
-                this.recursiveMode = target.checked;
-                
-                // Show/hide recursive options
-                const recursiveOptions = document.getElementById('recursive-options');
-                if (recursiveOptions) {
-                    recursiveOptions.style.display = this.recursiveMode ? 'block' : 'none';
-                }
-            });
+        const recursiveModeCheckbox = document.getElementById('recursive-mode-checkbox');
+        if (!(recursiveModeCheckbox instanceof HTMLInputElement)) {
+            throw new Error('Redundancy configuration recursive-mode checkbox not found');
         }
+        recursiveModeCheckbox.addEventListener('change', (e) => {
+            const target = e.target as HTMLInputElement;
+            this.recursiveMode = target.checked;
+            
+            const recursiveOptions = document.getElementById('recursive-options');
+            if (recursiveOptions) {
+                recursiveOptions.style.display = this.recursiveMode ? 'block' : 'none';
+            }
+        });
 
-        // Depth slider
-        const depthSlider = document.getElementById('depth-slider') as HTMLInputElement;
+        const depthSlider = document.getElementById('depth-slider');
         const depthValue = document.getElementById('depth-value');
-        if (depthSlider && depthValue) {
-            depthSlider.addEventListener('input', (e) => {
-                const target = e.target as HTMLInputElement;
-                this.recursiveConfig.maxDepth = parseInt(target.value);
-                const levels = this.recursiveConfig.maxDepth === 1 ? 'level' : 'levels';
-                depthValue.textContent = `${this.recursiveConfig.maxDepth} ${levels}`;
-            });
+        if (!(depthSlider instanceof HTMLInputElement) || !depthValue) {
+            throw new Error('Redundancy configuration depth controls not found');
         }
+        depthSlider.addEventListener('input', (e) => {
+            const target = e.target as HTMLInputElement;
+            this.recursiveConfig.maxDepth = parseInt(target.value);
+            const levels = this.recursiveConfig.maxDepth === 1 ? 'level' : 'levels';
+            depthValue.textContent = `${this.recursiveConfig.maxDepth} ${levels}`;
+        });
 
-        // Entire project checkbox
-        const entireProjectCheckbox = document.getElementById('entire-project-checkbox') as HTMLInputElement;
-        if (entireProjectCheckbox) {
-            entireProjectCheckbox.addEventListener('change', (e) => {
-                const target = e.target as HTMLInputElement;
-                this.recursiveConfig.analyzeEntireProject = target.checked;
-                
-                // Update depth slider state and UI
-                const depthSlider = document.getElementById('depth-slider') as HTMLInputElement;
-                const depthValue = document.getElementById('depth-value');
-                const depthLabel = depthSlider?.parentElement?.querySelector('label');
-                const depthDescription = depthSlider?.parentElement?.querySelector('p');
-                
-                if (depthSlider && depthValue && depthLabel && depthDescription) {
-                    if (target.checked) {
-                        // Disable depth controls and update UI
-                        depthSlider.disabled = true;
-                        depthSlider.style.opacity = '0.5';
-                        depthSlider.style.cursor = 'not-allowed';
-                        
-                        // Update label to show it's disabled
-                        const currentDepthText = `${this.recursiveConfig.maxDepth} level${this.recursiveConfig.maxDepth === 1 ? '' : 's'}`;
-                        depthLabel.innerHTML = `Analysis Depth: <span id="depth-value">${currentDepthText}</span> <span style="color: #666; font-weight: normal;"> (disabled - analyzing entire project)</span>`;
-                        
-                        // Update description
-                        depthDescription.textContent = 'Entire project mode: all levels will be analyzed regardless of depth setting';
-                        depthDescription.style.color = '#666';
-                    } else {
-                        // Enable depth controls and restore UI
-                        depthSlider.disabled = false;
-                        depthSlider.style.opacity = '1';
-                        depthSlider.style.cursor = 'pointer';
-                        
-                        // Restore normal label
-                        const currentDepthText = `${this.recursiveConfig.maxDepth} level${this.recursiveConfig.maxDepth === 1 ? '' : 's'}`;
-                        depthLabel.innerHTML = `Analysis Depth: <span id="depth-value">${currentDepthText}</span>`;
-                        
-                        // Restore normal description
-                        depthDescription.textContent = '1 = current node only, 2 = children + grandchildren, etc.';
-                        depthDescription.style.color = '#666';
-                    }
-                }
-            });
+        const entireProjectCheckbox = document.getElementById('entire-project-checkbox');
+        if (!(entireProjectCheckbox instanceof HTMLInputElement)) {
+            throw new Error('Redundancy configuration entire-project checkbox not found');
         }
+        entireProjectCheckbox.addEventListener('change', (e) => {
+            const target = e.target as HTMLInputElement;
+            this.recursiveConfig.analyzeEntireProject = target.checked;
+            
+            const depthSliderEl = document.getElementById('depth-slider');
+            const depthValueEl = document.getElementById('depth-value');
+            if (!(depthSliderEl instanceof HTMLInputElement) || !depthValueEl) {
+                throw new Error('Redundancy configuration depth controls not found during project toggle');
+            }
+            const depthLabel = depthSliderEl.parentElement?.querySelector('label');
+            const depthDescription = depthSliderEl.parentElement?.querySelector('p');
+            if (!depthLabel || !depthDescription) {
+                throw new Error('Redundancy configuration depth labels not found');
+            }
+
+            if (target.checked) {
+                depthSliderEl.disabled = true;
+                depthSliderEl.style.opacity = '0.5';
+                depthSliderEl.style.cursor = 'not-allowed';
+                
+                const currentDepthText = `${this.recursiveConfig.maxDepth} level${this.recursiveConfig.maxDepth === 1 ? '' : 's'}`;
+                depthLabel.innerHTML = `Analysis Depth: <span id="depth-value">${currentDepthText}</span> <span style="color: #666; font-weight: normal;"> (disabled - analyzing entire project)</span>`;
+                
+                depthDescription.textContent = 'Entire project mode: all levels will be analyzed regardless of depth setting';
+                depthDescription.style.color = '#666';
+            } else {
+                depthSliderEl.disabled = false;
+                depthSliderEl.style.opacity = '1';
+                depthSliderEl.style.cursor = 'pointer';
+                
+                const currentDepthText = `${this.recursiveConfig.maxDepth} level${this.recursiveConfig.maxDepth === 1 ? '' : 's'}`;
+                depthLabel.innerHTML = `Analysis Depth: <span id="depth-value">${currentDepthText}</span>`;
+                
+                depthDescription.textContent = '1 = current node only, 2 = children + grandchildren, etc.';
+                depthDescription.style.color = '#666';
+            }
+        });
     }
 
     /**
@@ -1014,7 +1017,7 @@ export class RedundancyDetectorModal extends BaseModal {
         const retryBtn = document.getElementById('retry-analysis-btn');
         if (retryBtn) {
             retryBtn.addEventListener('click', () => {
-                this.performAnalysis();
+                void this.performAnalysis();
             });
         }
         
@@ -1024,7 +1027,7 @@ export class RedundancyDetectorModal extends BaseModal {
             const nodeId = (button as HTMLElement).dataset['nodeId'];
             if (nodeId) {
                 button.addEventListener('click', () => {
-                    this.handleDeleteNode(nodeId);
+                    void this.handleDeleteNode(nodeId);
                 });
             }
         });

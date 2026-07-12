@@ -234,7 +234,7 @@ export class WorldRpgView {
         const checked = (e.target as HTMLInputElement).checked;
         void this.setAdventureTemplate(adv, checked);
       });
-      const rerollInput = item.querySelector('[data-reroll]') as HTMLInputElement | null;
+      const rerollInput = item.querySelector('[data-reroll]');
       if (rerollInput) {
         rerollInput.addEventListener('change', (e) => {
           adv.regenerateOpeningOnStart = (e.target as HTMLInputElement).checked;

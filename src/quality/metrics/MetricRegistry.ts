@@ -24,11 +24,7 @@ const METRIC_REGISTRY: MetricRegistry = {
  * rather than masking the problem with a silent fallback.
  */
 export function getMetricDefinition<K extends MetricType>(type: K): MetricDefinition<K> {
-    const definition = METRIC_REGISTRY[type];
-    if (!definition) {
-        throw new Error(`Unknown metric type: "${type}". No detector is registered for it.`);
-    }
-    return definition;
+    return METRIC_REGISTRY[type];
 }
 
 /** Returns all registered metric definitions (for building UI option lists). */

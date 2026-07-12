@@ -27,8 +27,9 @@ export function createXMLStorySystem(config?: Partial<import('./types/XMLStoryTy
         
         // Convenience methods
         processAIResponse: (response: string) => service.processAIResponse(response),
-        handleHumanEdit: (elementId: string, value: string) => 
-            service.handleHumanEdit(elementId, value),
+        handleHumanEdit: (elementId: string, value: string) => {
+            service.handleHumanEdit(elementId, value);
+        },
         clearHighlights: () => { service.clearAIHighlights(); },
         getWhiteboardState: () => service.getWhiteboardState(),
         getPendingEdits: () => service.getPendingHumanEdits(),

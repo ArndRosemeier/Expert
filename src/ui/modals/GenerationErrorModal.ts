@@ -9,7 +9,7 @@ export interface ErrorDetails {
     operation?: string;
     timestamp: Date;
     stack?: string;
-    originalError?: any;
+    originalError?: unknown;
 }
 
 export class GenerationErrorModal extends BaseModal {
@@ -116,21 +116,23 @@ export class GenerationErrorModal extends BaseModal {
     }
 
     protected setupEventListeners(): void {
-        const copyBtn = this.element?.querySelector('#copy-error-btn') as HTMLButtonElement;
-        const retryBtn = this.element?.querySelector('#retry-operation-btn') as HTMLButtonElement;
-        const closeBtn = this.element?.querySelector('#close-error-btn') as HTMLButtonElement;
+        const copyBtn = this.element?.querySelector('#copy-error-btn');
+        const retryBtn = this.element?.querySelector('#retry-operation-btn');
+        const closeBtn = this.element?.querySelector('#close-error-btn');
 
-        if (copyBtn) {
-            copyBtn.addEventListener('click', () => this.copyErrorToClipboard());
+        if (!(copyBtn instanceof HTMLButtonElement)) {
+            throw new Error('Copy error button not found');
+        }
+        if (!(retryBtn instanceof HTMLButtonElement)) {
+            throw new Error('Retry error button not found');
+        }
+        if (!(closeBtn instanceof HTMLButtonElement)) {
+            throw new Error('Close error button not found');
         }
 
-        if (retryBtn) {
-            retryBtn.addEventListener('click', () => { this.handleRetry(); });
-        }
-
-        if (closeBtn) {
-            closeBtn.addEventListener('click', () => void this.close());
-        }
+        copyBtn.addEventListener('click', () => { void this.copyErrorToClipboard(); });
+        retryBtn.addEventListener('click', () => { this.handleRetry(); });
+        closeBtn.addEventListener('click', () => { void this.close(); });
     }
 
     private formatErrorForCopy(): string {
@@ -178,17 +180,18 @@ ${JSON.stringify(this.errorDetails.originalError, null, 2)}`;
             await navigator.clipboard.writeText(errorText);
             
             // Show temporary success feedback
-            const copyBtn = this.element?.querySelector('#copy-error-btn') as HTMLButtonElement;
-            if (copyBtn) {
-                const originalText = copyBtn.textContent;
-                copyBtn.textContent = '✅ Copied!';
-                copyBtn.disabled = true;
-                
-                setTimeout(() => {
-                    copyBtn.textContent = originalText;
-                    copyBtn.disabled = false;
-                }, 2000);
+            const copyBtn = this.element?.querySelector('#copy-error-btn');
+            if (!(copyBtn instanceof HTMLButtonElement)) {
+                throw new Error('Copy error button not found');
             }
+            const originalText = copyBtn.textContent;
+            copyBtn.textContent = '✅ Copied!';
+            copyBtn.disabled = true;
+
+            setTimeout(() => {
+                copyBtn.textContent = originalText;
+                copyBtn.disabled = false;
+            }, 2000);
         } catch (error) {
             console.error('Failed to copy to clipboard:', error);
             

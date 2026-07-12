@@ -1,5 +1,5 @@
 import { getElementById } from "./dom-elements";
-import { showGenericModal } from './modals/index';
+import { showGenericModal, GenericModal } from './modals/index';
 // ProjectTemplate import removed - no longer used
 import { SingleTemplateEditor } from './components/SingleTemplateEditor';
 import * as state from '../state';
@@ -13,8 +13,7 @@ export function openTemplateEditor() {
     try {
     const templateManager = state.getTemplateManager();
     if (!templateManager) {
-        alert("Template manager is not initialized.");
-        return;
+        throw new Error('Template manager is not initialized');
     }
 
     const templateNames = templateManager.getTemplateNames();
@@ -51,7 +50,7 @@ export function openTemplateEditor() {
                     id: 'cancel',
                     label: '✕ Close',
                     type: 'secondary',
-                    handler: async () => {
+                    handler: () => {
                         if (isDirty && !confirm("You have unsaved changes. Are you sure you want to cancel?")) {
                             throw new Error('__KEEP_MODAL_OPEN__');
                         }
@@ -62,7 +61,7 @@ export function openTemplateEditor() {
                     id: 'save',
                     label: 'Save Changes',
                     type: 'primary',
-                    handler: async () => {
+                    handler: () => {
                         handleSaveFromModal(modal);
                     }
                 }
@@ -96,10 +95,6 @@ function setupTemplateEditorListeners() {
     // 🔧 NEW: Use EventManager for robust event delegation to prevent listener loss
     void import('./event-manager').then(({ eventManager }) => {
         const container = getElementById('template-editor-container');
-        if (!container) {
-            console.error('❌ Template editor container not found');
-            return;
-        }
 
         // Add delegated event listeners that survive DOM changes
         eventManager.addDelegatedEvent(container, 'change', '#template-select', handleTemplateSelect);
@@ -135,7 +130,7 @@ function handleTemplateSelect(event: Event) {
 function handleSave() {
     const templateManager = state.getTemplateManager();
     if (!templateManager) {
-        throw new Error('TemplateManager not available - services not properly initialized');
+        throw new Error('Template manager is not initialized');
     }
     if (!currentTemplateName) {
         throw new Error('No template selected - UI state corrupted');
@@ -163,11 +158,11 @@ function handleSave() {
             // Only delete the old template if there are multiple templates
             const templateNames = templateManager.getTemplateNames();
             if (templateNames.length > 1) {
-            templateManager.deleteTemplate(currentTemplateName);
+                void templateManager.deleteTemplate(currentTemplateName);
             }
         }
         
-        templateManager.saveTemplate(newName, template);
+        void templateManager.saveTemplate(newName, template);
         isDirty = false;
         alert(`Template '${newName}' saved successfully.`);
         
@@ -186,7 +181,10 @@ function handleSave() {
 
 function handleSaveAsNew() {
     const templateManager = state.getTemplateManager();
-    if (!templateManager || !singleTemplateEditor) return;
+    if (!templateManager) {
+        throw new Error('Template manager is not initialized');
+    }
+    if (!singleTemplateEditor) return;
 
     const template = singleTemplateEditor.getTemplateFromUI();
     const newName = template.name.trim();
@@ -201,7 +199,7 @@ function handleSaveAsNew() {
     }
 
     try {
-        templateManager.saveTemplate(newName, template);
+        void templateManager.saveTemplate(newName, template);
         isDirty = false;
         alert(`Template '${newName}' created successfully.`);
         // Refresh the selector to include the new template
@@ -217,11 +215,14 @@ function handleSaveAsNew() {
 
 function handleDelete() {
     const templateManager = state.getTemplateManager();
-    if (!templateManager || !currentTemplateName) return;
+    if (!templateManager) {
+        throw new Error('Template manager is not initialized');
+    }
+    if (!currentTemplateName) return;
 
     if (confirm(`Are you sure you want to delete the template '${currentTemplateName}'?`)) {
         try {
-            templateManager.deleteTemplate(currentTemplateName);
+            void templateManager.deleteTemplate(currentTemplateName);
             const templateNames = templateManager.getTemplateNames();
             currentTemplateName = templateNames[0] ?? null;
             isDirty = false;
@@ -237,11 +238,13 @@ function handleDelete() {
 
 function handleRestoreDefaults() {
     const templateManager = state.getTemplateManager();
-    if (!templateManager) return;
+    if (!templateManager) {
+        throw new Error('Template manager is not initialized');
+    }
 
     if (confirm("Are you sure you want to restore all templates to defaults? This will remove any custom templates you have created.")) {
         try {
-            templateManager.restoreDefaults();
+            void templateManager.restoreDefaults();
             const templateNames = templateManager.getTemplateNames();
             currentTemplateName = templateNames[0] ?? null;
             isDirty = false;
@@ -257,12 +260,11 @@ function handleRestoreDefaults() {
 
 
 
-function handleSaveFromModal(modal: unknown) {
+function handleSaveFromModal(modal: GenericModal) {
     try {
         handleSave();
-        void (modal as any).close();
-    } catch (error) {
-        // Error already shown in handleSave, just keep modal open
+        void modal.close();
+    } catch {
         throw new Error('__KEEP_MODAL_OPEN__');
     }
 }
@@ -273,8 +275,10 @@ function handleSaveFromModal(modal: unknown) {
 
 function populateTemplateSelector() {
     const templateManager = state.getTemplateManager();
+    if (!templateManager) {
+        throw new Error('Template manager is not initialized');
+    }
     const select = getElementById<HTMLSelectElement>('template-select');
-    if (!templateManager || !select) return;
 
     const names = templateManager.getTemplateNames().sort();
     select.innerHTML = names.map(name => `<option value="${name}">${name}</option>`).join('');
@@ -286,8 +290,10 @@ function populateTemplateSelector() {
 
 function renderCurrentTemplateView() {
     const templateManager = state.getTemplateManager();
+    if (!templateManager) {
+        throw new Error('Template manager is not initialized');
+    }
     const container = getElementById('single-template-editor-container');
-    if (!templateManager || !container) return;
 
     if (!currentTemplateName) {
         container.innerHTML = '<p style="text-align: center; color: #666; padding: 2rem;">No template selected.</p>';
@@ -306,7 +312,7 @@ function renderCurrentTemplateView() {
     singleTemplateEditor = new SingleTemplateEditor({
         containerId: 'single-template-editor-container',
         template: template,
-        onTemplateChange: (_updatedTemplate) => {
+        onTemplateChange: () => {
             isDirty = true;
         },
         readonly: false,

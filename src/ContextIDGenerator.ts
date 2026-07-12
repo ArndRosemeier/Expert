@@ -45,46 +45,10 @@ export class ContextIDGenerator {
     public scanProjectTreeForIds(rootNode: DocumentNode): Set<string> {
         const allIds = new Set<string>();
         
-        // Helper function to recursively collect IDs
         const collectIds = (node: DocumentNode): void => {
-            // Add the node's ID
-            allIds.add(node.id);
-            
-            // Add version IDs
-            const versions = (node as any).versions ?? [];
-            versions.forEach((version: any) => {
-                if (version.id) {
-                    allIds.add(version.id);
-                }
-            });
-            
-            // Add conditional context item IDs
-            const conditionalItems = (node as any).conditionalContextItems ?? [];
-            conditionalItems.forEach((item: any) => {
-                if (item.id) {
-                    allIds.add(item.id);
-                }
-            });
-            
-            // Add generation session IDs
-            if (node.generationSessions) {
-                node.generationSessions.forEach((session: any) => {
-                    if (session.sessionId) {
-                        allIds.add(session.sessionId);
-                    }
-                });
+            for (const id of node.collectAllContextIds()) {
+                allIds.add(id);
             }
-            
-            // Add todo item IDs
-            if (node.todos) {
-                node.todos.forEach((todo: any) => {
-                    if (todo.id) {
-                        allIds.add(todo.id);
-                    }
-                });
-            }
-            
-            // Recursively process children
             node.children.forEach(child => { collectIds(child); });
         };
         
@@ -168,7 +132,6 @@ export class ContextIDGenerator {
     public normalizeConditionalContextIds(rootNode: DocumentNode): Map<string, string> {
         const idMapping = new Map<string, string>();
         
-        // Collect all nodes
         const allNodes: DocumentNode[] = [];
         const collectNodes = (node: DocumentNode): void => {
             allNodes.push(node);
@@ -176,18 +139,14 @@ export class ContextIDGenerator {
         };
         collectNodes(rootNode);
         
-        // Only normalize conditional context item IDs - leave node IDs unchanged
         for (const node of allNodes) {
-            const conditionalItems = (node as any).conditionalContextItems ?? [];
-            conditionalItems.forEach((item: any) => {
-                if (item.id) {
-                    const normalizedItemId = this.normalizeContextID(item.id, rootNode);
-                    if (normalizedItemId !== item.id) {
-                        idMapping.set(item.id, normalizedItemId);
-                        item.id = normalizedItemId;
-                    }
+            for (const item of node.getConditionalContextItems()) {
+                const normalizedItemId = this.normalizeContextID(item.id, rootNode);
+                if (normalizedItemId !== item.id) {
+                    idMapping.set(item.id, normalizedItemId);
+                    node.renameConditionalContextItemId(item.id, normalizedItemId);
                 }
-            });
+            }
         }
         
         return idMapping;

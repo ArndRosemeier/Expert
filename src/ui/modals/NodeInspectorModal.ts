@@ -9,333 +9,11 @@ import { DiffTool } from '../../DiffTool';
 import { promptForVersionName } from './VersionNameModal';
 
 
-// ============================================================================
-// INTERFACES & TYPES
-// ============================================================================
-
-// ============================================================================
-// EVENT SYSTEM
-// ============================================================================
-
-class EventBus {
-    private listeners: Map<string, Function[]> = new Map();
-
-    on(event: string, callback: Function): void {
-        if (!this.listeners.has(event)) {
-            this.listeners.set(event, []);
-        }
-        this.listeners.get(event)!.push(callback);
-    }
-
-    emit(event: string, data?: unknown): void {
-        const callbacks = this.listeners.get(event);
-        if (callbacks) {
-            callbacks.forEach(callback => callback(data));
-        }
-    }
-
-    off(event: string, callback: Function): void {
-        const callbacks = this.listeners.get(event);
-        if (callbacks) {
-            const index = callbacks.indexOf(callback);
-            if (index > -1) {
-                callbacks.splice(index, 1);
-            }
-        }
-    }
-
-    destroy(): void {
-        this.listeners.clear();
-    }
-}
-
-// ============================================================================
-// BASE COMPONENT SYSTEM
-// ============================================================================
-
-abstract class UIComponent {
-    protected element: HTMLElement;
-    protected isVisible: boolean = false;
-    protected eventBus: EventBus;
-
-    constructor(eventBus: EventBus) {
-        this.eventBus = eventBus;
-        this.element = this.createElement();
-    }
-
-    protected abstract createElement(): HTMLElement;
-    abstract render(): HTMLElement;
-    abstract destroy(): void;
-
-    show(): void {
-        this.isVisible = true;
-        this.element.style.display = 'block';
-    }
-
-    hide(): void {
-        this.isVisible = false;
-        this.element.style.display = 'none';
-    }
-
-    getElement(): HTMLElement {
-        return this.element;
-    }
-}
-
-// ============================================================================
-// VERSIONS LIST COMPONENT
-// ============================================================================
-
-// @ts-ignore - Legacy class kept for potential future use
-class VersionsList extends UIComponent {
-    private versions: ContentVersion[] = [];
-    private selectedVersionId: string | null = null;
-
-    protected createElement(): HTMLElement {
-        const container = document.createElement('div');
-        container.className = 'versions-list-container';
-        return container;
-    }
-
-    setVersions(versions: ContentVersion[]): void {
-        this.versions = this.sortVersions(versions);
-        this.renderVersions();
-    }
-
-    setSelectedVersion(versionId: string | null): void {
-        this.selectedVersionId = versionId;
-        this.updateSelection();
-    }
-
-    private sortVersions(versions: ContentVersion[]): ContentVersion[] {
-        return [...versions].sort((a, b) => {
-            // Master always first
-            const aIsMaster = a.tags.has('master');
-            const bIsMaster = b.tags.has('master');
-            
-            if (aIsMaster && !bIsMaster) return -1;
-            if (!aIsMaster && bIsMaster) return 1;
-            
-            // Then by timestamp (newest first)
-            return new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime();
-        });
-    }
-
-    private renderVersions(): void {
-        this.element.innerHTML = `
-            <div class="versions-list-header">
-                <h3>Versions (${this.versions.length})</h3>
-            </div>
-            <div class="versions-list-content">
-                ${this.versions.map(version => this.renderVersionItem(version)).join('')}
-            </div>
-        `;
-
-        this.setupEventListeners();
-    }
-
-    private renderVersionItem(version: ContentVersion): string {
-        const isMaster = version.tags.has('master');
-        const isSelected = version.id === this.selectedVersionId;
-        
-        const classes = ['version-item'];
-        if (isMaster) classes.push('master');
-        if (isSelected) classes.push('selected');
-        
-        const tags = Array.from(version.tags)
-            .filter(tag => tag !== 'master')
-            .map(tag => `<span class="version-tag ${tag}">${tag}</span>`)
-            .join('');
-        
-        const timestamp = new Date(version.timestamp).toLocaleString();
-        const contentPreview = this.escapeHtml(version.content.substring(0, 200));
-        
-        return `
-            <div class="${classes.join(' ')}" data-version-id="${version.id}">
-                <div class="version-header">
-                    <span class="version-id">${version.id.substring(0, 8)}...</span>
-                    ${isMaster ? '<span class="master-badge">MASTER</span>' : ''}
-                </div>
-                ${tags ? `<div class="version-tags">${tags}</div>` : ''}
-                <div class="version-timestamp">${timestamp}</div>
-                <div class="version-preview">${contentPreview}${version.content.length > 200 ? '...' : ''}</div>
-            </div>
-        `;
-    }
-
-    private setupEventListeners(): void {
-        // Version selection
-        const content = this.element.querySelector('.versions-list-content');
-        if (content) {
-            content.addEventListener('click', (e) => {
-                const versionItem = (e.target as HTMLElement).closest('.version-item');
-                if (versionItem) {
-                    const versionId = versionItem.getAttribute('data-version-id');
-                    if (versionId) {
-                        this.eventBus.emit('version:selected', versionId);
-                    }
-                }
-            });
-        }
-    }
-
-    private updateSelection(): void {
-        // Update visual selection
-        const items = this.element.querySelectorAll('.version-item');
-        items.forEach(item => {
-            const versionId = item.getAttribute('data-version-id');
-            if (versionId === this.selectedVersionId) {
-                item.classList.add('selected');
-            } else {
-                item.classList.remove('selected');
-            }
-        });
-    }
-
-    private escapeHtml(text: string): string {
-        const div = document.createElement('div');
-        div.textContent = text;
-        return div.innerHTML;
-    }
-
-    render(): HTMLElement {
-        return this.element;
-    }
-
-    destroy(): void {
-        // Remove event listeners and clean up
-        this.element.innerHTML = '';
-    }
-}
-
-// ============================================================================
-// CONTENT VIEWER COMPONENT  
-// ============================================================================
-
-// @ts-ignore - Legacy class kept for potential future use
-class ContentViewer extends UIComponent {
-    private version: ContentVersion | null = null;
-
-    protected createElement(): HTMLElement {
-        const container = document.createElement('div');
-        container.className = 'content-viewer-container';
-        return container;
-    }
-
-    setVersion(version: ContentVersion | null): void {
-        this.version = version;
-        this.renderContent();
-    }
-
-    private renderContent(): void {
-        if (!this.version) {
-            this.element.innerHTML = `
-                <div class="content-viewer-empty">
-                    <p>Select a version to view its content</p>
-                </div>
-            `;
-            return;
-        }
-
-        const ratings = this.version.metadata?.['ratings'] ?? [];
-        
-        this.element.innerHTML = `
-            <div class="content-viewer-header">
-                <h3>Content Preview</h3>
-                <div class="version-info">
-                    ${this.version.tags.has('master') ? '<strong>MASTER VERSION</strong> • ' : ''}
-                    Created: ${new Date(this.version.timestamp).toLocaleString()}
-                </div>
-            </div>
-            <div class="content-viewer-body">
-                ${ratings.length > 0 ? this.renderRatings(ratings) : ''}
-                <div class="content-section">
-                    <pre class="content-text">${this.escapeHtml(this.version.content)}</pre>
-                </div>
-            </div>
-        `;
-    }
-
-    private renderRatings(ratings: Rating[]): string {
-        // Import and use shared RatingsRenderer
-        try {
-            const { RatingsRenderer } = require('../components/RatingsRenderer');
-            
-            // Convert ratings to expected format for RatingsRenderer
-            const formattedRatings = ratings.map(rating => {
-                return {
-                    actual: rating.actual || (rating as any).score || 0, // Support both old and new formats
-                    goal: rating.goal || 10,
-                    criterion: rating.criterion || 'Unknown',
-                    justification: rating.justification,
-                    passed: rating.passed,
-                    binary: rating.binary
-                };
-            });
-            
-            // Use compact mode for modal display
-            return RatingsRenderer.renderRatings(formattedRatings, {
-                title: 'Ratings',
-                compact: true,
-                showGoalLine: true,
-                showJustification: false, // Keep compact in modal
-                showTimestamp: false
-            });
-        } catch (error) {
-            console.warn('RatingsRenderer not available, using fallback', error);
-            // Fallback to simple display
-            const ratingsHtml = ratings.map(rating => {
-                const score = rating.actual || (rating as any).score || 0; // Support both old and new formats
-                const goal = rating.goal || 10;
-                
-                const criterionName = rating.criterion || 'Unknown';
-                
-                return `
-                    <div style="margin-bottom: 0.5rem;">
-                        <span style="font-weight: 600;">${this.escapeHtml(criterionName)}</span>: 
-                        <span style="color: ${score >= goal ? '#28a745' : '#dc3545'};">${score}/${goal}</span>
-                    </div>
-                `;
-            }).join('');
-            
-            return `
-                <div style="padding: 0.75rem; background-color: #f8f9fa; border-radius: 6px; border: 1px solid #e9ecef;">
-                    <h4 style="margin: 0 0 0.75rem 0; font-size: 1rem;">Ratings</h4>
-                    ${ratingsHtml}
-                </div>
-            `;
-        }
-    }
-
-    private escapeHtml(text: string): string {
-        const div = document.createElement('div');
-        div.textContent = text;
-        return div.innerHTML;
-    }
-
-    render(): HTMLElement {
-        return this.element;
-    }
-
-    destroy(): void {
-        this.element.innerHTML = '';
-    }
-}
-
-// ============================================================================
-// CONTROLLER (BUSINESS LOGIC)
-// ============================================================================
-
-
-
-// ============================================================================
-// MAIN MODAL CLASS
-// ============================================================================
-
 export class NodeInspectorModal extends BaseModal {
     // Embedded Conditional Context editor and listener
     private ccEditor: ConditionalContextEditor | null = null;
     private ccSelectListener: EventListener | null = null;
+    private todoChangeHandler: EventListener | null = null;
     private node: DocumentNode | null = null;
     private selectedVersionId: string | null = null;
 
@@ -382,17 +60,17 @@ export class NodeInspectorModal extends BaseModal {
         window.addEventListener('todoListChanged', handleTodoChange as EventListener);
         
         // Store reference for cleanup
-        (this as any)._todoChangeHandler = handleTodoChange;
+        this.todoChangeHandler = handleTodoChange as EventListener;
     }
 
     public override async close(): Promise<void> {
         // Clean up todo change listener
-        if ((this as any)._todoChangeHandler) {
-            window.removeEventListener('todoListChanged', (this as any)._todoChangeHandler as EventListener);
-            delete (this as any)._todoChangeHandler;
+        if (this.todoChangeHandler) {
+            window.removeEventListener('todoListChanged', this.todoChangeHandler);
+            this.todoChangeHandler = null;
         }
         // Cleanup embedded Conditional Context editor and listener
-        try { this.ccEditor?.destroy(); } catch {}
+        this.ccEditor?.destroy();
         this.ccEditor = null;
         if (this.ccSelectListener) {
             window.removeEventListener('cc-select-node', this.ccSelectListener);
@@ -584,30 +262,26 @@ export class NodeInspectorModal extends BaseModal {
                     });
                 }
 
-                if (tagBtn) {
-                    tagBtn.addEventListener('click', async (e) => {
-                        e.stopPropagation(); // Prevent triggering version selection
-                        await this.handleTagVersion(version.id);
-                    });
-                }
-                
-                if (removeBtn) {
-                    removeBtn.addEventListener('click', async (e) => {
-                        e.stopPropagation(); // Prevent triggering version selection
-                        await this.handleRemoveVersion(version.id);
-                    });
-                }
+                tagBtn.addEventListener('click', (e) => {
+                    e.stopPropagation(); // Prevent triggering version selection
+                    void this.handleTagVersion(version.id);
+                });
+
+                removeBtn.addEventListener('click', (e) => {
+                    e.stopPropagation(); // Prevent triggering version selection
+                    void this.handleRemoveVersion(version.id);
+                });
             }
             
             // Add event listeners for clickable tags
             const clickableTags = item.querySelectorAll('.clickable-tag');
             clickableTags.forEach(tagElement => {
-                tagElement.addEventListener('click', async (e) => {
+                tagElement.addEventListener('click', (e) => {
                     e.stopPropagation(); // Prevent triggering version selection
                     const tagName = (tagElement as HTMLElement).dataset['tag'];
                     const versionId = (tagElement as HTMLElement).dataset['versionId'];
                     if (tagName && versionId) {
-                        await this.handleRemoveTagFromVersion(versionId, tagName);
+                        void this.handleRemoveTagFromVersion(versionId, tagName);
                     }
                 });
             });
@@ -805,9 +479,7 @@ export class NodeInspectorModal extends BaseModal {
         
         const content = justificationDiv.querySelector('.justification-content') as HTMLElement;
         const toggle = header.querySelector('.justification-toggle') as HTMLElement;
-        
-        if (!content || !toggle) return;
-        
+
         const isCollapsed = content.classList.contains('collapsed');
         
         if (isCollapsed) {
@@ -827,7 +499,8 @@ export class NodeInspectorModal extends BaseModal {
         const wrapper = document.createElement('div');
         wrapper.className = 'scrollable-content';
         if (!this.node) return wrapper;
-        const version = this.node.getAllVersions().find(v => v.id === this.selectedVersionId);
+        const node = this.node;
+        const version = node.getAllVersions().find(v => v.id === this.selectedVersionId);
         if (!version) {
             wrapper.innerHTML = '<p>No version selected.</p>';
             return wrapper;
@@ -882,7 +555,7 @@ export class NodeInspectorModal extends BaseModal {
                 <div class="version-section" id="ins-notes-section">
                     <h4 class="section-title" id="ins-notes-toggle" style="cursor: pointer;">▼ Notes</h4>
                     <div class="section-content foldable-content" id="ins-notes-content">
-                        <textarea class="notes-editor auto-resize" id="inspector-notes-editor" placeholder="Enter personal notes about this node...">${this.escapeHtml(this.node?.notes || '')}</textarea>
+                        <textarea class="notes-editor auto-resize" id="inspector-notes-editor" placeholder="Enter personal notes about this node...">${this.escapeHtml(node.notes || '')}</textarea>
                     </div>
                 </div>
                 </div>
@@ -893,61 +566,59 @@ export class NodeInspectorModal extends BaseModal {
         setTimeout(() => {
             try {
                 const host = wrapper.querySelector('#inspector-conditional-context-host') as HTMLElement;
-                if (host && this.node) {
-                    // Destroy previous instance if any
-                    try { this.ccEditor?.destroy(); } catch {}
-                    this.ccEditor = new ConditionalContextEditor({
-                        node: this.node,
-                        projectManager: findProjectByNode(this.node)!,
-                        showPreview: false,
-                        showInheritedByDefault: true,
-                        onNavigateToNodeId: (nodeId: string) => {
-                            try {
-                                const pm = findProjectByNode(this.node!);
-                                if (!pm) return;
-                                void import('../../project/TreeService')
-                                    .then(({ TreeService }) => {
-                                        const ts = new TreeService();
-                                        const target = ts.findNodeById(nodeId, pm.rootNode);
-                                        if (target) {
-                                            // Update inspector state and re-render in-place
-                                            this.node = target;
-                                            const versions = target.getAllVersions();
-                                            const master = versions.find(v => v.tags.has('master'));
-                                            this.selectedVersionId = master ? master.id : (versions[0]?.id ?? null);
-                                            this.rerender();
-                                        }
-                                    })
-                                    .catch((e) => {
-                                        console.error('Failed to navigate in NodeInspector:', e);
-                                    });
-                            } catch (e) {
-                                console.error('Failed to navigate in NodeInspector:', e);
-                            }
-                        }
-                    });
-                    this.ccEditor.mount(host);
-
-                    // Rewire node-select from embedded editor
-                    if (this.ccSelectListener) {
-                        window.removeEventListener('cc-select-node', this.ccSelectListener);
-                    }
-                    this.ccSelectListener = ((ev: Event) => {
-                        const detail = (ev as CustomEvent<{ nodeId: string }>).detail;
-                        if (detail && detail.nodeId) {
-                            // Select in main UI and also re-render inspector to reflect new path/title
-                            void import('../project-ui')
-                                .then(({ setSelectedNodeAndRedraw }) => {
-                                    setSelectedNodeAndRedraw(detail.nodeId);
+                // Destroy previous instance if any
+                this.ccEditor?.destroy();
+                this.ccEditor = new ConditionalContextEditor({
+                    node,
+                    projectManager: findProjectByNode(node)!,
+                    showPreview: false,
+                    showInheritedByDefault: true,
+                    onNavigateToNodeId: (nodeId: string) => {
+                        try {
+                            const pm = findProjectByNode(node);
+                            if (!pm) return;
+                            void import('../../project/TreeService')
+                                .then(({ TreeService }) => {
+                                    const ts = new TreeService();
+                                    const target = ts.findNodeById(nodeId, pm.rootNode);
+                                    if (target) {
+                                        // Update inspector state and re-render in-place
+                                        this.node = target;
+                                        const versions = target.getAllVersions();
+                                        const master = versions.find(v => v.tags.has('master'));
+                                        this.selectedVersionId = master ? master.id : (versions[0]?.id ?? null);
+                                        this.rerender();
+                                    }
                                 })
                                 .catch((e) => {
-                                    console.error('Failed to update selection in main UI:', e);
+                                    console.error('Failed to navigate in NodeInspector:', e);
                                 });
-                            // Optionally, close and reopen to the selected node; for now, just refresh header
+                        } catch (e) {
+                            console.error('Failed to navigate in NodeInspector:', e);
                         }
-                    }) as EventListener;
-                    window.addEventListener('cc-select-node', this.ccSelectListener);
+                    }
+                });
+                this.ccEditor.mount(host);
+
+                // Rewire node-select from embedded editor
+                if (this.ccSelectListener) {
+                    window.removeEventListener('cc-select-node', this.ccSelectListener);
                 }
+                this.ccSelectListener = ((ev: Event) => {
+                    const detail = (ev as CustomEvent<{ nodeId: string }>).detail;
+                    if (detail.nodeId) {
+                        // Select in main UI and also re-render inspector to reflect new path/title
+                        void import('../project-ui')
+                            .then(({ setSelectedNodeAndRedraw }) => {
+                                setSelectedNodeAndRedraw(detail.nodeId);
+                            })
+                            .catch((e) => {
+                                console.error('Failed to update selection in main UI:', e);
+                            });
+                        // Optionally, close and reopen to the selected node; for now, just refresh header
+                    }
+                }) as EventListener;
+                window.addEventListener('cc-select-node', this.ccSelectListener);
             } catch (e) {
                 console.error('Failed to mount embedded Conditional Context editor in NodeInspector:', e);
             }
@@ -955,8 +626,8 @@ export class NodeInspectorModal extends BaseModal {
 
         // Wire fold/unfold behavior
         const attachToggle = (toggleId: string, contentId: string) => {
-            const t = wrapper.querySelector('#' + toggleId) as HTMLElement | null;
-            const c = wrapper.querySelector('#' + contentId) as HTMLElement | null;
+            const t = wrapper.querySelector('#' + toggleId);
+            const c = wrapper.querySelector('#' + contentId);
             if (t && c) {
                 t.addEventListener('click', () => {
                     const isCollapsed = c.classList.toggle('collapsed');
@@ -1208,7 +879,7 @@ export class NodeInspectorModal extends BaseModal {
                 // Update both the project tree and node details to ensure all UI reflects changes
                 const { renderMultiProjectTree, renderNodeDetails } = await import('../project-ui');
                 renderMultiProjectTree(); // Updates tree titles and structure
-                renderNodeDetails();      // Updates details panel content
+                await renderNodeDetails();      // Updates details panel content
             }
         } catch (error) {
             console.error('Failed to persist node changes:', error);
@@ -1237,55 +908,47 @@ export class NodeInspectorModal extends BaseModal {
     private setupEditorEventListeners(): void {
         if (!this.node) return;
 
-        const titleEditor = document.getElementById('inspector-title-editor') as HTMLInputElement;
-        const contentEditor = document.getElementById('inspector-content-editor') as HTMLTextAreaElement;
-        // contextEditor removed - using conditional context system
-        const notesEditor = document.getElementById('inspector-notes-editor') as HTMLTextAreaElement;
-
         // Upgrade content textarea to enhanced UniversalTextEditor - Drop-in replacement!
-        if (contentEditor) {
-            const enhancedContentEditor = UniversalTextEditor.replace(contentEditor, {
-                mode: 'enhanced'  // Enable AI features and text transformation
-            });
-            
-            // Add blur event listener using standard DOM API
-            enhancedContentEditor.addEventListener('blur', async () => {
-                this.saveContent(enhancedContentEditor.value);
-                // Update external UI only when editing is finished
-                await this.persistNodeChanges();
-            });
-        }
+        const contentEditor = document.getElementById('inspector-content-editor') as HTMLTextAreaElement;
+        const enhancedContentEditor = UniversalTextEditor.replace(contentEditor, {
+            mode: 'enhanced'  // Enable AI features and text transformation
+        });
+
+        // Add blur event listener using standard DOM API
+        enhancedContentEditor.addEventListener('blur', () => {
+            this.saveContent(enhancedContentEditor.value);
+            // Update external UI only when editing is finished
+            void this.persistNodeChanges();
+        });
 
         // Traditional context editor removed - using conditional context system
 
         // Upgrade notes textarea to enhanced UniversalTextEditor - Drop-in replacement!
-        if (notesEditor) {
-            const enhancedNotesEditor = UniversalTextEditor.replace(notesEditor, {
-                mode: 'enhanced'  // Enable AI features for notes editing too
-            });
-            
-            // Add blur event listener using standard DOM API - should work exactly like before
-            enhancedNotesEditor.addEventListener('blur', async () => {
-                this.saveNotes(enhancedNotesEditor.value);
-                // Update external UI only when editing is finished
-                await this.persistNodeChanges();
-            });
-        }
+        const notesEditor = document.getElementById('inspector-notes-editor') as HTMLTextAreaElement;
+        const enhancedNotesEditor = UniversalTextEditor.replace(notesEditor, {
+            mode: 'enhanced'  // Enable AI features for notes editing too
+        });
+
+        // Add blur event listener using standard DOM API - should work exactly like before
+        enhancedNotesEditor.addEventListener('blur', () => {
+            this.saveNotes(enhancedNotesEditor.value);
+            // Update external UI only when editing is finished
+            void this.persistNodeChanges();
+        });
 
         // Title editor - save only on blur (when focus is lost)
-        if (titleEditor) {
-            titleEditor.addEventListener('blur', async () => {
-                this.saveTitle(titleEditor.value);
-                // Update external UI only when editing is finished
-                await this.persistNodeChanges();
-            });
-        }
+        const titleEditor = document.getElementById('inspector-title-editor') as HTMLInputElement;
+        titleEditor.addEventListener('blur', () => {
+            this.saveTitle(titleEditor.value);
+            // Update external UI only when editing is finished
+            void this.persistNodeChanges();
+        });
 
         // Authorize-anyway toggle: accept (or revoke) a node whose generation did
         // not meet all quality goals, clearing/restoring the ❗ mark in the tree.
         const approveBtn = document.getElementById('inspector-approve-quality-btn');
         if (approveBtn) {
-            approveBtn.addEventListener('click', async () => {
+            approveBtn.addEventListener('click', () => {
                 if (!this.node) return;
                 if (this.node.isQualityApproved()) {
                     this.node.revokeQualityApproval();
@@ -1294,8 +957,9 @@ export class NodeInspectorModal extends BaseModal {
                 }
                 // Persist + refresh the tree (updates the ❗ mark), then rerender
                 // the modal so the button and verdict reflect the new state.
-                await this.persistNodeChanges();
-                this.rerender();
+                void this.persistNodeChanges().then(() => {
+                    this.rerender();
+                });
             });
         }
 
@@ -1372,9 +1036,9 @@ export class NodeInspectorModal extends BaseModal {
 
         // Use 3-column layout with visual progress bars (0-10 scale)
         const ratingsHtml = orderedRatings.map(rating => {
-            const score = rating.actual || (rating as any).score || 0; // Support both old and new formats
-            const goal = rating.goal || 10;
-            const criterionName = rating.criterion || 'Unknown';
+            const score = rating.actual;
+            const goal = rating.goal;
+            const criterionName = rating.criterion;
 
             // Binary (pass/fail) constraints read as a Pass/Fail pill rather than a
             // 0-10 bar, which would be misleading for a 0/1 score.
@@ -1395,7 +1059,14 @@ export class NodeInspectorModal extends BaseModal {
             const scorePercentage = Math.min((score / 10) * 100, 100); // Always scale to 10
             const goalPercentage = Math.min((goal / 10) * 100, 100); // Goal indicator position
 
-            const barColor = score >= goal ? '#28a745' : (score >= goal * 0.7 ? '#ffc107' : '#dc3545');
+            let barColor: string;
+            if (score >= goal) {
+                barColor = '#28a745';
+            } else if (score >= goal * 0.7) {
+                barColor = '#ffc107';
+            } else {
+                barColor = '#dc3545';
+            }
             const textColor = score >= goal ? '#28a745' : '#dc3545';
             
             return `
@@ -1410,11 +1081,7 @@ export class NodeInspectorModal extends BaseModal {
             `;
         }).join('');
 
-        const belowGoal = ratings.filter(rating => {
-            const score = rating.actual || (rating as any).score || 0;
-            const goal = rating.goal || 10;
-            return score < goal;
-        }).length;
+        const belowGoal = ratings.filter(rating => rating.actual < rating.goal).length;
         const passed = belowGoal === 0;
         const verdict = passed
             ? `<span style="color: #28a745;">PASSED</span>`
@@ -1424,7 +1091,7 @@ export class NodeInspectorModal extends BaseModal {
         // winning generation fell short. Lets the user clear the ❗ tree mark by
         // accepting the result as-is (or revoke that acceptance later).
         const isMaster = version.tags.has('master');
-        const isApproved = this.node !== null && this.node.isQualityApproved();
+        const isApproved = this.node?.isQualityApproved() ?? false;
         let approveButtonHtml = '';
         if (isMaster && belowGoal > 0) {
             approveButtonHtml = isApproved
@@ -2276,6 +1943,6 @@ class TagSelectionModal extends BaseModal {
             this.resolvePromise(null);
             this.resolvePromise = null;
         }
-        void super.destroy();
+        super.destroy();
     }
 }

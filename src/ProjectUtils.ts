@@ -1,5 +1,5 @@
 import { ProjectManager } from './ProjectManager';
-import { DocumentNode } from './DocumentNode';
+import { DocumentNode, ContentVersion } from './DocumentNode';
 import { QualityCriterion, isLLMCriterion } from './types';
 
 /**
@@ -17,7 +17,7 @@ interface TagAnalysis {
 export interface VersionInfo {
     node: DocumentNode;
     versionId: string;
-    version: any; // ContentVersion
+    version: ContentVersion;
 }
 
 /**
@@ -28,42 +28,23 @@ export interface VersionInfo {
  * @param project The ProjectManager instance to fix
  */
 export function AssertFlatTemplateCopy(project: ProjectManager): void {
-    if (!project?.rootNode) {
-        console.warn('AssertFlatTemplateCopy: Invalid project provided');
-        return;
-    }
-
     const rootTemplate = project.rootNode.template;
-    if (!rootTemplate || !Array.isArray(rootTemplate)) {
-        console.warn('AssertFlatTemplateCopy: Root node has invalid template');
-        return;
-    }
-
-    // Normalize the root's per-layer length hints so they stay index-aligned with
-    // the template (older roots may have none). All nodes then share this exact
-    // reference, mirroring how `template` is shared.
-    const existingLengths = Array.isArray(project.rootNode.layerLengths) ? project.rootNode.layerLengths : [];
+    const existingLengths = project.rootNode.layerLengths;
     const rootLayerLengths = rootTemplate.map((_, i) => existingLengths[i] ?? null);
     project.rootNode.layerLengths = rootLayerLengths;
 
-    // Recursively update all nodes to use the root template reference
     function updateNodeTemplate(node: DocumentNode): void {
-        // Ensure the node uses the same template + length-hint references as root
         node.template = rootTemplate;
         node.layerLengths = rootLayerLengths;
         
-        // Recursively update all children
         for (const child of node.children) {
             updateNodeTemplate(child);
         }
     }
 
-    // Update all child nodes (root node already has the correct reference)
     for (const child of project.rootNode.children) {
         updateNodeTemplate(child);
     }
-
-
 }
 
 
@@ -76,12 +57,11 @@ export function AssertFlatTemplateCopy(project: ProjectManager): void {
  * @returns JSON string representation of criteria or fallback message
  */
 export function formatCriteriaAsJson(criteria: QualityCriterion[]): string {
-    if (!criteria || criteria.length === 0) {
+    if (criteria.length === 0) {
         return 'No criteria defined';
     }
     
     const formattedCriteria = criteria.map(c => {
-        // Extract just the name part (before any period) for cleaner display
         const shortName = c.name.indexOf('.') > 0 ? c.name.substring(0, c.name.indexOf('.')) : c.name;
         return {
             name: shortName,
@@ -102,7 +82,7 @@ export function formatCriteriaAsJson(criteria: QualityCriterion[]): string {
  * @returns JSON string representation of criteria with scoring guidance
  */
 export function formatCriteriaForRater(criteria: QualityCriterion[]): string {
-    if (!criteria || criteria.length === 0) {
+    if (criteria.length === 0) {
         return 'No criteria defined';
     }
 
@@ -152,19 +132,16 @@ export function analyzeTagsInHierarchy(rootNode: DocumentNode): TagAnalysis {
     const tagToNodesMap: { [tagName: string]: DocumentNode[] } = {};
     const tagToVersionsMap: { [tagName: string]: VersionInfo[] } = {};
 
-    // Collect all tags from all versions of all nodes
     for (const node of allNodes) {
         const versions = node.getAllVersions();
         
         for (const version of versions) {
             for (const tag of version.tags) {
-                // Map tag to nodes
                 tagToNodesMap[tag] ??= [];
                 if (!tagToNodesMap[tag].includes(node)) {
                     tagToNodesMap[tag].push(node);
                 }
 
-                // Map tag to versions
                 tagToVersionsMap[tag] ??= [];
                 tagToVersionsMap[tag].push({
                     node,
@@ -175,7 +152,6 @@ export function analyzeTagsInHierarchy(rootNode: DocumentNode): TagAnalysis {
         }
     }
 
-    // Create sorted tag list (master first, then alphabetical)
     const allTags = Object.keys(tagToNodesMap).sort((a, b) => {
         if (a === 'master') return -1;
         if (b === 'master') return 1;

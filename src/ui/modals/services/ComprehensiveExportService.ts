@@ -70,7 +70,7 @@ export class ComprehensiveExportService {
      * 
      * @param fileHandle Optional file handle for direct writing (preserves user gesture)
      */
-    public static async createComprehensiveBackup(fileHandle?: any): Promise<ComprehensiveExportResult> {
+    public static async createComprehensiveBackup(fileHandle?: FileSystemFileHandle | null): Promise<ComprehensiveExportResult> {
         try {
             const zip = new JSZip();
             const exportedItems: string[] = [];
@@ -141,7 +141,7 @@ export class ComprehensiveExportService {
                     const writable = await fileHandle.createWritable();
                     await writable.write(zipBlob);
                     await writable.close();
-                    actualFilename = fileHandle.name ?? filename;
+                    actualFilename = fileHandle.name;
                     console.log('✅ Backup saved using file handle:', actualFilename);
                 } catch (writeError) {
                     console.error('❌ Failed to write to file handle:', writeError);
@@ -160,14 +160,18 @@ export class ComprehensiveExportService {
                 
                 // Check if user cancelled or download failed
                 if (!downloadResult.success || downloadResult.cancelled) {
+                    let message: string;
+                    if (downloadResult.cancelled) {
+                        message = 'Export cancelled by user';
+                    } else if (downloadResult.error) {
+                        message = `Export failed: ${downloadResult.error}`;
+                    } else {
+                        message = 'Export failed to save file';
+                    }
                     return {
                         success: false,
                         filename: '',
-                        message: downloadResult.cancelled 
-                            ? 'Export cancelled by user' 
-                            : downloadResult.error 
-                                ? `Export failed: ${downloadResult.error}` 
-                                : 'Export failed to save file',
+                        message,
                         exportedItems: []
                     };
                 }
@@ -199,29 +203,17 @@ export class ComprehensiveExportService {
     private static async getIndexedDBService(): Promise<IndexedDBService> {
         // Get the storage service instance
         const storage = await StorageService.getInstance();
-        
-        // Access the underlying IndexedDB service using the proper method
-        if (!storage.getIndexedDBService) {
-            throw new Error('Storage service does not support IndexedDB direct access');
-        }
-        
-        const indexedDBService = storage.getIndexedDBService();
-        
-        if (!indexedDBService) {
-            throw new Error('Could not access IndexedDB service for complete export');
-        }
-        
-        return indexedDBService;
+        return storage.getIndexedDBService();
     }
 
     /**
      * Filter out sensitive data from the export
      */
-    private static filterSensitiveData(data: any[]): any[] {
+    private static filterSensitiveData(data: unknown[]): unknown[] {
         return data.filter(item => {
-            // Filter out items with sensitive keys
-            if (item && typeof item === 'object' && 'key' in item) {
-                return !SENSITIVE_KEYS.includes(item.key);
+            if (typeof item === 'object' && item !== null && 'key' in item) {
+                const key = (item as { key: unknown }).key;
+                return typeof key !== 'string' || !SENSITIVE_KEYS.includes(key);
             }
             return true;
         });

@@ -101,7 +101,7 @@ export class GuidedReviewModal extends SimpleModal {
         this.selectedLevels = layers.map(l => l.level);
         this.scope = new ReviewScope(this.sourceNode, this.selectedLevels);
 
-        this.hooks = { onOpen: () => this.onOpened() };
+        this.hooks = { onOpen: async () => this.onOpened() };
     }
 
     public render(): HTMLElement {
@@ -162,7 +162,7 @@ export class GuidedReviewModal extends SimpleModal {
         });
 
         const closeButton = this.makeButton('Close', '#e5e7eb', '#111827');
-        addEventListenerWithCleanup(closeButton, 'click', () => this.guardedClose(), this.cleanupHandlers);
+        addEventListenerWithCleanup(closeButton, 'click', () => { void this.guardedClose(); }, this.cleanupHandlers);
 
         controls.appendChild(purposeLabel);
         controls.appendChild(this.sizeLabel);

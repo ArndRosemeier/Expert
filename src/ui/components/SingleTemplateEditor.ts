@@ -43,10 +43,6 @@ export class SingleTemplateEditor {
 
     public render(): void {
         const container = getElementById(this.containerId);
-        if (!container) {
-            console.error(`Container with id '${this.containerId}' not found`);
-            return;
-        }
 
         const nameFieldHtml = this.showNameField ? `
             <div class="template-field">
@@ -117,13 +113,12 @@ export class SingleTemplateEditor {
 
     private renderHierarchyLevels(): void {
         const editor = getElementById(`${this.containerId}-hierarchy-editor`);
-        if (!editor) return;
 
         this.isPopulating = true;
         editor.innerHTML = '';
 
         const levels = this.template.hierarchyLevels;
-        const lengths = this.template.layerLengths ?? [];
+        const lengths = this.template.layerLengths;
         levels.forEach((level, index) => {
             const parsed = this.parseLayer(level, lengths[index] ?? null);
             const layerElement = this.createLayerElement(parsed, index, levels.length);
@@ -178,13 +173,11 @@ export class SingleTemplateEditor {
 
     private setupEventListeners(): void {
         const container = getElementById(this.containerId);
-        if (!container || this.readonly) return;
+        if (this.readonly) return;
 
         // Add layer button
         const addBtn = getElementById(`${this.containerId}-add-layer-btn`);
-        if (addBtn) {
-            addBtn.addEventListener('click', () => { this.handleAddLayer(); });
-        }
+        addBtn.addEventListener('click', () => { this.handleAddLayer(); });
 
         // Remove layer buttons (delegated)
         container.addEventListener('click', (e) => {
@@ -195,7 +188,7 @@ export class SingleTemplateEditor {
             }
         });
 
-        container.addEventListener('input', (_e) => {
+        container.addEventListener('input', () => {
             if (!this.isPopulating) {
                 this.isDirty = true;
                 this.notifyChange();
@@ -259,9 +252,6 @@ export class SingleTemplateEditor {
         const editor = getElementById(`${this.containerId}-hierarchy-editor`);
         const levels: string[] = [];
         const lengths: (number | null)[] = [];
-        if (!editor) {
-            return { levels, lengths };
-        }
 
         editor.querySelectorAll<HTMLElement>('.hierarchy-layer').forEach(row => {
             const nameInput = row.querySelector<HTMLInputElement>('input[data-field="name"]');
@@ -301,9 +291,7 @@ export class SingleTemplateEditor {
 
         if (this.showNameField) {
             const nameInput = getElementById<HTMLInputElement>(`${this.containerId}-name`);
-            if (nameInput) {
-                nameInput.value = template.name;
-            }
+            nameInput.value = template.name;
         }
     }
 

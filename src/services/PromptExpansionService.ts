@@ -1,6 +1,7 @@
 import { QualityCriterion } from '../types';
 import { formatCriteriaAsJson } from '../ProjectUtils';
 import { SettingsManager } from '../SettingsManager';
+import { getElementById } from '../ui/dom-elements';
 
 export interface PlaceholderContext {
     // Node-specific context
@@ -530,7 +531,7 @@ class PromptExpansionService {
 
         // Language placeholder - use context provider to access project language
         this.registerContextPlaceholder('language', (context) => ({
-            value: context?.project?.language ?? this.settingsManager.getLanguage(),
+            value: context.project?.language ?? this.settingsManager.getLanguage(),
             description: 'Current project language setting'
         }));
 
@@ -1150,13 +1151,16 @@ Rules: lesser-known authentic names, clear pronunciation, grounded feel
                                 label: 'OK',
                                 type: 'primary',
                                 handler: () => {
-                                    const input = document.getElementById('user-input') as HTMLInputElement;
-                                    const value = input?.value?.trim() || '';
+                                    const input = getElementById('user-input');
+                                    if (!(input instanceof HTMLInputElement)) {
+                                        throw new Error('user-input is not an HTMLInputElement');
+                                    }
+                                    const value = input.value.trim();
                                     if (value) {
                                         resolveOnce(value);
                                         void modal.close();
                                     } else {
-                                        input?.focus();
+                                        input.focus();
                                     }
                                 }
                             }
@@ -1168,27 +1172,28 @@ Rules: lesser-known authentic names, clear pronunciation, grounded feel
                     },
                     {
                         onOpen: () => {
-                            void void setTimeout(() => {
-                                const input = document.getElementById('user-input') as HTMLInputElement;
-                                if (input) {
-                                    input.addEventListener('keydown', (e) => {
-                                        if (e.key === 'Enter') {
-                                            e.preventDefault();
-                                            const value = input.value.trim();
-                                            if (value) {
-                                                resolveOnce(value);
-                                                void modal.close();
-                                            } else {
-                                                input.focus();
-                                            }
-                                        } else if (e.key === 'Escape') {
-                                            e.preventDefault();
-                                            rejectOnce(new Error('USER_CANCELLED'));
-                                            void modal.close();
-                                        }
-                                    });
-                                    input.focus();
+                            void setTimeout(() => {
+                                const input = getElementById('user-input');
+                                if (!(input instanceof HTMLInputElement)) {
+                                    throw new Error('user-input is not an HTMLInputElement');
                                 }
+                                input.addEventListener('keydown', (e) => {
+                                    if (e.key === 'Enter') {
+                                        e.preventDefault();
+                                        const value = input.value.trim();
+                                        if (value) {
+                                            resolveOnce(value);
+                                            void modal.close();
+                                        } else {
+                                            input.focus();
+                                        }
+                                    } else if (e.key === 'Escape') {
+                                        e.preventDefault();
+                                        rejectOnce(new Error('USER_CANCELLED'));
+                                        void modal.close();
+                                    }
+                                });
+                                input.focus();
                             }, 100);
                         },
                         onClose: () => {
@@ -1258,8 +1263,11 @@ Rules: lesser-known authentic names, clear pronunciation, grounded feel
                                 label: 'OK',
                                 type: 'primary',
                                 handler: () => {
-                                    const select = document.getElementById('user-select') as HTMLSelectElement;
-                                    const value = select?.value || '';
+                                    const select = getElementById('user-select');
+                                    if (!(select instanceof HTMLSelectElement)) {
+                                        throw new Error('user-select is not an HTMLSelectElement');
+                                    }
+                                    const value = select.value;
                                     if (value) {
                                         resolveOnce(value);
                                         void modal.close();
@@ -1274,11 +1282,12 @@ Rules: lesser-known authentic names, clear pronunciation, grounded feel
                     },
                     {
                         onOpen: () => {
-                            void void setTimeout(() => {
-                                const select = document.getElementById('user-select') as HTMLSelectElement;
-                                if (select) {
-                                    select.focus();
+                            void setTimeout(() => {
+                                const select = getElementById('user-select');
+                                if (!(select instanceof HTMLSelectElement)) {
+                                    throw new Error('user-select is not an HTMLSelectElement');
                                 }
+                                select.focus();
                             }, 100);
                         },
                         onClose: () => {
@@ -1343,13 +1352,16 @@ Rules: lesser-known authentic names, clear pronunciation, grounded feel
                                 label: 'OK',
                                 type: 'primary',
                                 handler: () => {
-                                    const textarea = document.getElementById('user-textarea') as HTMLTextAreaElement;
-                                    const value = textarea?.value?.trim() || '';
+                                    const textarea = getElementById('user-textarea');
+                                    if (!(textarea instanceof HTMLTextAreaElement)) {
+                                        throw new Error('user-textarea is not an HTMLTextAreaElement');
+                                    }
+                                    const value = textarea.value.trim();
                                     if (value) {
                                         resolveOnce(value);
                                         void modal.close();
                                     } else {
-                                        textarea?.focus();
+                                        textarea.focus();
                                     }
                                 }
                             }
@@ -1361,11 +1373,12 @@ Rules: lesser-known authentic names, clear pronunciation, grounded feel
                     },
                     {
                         onOpen: () => {
-                            void void setTimeout(() => {
-                                const textarea = document.getElementById('user-textarea') as HTMLTextAreaElement;
-                                if (textarea) {
-                                    textarea.focus();
+                            void setTimeout(() => {
+                                const textarea = getElementById('user-textarea');
+                                if (!(textarea instanceof HTMLTextAreaElement)) {
+                                    throw new Error('user-textarea is not an HTMLTextAreaElement');
                                 }
+                                textarea.focus();
                             }, 100);
                         },
                         onClose: () => {
@@ -1492,11 +1505,9 @@ Rules: lesser-known authentic names, clear pronunciation, grounded feel
 }
 
 // Global singleton instance
-let promptExpansionService: PromptExpansionService;
+let promptExpansionService: PromptExpansionService | undefined;
 
 export function createPromptExpansionService(settingsManager: SettingsManager): PromptExpansionService {
-    if (!promptExpansionService) {
-        promptExpansionService = new PromptExpansionService(settingsManager);
-    }
+    promptExpansionService ??= new PromptExpansionService(settingsManager);
     return promptExpansionService;
 } 

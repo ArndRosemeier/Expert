@@ -133,7 +133,8 @@ export class BackgroundRectangle extends PostItNote {
   /**
    * Override to prevent content setting
    */
-  public override setContent(_content: string): void {
+  public override setContent(content: string): void {
+    void content;
     // Do nothing - background rectangles don't have content
   }
 

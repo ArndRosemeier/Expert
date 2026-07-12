@@ -89,32 +89,32 @@ export class RPGWorldInspector {
         
         // Attach debug mode listener
         const debugCheckbox = this.container.querySelector('#rpg-debug-mode') as HTMLInputElement;
-        debugCheckbox?.addEventListener('change', () => {
+        debugCheckbox.addEventListener('change', () => {
             this.debugMode = debugCheckbox.checked;
             console.log(`🐛 Debug mode ${this.debugMode ? 'enabled' : 'disabled'}`);
         });
 
         const autoConsolidateCheckbox = this.container.querySelector('#rpg-auto-consolidate') as HTMLInputElement;
-        autoConsolidateCheckbox?.addEventListener('change', () => {
+        autoConsolidateCheckbox.addEventListener('change', () => {
             this.autoConsolidate = autoConsolidateCheckbox.checked;
             this.interactionService.setAutoConsolidateEnabled(this.autoConsolidate);
         });
         
         // Attach toggle listeners
-        const sceneBtn = this.container.querySelector('#rpg-scene-view-btn');
-        const worldBtn = this.container.querySelector('#rpg-world-view-btn');
+        const sceneBtn = this.container.querySelector('#rpg-scene-view-btn') as HTMLElement;
+        const worldBtn = this.container.querySelector('#rpg-world-view-btn') as HTMLElement;
         
-        sceneBtn?.addEventListener('click', () => {
+        sceneBtn.addEventListener('click', () => {
             this.currentView = 'scene';
             sceneBtn.classList.add('active');
-            worldBtn?.classList.remove('active');
+            worldBtn.classList.remove('active');
             this.renderContent();
         });
         
-        worldBtn?.addEventListener('click', () => {
+        worldBtn.addEventListener('click', () => {
             this.currentView = 'world';
-            worldBtn?.classList.add('active');
-            sceneBtn?.classList.remove('active');
+            worldBtn.classList.add('active');
+            sceneBtn.classList.remove('active');
             this.renderContent();
         });
         
@@ -128,7 +128,7 @@ export class RPGWorldInspector {
         const target = event.target as HTMLElement | null;
         if (!target) return;
 
-        const header = target.closest('.rpg-tree-category-header') as HTMLElement | null;
+        const header = target.closest('.rpg-tree-category-header');
         if (header) {
             const category = header.getAttribute('data-category');
             const content = this.contentContainer.querySelector(`.rpg-tree-category-content[data-category="${category}"]`);
@@ -137,7 +137,7 @@ export class RPGWorldInspector {
             return;
         }
 
-        const entityHeader = target.closest('.rpg-entity-header') as HTMLElement | null;
+        const entityHeader = target.closest('.rpg-entity-header');
         if (entityHeader) {
             const entityId = entityHeader.getAttribute('data-entity-id');
             const content = this.contentContainer.querySelector(`.rpg-entity-details[data-entity-id="${entityId}"]`);
@@ -146,7 +146,7 @@ export class RPGWorldInspector {
             return;
         }
 
-        const relationshipLink = target.closest('.rpg-relationship-link') as HTMLElement | null;
+        const relationshipLink = target.closest('.rpg-relationship-link');
         if (relationshipLink) {
             const targetId = relationshipLink.getAttribute('data-target-id');
             if (targetId) {
@@ -155,8 +155,8 @@ export class RPGWorldInspector {
             return;
         }
 
-        const actionEl = target.closest('[data-rpg-action]') as HTMLElement | null;
-        if (!actionEl) return;
+        const actionEl = target.closest('[data-rpg-action]');
+        if (!(actionEl instanceof HTMLElement)) return;
 
         const action = actionEl.getAttribute('data-rpg-action');
         if (!action) return;
@@ -470,7 +470,7 @@ export class RPGWorldInspector {
             if (entity) {
                 html += this.renderCharacterEditor(entityId);
             }
-        } else if (entityType === 'lore') {
+        } else {
             const entity = this.worldStateService.getLore(worldState, entityId);
             if (entity) {
                 html += this.renderLoreEditor(entityId);
@@ -860,26 +860,26 @@ export class RPGWorldInspector {
         const wrapper = this.contentContainer?.querySelector(`.rpg-relationship-editor[data-rel-id="${relId}"]`) as HTMLElement | null;
         if (!wrapper) throw new Error(`Relationship editor not found: ${relId}`);
 
-        const note = (wrapper.querySelector('[data-rel-field="note"]') as HTMLInputElement | null)?.value;
+        const note = (wrapper.querySelector('[data-rel-field="note"]') as HTMLInputElement).value;
 
         if (rel.kind === 'attitude_towards') {
             const stance = (wrapper.querySelector('[data-rel-field="stance"]') as HTMLSelectElement).value as RPGAttitudeStance;
             const intensityVal = Number((wrapper.querySelector('[data-rel-field="intensity"]') as HTMLSelectElement).value);
-            const reason = (wrapper.querySelector('[data-rel-field="reason"]') as HTMLInputElement | null)?.value;
+            const reason = (wrapper.querySelector('[data-rel-field="reason"]') as HTMLInputElement).value;
 
             if (intensityVal !== -3 && intensityVal !== -2 && intensityVal !== -1 && intensityVal !== 0 && intensityVal !== 1 && intensityVal !== 2 && intensityVal !== 3) {
                 throw new Error(`Invalid intensity: ${intensityVal}`);
             }
 
             this.worldStateService.updateRelationship(worldState, relId, {
-                ...(note !== undefined && { note }),
+                note,
                 stance,
                 intensity: intensityVal,
-                ...(reason !== undefined && { reason })
+                reason
             });
         } else {
             this.worldStateService.updateRelationship(worldState, relId, {
-                ...(note !== undefined && { note })
+                note
             });
         }
 

@@ -186,7 +186,7 @@ export class PostItNote implements BoardElement {
       // Draw dot with border
       context.fillStyle = dotColor;
       context.strokeStyle = dotBorderColor;
-      context.lineWidth = 1 * zoom;
+      context.lineWidth = zoom;
       
       context.beginPath();
       context.arc(dot.x, dot.y, dotRadius, 0, Math.PI * 2);

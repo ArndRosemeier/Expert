@@ -24,6 +24,16 @@ export interface FileDownloadResult {
     error?: string;
 }
 
+interface FilePickerWindow {
+    showSaveFilePicker(options: {
+        suggestedName?: string;
+        types?: Array<{
+            description: string;
+            accept: Record<string, string[]>;
+        }>;
+    }): Promise<FileSystemFileHandle>;
+}
+
 export class FileDownloadService {
     /**
      * Downloads a blob as a file using File System Access API with strict preference
@@ -52,7 +62,7 @@ export class FileDownloadService {
                 const fileTypeConfig = this.getFileTypeConfig(options);
                 
                 console.log('🎯 Opening Save As dialog...');
-                const fileHandle = await (window as any).showSaveFilePicker({
+                const fileHandle = await (window as unknown as FilePickerWindow).showSaveFilePicker({
                     suggestedName: options.filename,
                     types: [fileTypeConfig]
                 });
@@ -68,9 +78,8 @@ export class FileDownloadService {
                     actualFilename: fileHandle.name,
                     method: 'save-as'
                 };
-        } catch (error: any) {
-            // Check if user cancelled
-            if (error.name === 'AbortError') {
+        } catch (error: unknown) {
+            if (error instanceof DOMException && error.name === 'AbortError') {
                 console.log('❌ User cancelled file save');
                 return {
                     success: false,
@@ -84,11 +93,12 @@ export class FileDownloadService {
                 
                 // If forceFileSelector, don't fall back
                 if (options.forceFileSelector) {
+                    const message = error instanceof Error ? error.message : String(error);
                     return {
                         success: false,
                         cancelled: false,
                         method: 'failed',
-                        error: `File selector failed: ${error.message}`
+                        error: `File selector failed: ${message}`
                     };
                 }
                 
@@ -230,7 +240,7 @@ export class FileDownloadService {
     /**
      * Convenience method for JSON exports with file selector preference
      */
-    public static async downloadJson(data: any, filename: string, description?: string): Promise<FileDownloadResult> {
+    public static async downloadJson(data: unknown, filename: string, description?: string): Promise<FileDownloadResult> {
         const content = JSON.stringify(data, null, 2);
         return await this.downloadText(content, {
             filename,
@@ -348,12 +358,22 @@ export class FileDownloadService {
      */
     private static getBrowserInfo(): { name: string; version: string } {
         const userAgent = navigator.userAgent;
-        const browserName = userAgent.includes('Chrome') ? 'Chrome' :
-                            userAgent.includes('Edg') ? 'Edge' :
-                            userAgent.includes('Firefox') ? 'Firefox' :
-                            userAgent.includes('Safari') ? 'Safari' : 'Unknown';
-        const versionMatch = (userAgent.match(/Chrome\/(\d+)/) ?? userAgent.match(/Edg\/(\d+)/)) ?? userAgent.match(/Firefox\/(\d+)/) ?? userAgent.match(/Safari\/(\d+)/);
-        const version = versionMatch ? (versionMatch[1] ?? 'Unknown') : 'Unknown';
+        let browserName = 'Unknown';
+        if (userAgent.includes('Chrome') && !userAgent.includes('Edg')) {
+            browserName = 'Chrome';
+        } else if (userAgent.includes('Edg')) {
+            browserName = 'Edge';
+        } else if (userAgent.includes('Firefox')) {
+            browserName = 'Firefox';
+        } else if (userAgent.includes('Safari')) {
+            browserName = 'Safari';
+        }
+
+        const versionMatch = userAgent.match(/Chrome\/(\d+)/)
+            ?? userAgent.match(/Edg\/(\d+)/)
+            ?? userAgent.match(/Firefox\/(\d+)/)
+            ?? userAgent.match(/Safari\/(\d+)/);
+        const version = versionMatch?.[1] ?? 'Unknown';
         return { name: browserName, version };
     }
 } 

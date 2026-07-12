@@ -5,11 +5,15 @@
  * Provides enhanced debugging and validation for AI-generated content.
  */
 
+type JsonPrimitive = string | number | boolean | null;
+type JsonObject = { [key: string]: JsonValue };
+type JsonValue = JsonPrimitive | JsonObject | JsonValue[];
+
 export interface ParsedContent {
     hasStructuredData: boolean;
     content: string;
     context: string;
-    metadata: Record<string, any>;
+    metadata: Record<string, JsonValue>;
     template?: {
         name: string;
         hierarchyLevels: string[];
@@ -132,8 +136,12 @@ export class SmartContentParser {
                     if (templateData) {
                         sections.template = templateData;
                     }
-                } else {
-                    (sections as any)[key] = content;
+                } else if (key === 'title') {
+                    sections.title = content;
+                } else if (key === 'context') {
+                    sections.context = content;
+                } else if (key === 'concept') {
+                    sections.concept = content;
                 }
                 
                 this.debug(`✅ Extracted ${key} section (${content.length} chars)`);
@@ -244,53 +252,69 @@ export class SmartContentParser {
     /**
      * Parse project structure from JSON
      */
-    private static parseProjectStructure(jsonData: any, originalResponse: string): ParsedContent {
+    private static parseProjectStructure(jsonData: JsonObject, originalResponse: string): ParsedContent {
         // Check for our expected project structure
         if (this.isValidProjectStructure(jsonData)) {
             // Convert Context to string if it's an object
             let contextString = '';
-            if (typeof jsonData.Context === 'string') {
-                contextString = jsonData.Context;
-            } else if (typeof jsonData.Context === 'object') {
+            const contextValue = jsonData['Context'];
+            if (typeof contextValue === 'string') {
+                contextString = contextValue;
+            } else if (this.isJsonObject(contextValue)) {
                 // Convert object to readable string format
-                contextString = this.convertContextObjectToString(jsonData.Context);
+                contextString = this.convertContextObjectToString(contextValue);
                 this.debug('✅ Converted Context object to string, length:', contextString.length);
+            }
+
+            const contentValue = jsonData['Content'];
+            const content = typeof contentValue === 'string' ? contentValue : originalResponse;
+            const template = jsonData['Template'];
+            if (!this.isProjectTemplate(template)) {
+                return this.createRawParsedContent(originalResponse);
             }
 
             return {
                 hasStructuredData: true,
-                content: jsonData.Content || originalResponse,
+                content,
                 context: contextString,
-                template: jsonData.Template,
+                template,
                 metadata: {
                     parseMethod: 'structured_project',
                     originalLength: originalResponse.length,
-                    contextType: typeof jsonData.Context
+                    contextType: typeof contextValue
                 }
             };
         }
 
         // Try alternative structures
-        if (jsonData.content || jsonData.template || jsonData.context) {
+        const altContent = jsonData['content'] ?? jsonData['Content'];
+        const altTemplate = jsonData['template'] ?? jsonData['Template'];
+        if (altContent !== undefined || altTemplate !== undefined || jsonData['context'] !== undefined || jsonData['Context'] !== undefined) {
             let contextString = '';
-            const contextData = jsonData.context ?? jsonData.Context;
+            const contextData = jsonData['context'] ?? jsonData['Context'];
             if (typeof contextData === 'string') {
                 contextString = contextData;
-            } else if (typeof contextData === 'object') {
+            } else if (this.isJsonObject(contextData)) {
                 contextString = this.convertContextObjectToString(contextData);
             }
 
-            return {
+            const content = typeof altContent === 'string' ? altContent : originalResponse;
+            const template = this.normalizeTemplate(altTemplate);
+
+            const parsed: ParsedContent = {
                 hasStructuredData: true,
-                content: (jsonData.content ?? jsonData.Content) ?? originalResponse,
+                content,
                 context: contextString,
-                template: jsonData.template ?? jsonData.Template,
                 metadata: {
                     parseMethod: 'alternative_project',
                     originalLength: originalResponse.length,
                     contextType: typeof contextData
                 }
             };
+            if (template !== undefined) {
+                parsed.template = template;
+            }
+            return parsed;
         }
 
         return this.createRawParsedContent(originalResponse);
@@ -299,23 +323,32 @@ export class SmartContentParser {
     /**
      * Parse content structure from JSON (for regular content generation)
      */
-    private static parseContentStructure(jsonData: any, originalResponse: string): ParsedContent {
+    private static parseContentStructure(jsonData: JsonObject, originalResponse: string): ParsedContent {
+        const contentValue = jsonData['content'] ?? jsonData['text'] ?? jsonData['Content'];
+        const content = typeof contentValue === 'string' ? contentValue : originalResponse;
+        const contextValue = jsonData['context'] ?? jsonData['Context'];
+        const context = typeof contextValue === 'string' ? contextValue : '';
+
+        const metadata: Record<string, JsonValue> = {
+            parseMethod: 'content_structure',
+            originalLength: originalResponse.length
+        };
+        for (const [key, value] of Object.entries(jsonData)) {
+            metadata[key] = value;
+        }
+
         return {
             hasStructuredData: true,
-            content: (jsonData.content ?? jsonData.text) ?? jsonData.Content ?? originalResponse,
-            context: (jsonData.context ?? jsonData.Context) ?? '',
-            metadata: {
-                parseMethod: 'content_structure',
-                originalLength: originalResponse.length,
-                ...jsonData
-            }
+            content,
+            context,
+            metadata
         };
     }
 
     /**
      * Extract JSON from text using multiple strategies
      */
-    private static extractJson(text: string): any | null {
+    private static extractJson(text: string): JsonObject | null {
         this.debug('Trying JSON extraction strategies...');
 
         const strategies = [
@@ -370,14 +403,19 @@ export class SmartContentParser {
     /**
      * Try to parse JSON with error handling and repair attempts
      */
-    private static tryParseJson(jsonString: string, strategyName: string): any | null {
+    private static tryParseJson(jsonString: string, strategyName: string): JsonObject | null {
         try {
-            const parsed = JSON.parse(jsonString);
+            const parsed: unknown = JSON.parse(jsonString);
+            if (!this.isJsonObject(parsed)) {
+                this.debug(`❌ Strategy "${strategyName}" returned non-object JSON`);
+                return null;
+            }
             this.debug(`✅ Strategy "${strategyName}" succeeded`);
             this.debug(`   Parsed object keys:`, Object.keys(parsed));
-            this.debug(`   Content type:`, typeof parsed.Content, parsed.Content ? `(${parsed.Content.length} chars)` : '');
-            this.debug(`   Template exists:`, Boolean(parsed.Template));
-            this.debug(`   Context type:`, typeof parsed.Context);
+            const contentValue = parsed['Content'];
+            this.debug(`   Content type:`, typeof contentValue, typeof contentValue === 'string' ? `(${contentValue.length} chars)` : '');
+            this.debug(`   Template exists:`, Boolean(parsed['Template']));
+            this.debug(`   Context type:`, typeof parsed['Context']);
             return parsed;
         } catch (e) {
             this.debug(`❌ Strategy "${strategyName}" failed:`, (e as Error).message);
@@ -386,7 +424,11 @@ export class SmartContentParser {
             this.debug(`🔧 Attempting JSON repair for strategy "${strategyName}"`);
             try {
                 const repaired = this.repairJson(jsonString);
-                const parsed = JSON.parse(repaired);
+                const parsed: unknown = JSON.parse(repaired);
+                if (!this.isJsonObject(parsed)) {
+                    this.debug(`❌ Strategy "${strategyName}" failed after repair - non-object JSON`);
+                    return null;
+                }
                 this.debug(`✅ Strategy "${strategyName}" succeeded after repair`);
                 this.debug(`   Repaired object keys:`, Object.keys(parsed));
                 return parsed;
@@ -400,24 +442,47 @@ export class SmartContentParser {
     /**
      * Validate if object has valid project structure
      */
-    private static isValidProjectStructure(obj: any): obj is AIProjectStructure {
+    private static isValidProjectStructure(obj: JsonObject): obj is AIProjectStructure & JsonObject {
         this.debug('🔍 Validating project structure:');
         this.debug('  - obj exists:', Boolean(obj));
-        this.debug('  - Content type:', typeof obj?.Content);
-        this.debug('  - Template exists:', Boolean(obj?.Template));
-        this.debug('  - Template.name type:', typeof obj?.Template?.name);
-        this.debug('  - Template.hierarchyLevels is array:', Array.isArray(obj?.Template?.hierarchyLevels));
-        this.debug('  - Context type:', typeof obj?.Context);
+        this.debug('  - Content type:', typeof obj['Content']);
+        this.debug('  - Template exists:', Boolean(obj['Template']));
+        const template = obj['Template'];
+        this.debug('  - Template.name type:', typeof template === 'object' && template !== null && !Array.isArray(template) && 'name' in template ? typeof template['name'] : 'missing');
+        const hierarchyLevels = template && typeof template === 'object' && !Array.isArray(template) && 'hierarchyLevels' in template
+            ? template['hierarchyLevels']
+            : undefined;
+        this.debug('  - Template.hierarchyLevels is array:', Array.isArray(hierarchyLevels));
+        this.debug('  - Context type:', typeof obj['Context']);
         
-        const isValid = obj && 
-               typeof obj.Content === 'string' &&
-               obj.Template &&
-               typeof obj.Template.name === 'string' &&
-               Array.isArray(obj.Template.hierarchyLevels) &&
-               (typeof obj.Context === 'string' || typeof obj.Context === 'object');
+        const isValid = typeof obj['Content'] === 'string'
+               && this.isProjectTemplate(template)
+               && (typeof obj['Context'] === 'string' || this.isJsonObject(obj['Context']));
         
         this.debug('  - Overall valid:', isValid);
         return isValid;
+    }
+
+    private static isProjectTemplate(value: JsonValue | undefined): value is AIProjectStructure['Template'] {
+        return typeof value === 'object'
+            && value !== null
+            && !Array.isArray(value)
+            && 'name' in value
+            && typeof value['name'] === 'string'
+            && 'hierarchyLevels' in value
+            && Array.isArray(value['hierarchyLevels'])
+            && value['hierarchyLevels'].every(level => typeof level === 'string');
+    }
+
+    private static normalizeTemplate(value: JsonValue | undefined): ParsedContent['template'] | undefined {
+        if (!this.isProjectTemplate(value)) {
+            return undefined;
+        }
+        return value;
+    }
+
+    private static isJsonObject(value: unknown): value is JsonObject {
+        return typeof value === 'object' && value !== null && !Array.isArray(value);
     }
 
     /**
@@ -453,7 +518,7 @@ export class SmartContentParser {
     /**
      * Enhanced debugging for development
      */
-    private static debug(...args: any[]): void {
+    private static debug(...args: unknown[]): void {
         if (this.debugEnabled) {
             console.log('[SmartContentParser]', ...args);
         }
@@ -469,8 +534,8 @@ export class SmartContentParser {
     /**
      * Convert Context object to readable string format
      */
-    private static convertContextObjectToString(contextObj: any): string {
-        if (!contextObj || typeof contextObj !== 'object') {
+    private static convertContextObjectToString(contextObj: JsonObject): string {
+        if (!this.isJsonObject(contextObj)) {
             return '';
         }
 
@@ -478,31 +543,32 @@ export class SmartContentParser {
 
         // Handle different context object structures
         for (const [key, value] of Object.entries(contextObj)) {
-            if (key === 'Protagonist' && typeof value === 'object') {
-                const protag = value as any;
+            if (key === 'Protagonist' && this.isJsonObject(value)) {
+                const protag = value;
                 result += `PROTAGONIST:\n`;
-                if (protag.Name) result += `Name: ${protag.Name}\n`;
-                if (protag.Description) result += `Description: ${protag.Description}\n\n`;
+                if (typeof protag['Name'] === 'string') result += `Name: ${protag['Name']}\n`;
+                if (typeof protag['Description'] === 'string') result += `Description: ${protag['Description']}\n\n`;
             }
             else if (key === 'SupportingCharacters' && Array.isArray(value)) {
                 result += `SUPPORTING CHARACTERS:\n`;
                 for (const char of value) {
-                    if (typeof char === 'object' && char.Name && char.Role) {
-                        result += `• ${char.Name}: ${char.Role}\n`;
+                    if (this.isJsonObject(char) && typeof char['Name'] === 'string' && typeof char['Role'] === 'string') {
+                        result += `• ${char['Name']}: ${char['Role']}\n`;
                     }
                 }
                 result += '\n';
             }
-            else if (key === 'WorldBuilding' && typeof value === 'object') {
+            else if (key === 'WorldBuilding' && this.isJsonObject(value)) {
                 result += `WORLD BUILDING:\n`;
-                const worldData = value as any;
-                if (worldData.CoreConcept) {
-                    result += `Core Concept: ${worldData.CoreConcept}\n`;
+                const worldData = value;
+                if (typeof worldData['CoreConcept'] === 'string') {
+                    result += `Core Concept: ${worldData['CoreConcept']}\n`;
                 }
-                if (worldData.KeySettings && typeof worldData.KeySettings === 'object') {
+                const keySettings = worldData['KeySettings'];
+                if (this.isJsonObject(keySettings)) {
                     result += `Key Settings:\n`;
-                    for (const [settingName, settingDesc] of Object.entries(worldData.KeySettings)) {
-                        result += `• ${settingName}: ${settingDesc}\n`;
+                    for (const [settingName, settingDesc] of Object.entries(keySettings)) {
+                        result += `• ${settingName}: ${String(settingDesc)}\n`;
                     }
                 }
                 result += '\n';
@@ -510,15 +576,15 @@ export class SmartContentParser {
             else if (key === 'Themes' && Array.isArray(value)) {
                 result += `THEMES:\n`;
                 for (const theme of value) {
-                    result += `• ${theme}\n`;
+                    result += `• ${String(theme)}\n`;
                 }
                 result += '\n';
             }
-            else if (key === 'StyleGuide' && typeof value === 'object') {
+            else if (key === 'StyleGuide' && this.isJsonObject(value)) {
                 result += `STYLE GUIDE:\n`;
-                const styleData = value as any;
+                const styleData = value;
                 for (const [styleProp, styleValue] of Object.entries(styleData)) {
-                    result += `${styleProp}: ${styleValue}\n`;
+                    result += `${styleProp}: ${String(styleValue)}\n`;
                 }
                 result += '\n';
             }
@@ -529,10 +595,10 @@ export class SmartContentParser {
                 } else if (Array.isArray(value)) {
                     result += `${key.toUpperCase()}:\n`;
                     for (const item of value) {
-                        result += `• ${item}\n`;
+                        result += `• ${String(item)}\n`;
                     }
                     result += '\n';
-                } else if (typeof value === 'object') {
+                } else if (this.isJsonObject(value)) {
                     result += `${key.toUpperCase()}:\n${JSON.stringify(value, null, 2)}\n\n`;
                 }
             }

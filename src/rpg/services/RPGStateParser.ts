@@ -126,11 +126,12 @@ export class RPGStateParser {
         const locationElements = locationsContainer.querySelectorAll('location');
         
         for (const element of Array.from(locationElements)) {
-            const action = element.getAttribute('action') as 'create' | 'update';
-            if (!action) {
+            const actionAttr = element.getAttribute('action');
+            if (actionAttr !== 'create' && actionAttr !== 'update') {
                 console.warn('Location element missing action attribute, skipping');
                 continue;
             }
+            const action = actionAttr;
             
             const idElement = element.querySelector('id');
             if (!idElement?.textContent) {
@@ -193,11 +194,12 @@ export class RPGStateParser {
         const characterElements = charactersContainer.querySelectorAll('character');
         
         for (const element of Array.from(characterElements)) {
-            const action = element.getAttribute('action') as 'create' | 'update';
-            if (!action) {
+            const actionAttr = element.getAttribute('action');
+            if (actionAttr !== 'create' && actionAttr !== 'update') {
                 console.warn('Character element missing action attribute, skipping');
                 continue;
             }
+            const action = actionAttr;
             
             const idElement = element.querySelector('id');
             if (!idElement?.textContent) {
@@ -295,11 +297,12 @@ export class RPGStateParser {
         const loreElements = loreContainer.querySelectorAll('lore_item');
         
         for (const element of Array.from(loreElements)) {
-            const action = element.getAttribute('action') as 'create' | 'update';
-            if (!action) {
+            const actionAttr = element.getAttribute('action');
+            if (actionAttr !== 'create' && actionAttr !== 'update') {
                 console.warn('Lore element missing action attribute, skipping');
                 continue;
             }
+            const action = actionAttr;
             
             const idElement = element.querySelector('id');
             if (!idElement?.textContent) {
@@ -344,11 +347,12 @@ export class RPGStateParser {
         const relationshipElements = relationshipsContainer.querySelectorAll('relationship');
         
         for (const element of Array.from(relationshipElements)) {
-            const action = element.getAttribute('action') as 'create' | 'update' | 'delete';
-            if (!action) {
+            const actionAttr = element.getAttribute('action');
+            if (actionAttr !== 'create' && actionAttr !== 'update' && actionAttr !== 'delete') {
                 console.warn('Relationship element missing action attribute, skipping');
                 continue;
             }
+            const action = actionAttr;
             
             const fromIdElement = element.querySelector('from_id');
             const toIdElement = element.querySelector('to_id');

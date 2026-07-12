@@ -11,9 +11,9 @@ interface StorageServices {
     indexedDB: IndexedDBService | null;
 }
 
-interface PersistenceOperationOptions {
+interface PersistenceOperationOptions<T = unknown> {
     operation: string;
-    fallbackValue?: any;
+    fallbackValue?: T;
     requireIndexedDB?: boolean;
 }
 
@@ -27,11 +27,7 @@ export async function getStorageServices(requireIndexedDB: boolean = true): Prom
     
     let indexedDB: IndexedDBService | null = null;
     if (storage.isIndexedDB()) {
-        // Access the IndexedDB service from the storage instance
-        const service = await StorageService.getInstance();
-        if (service.isIndexedDB()) {
-            indexedDB = (service as any).indexedDBService;
-        }
+        indexedDB = storage.getIndexedDBService();
     }
     
     if (requireIndexedDB && !indexedDB) {
@@ -46,7 +42,7 @@ export async function getStorageServices(requireIndexedDB: boolean = true): Prom
  */
 async function executePersistenceOperation<T>(
     operation: () => Promise<T>,
-    options: PersistenceOperationOptions
+    options: PersistenceOperationOptions<T>
 ): Promise<ServiceResponseWithData<T>> {
     return executeWithErrorHandling(
         operation,
@@ -59,7 +55,7 @@ async function executePersistenceOperation<T>(
  */
 async function executePersistenceOperationWithFallback<T>(
     operation: () => Promise<T>,
-    options: PersistenceOperationOptions
+    options: PersistenceOperationOptions<T>
 ): Promise<T> {
     const result = await executePersistenceOperation(operation, options);
     
@@ -71,7 +67,10 @@ async function executePersistenceOperationWithFallback<T>(
         throw new Error(result.message);
     }
     
-    return result.data!;
+    if (result.data === undefined) {
+        throw new Error(`Persistence operation ${options.operation} succeeded but returned no data`);
+    }
+    return result.data;
 }
 
 
@@ -79,10 +78,6 @@ async function executePersistenceOperationWithFallback<T>(
  * Validate storage services are available
  */
 function validateStorageServices(services: StorageServices, requireIndexedDB: boolean = true): void {
-    if (!services.storage) {
-        throw new Error('Storage service is not available');
-    }
-    
     if (requireIndexedDB && !services.indexedDB) {
         throw new Error('IndexedDB service is not available but was required');
     }
@@ -104,8 +99,8 @@ function createStorageOperation<T>(
             },
             {
                 operation: operationName,
-                fallbackValue,
-                requireIndexedDB
+                requireIndexedDB,
+                ...(fallbackValue !== undefined ? { fallbackValue } : {})
             }
         );
     };

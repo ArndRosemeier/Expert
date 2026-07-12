@@ -126,9 +126,7 @@ export class RPGSnapshotManager {
             
         } catch (error) {
             console.error('Error rendering snapshots list:', error);
-            if (this.snapshotsListContainer) {
-                this.snapshotsListContainer.innerHTML = '<p class="rpg-error">Error loading snapshots</p>';
-            }
+            this.snapshotsListContainer.innerHTML = '<p class="rpg-error">Error loading snapshots</p>';
         }
     }
     

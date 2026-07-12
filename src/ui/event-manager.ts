@@ -171,7 +171,6 @@ export class EventManager {
         } = {}
     ): void {
         const button = document.getElementById(buttonId) as HTMLButtonElement;
-        if (!button) return;
 
         // Update content without replacing the element
         button.innerHTML = content;
@@ -246,30 +245,22 @@ export class EventManager {
      * Handle DOM changes and reattach listeners if needed
      */
     private handleDOMChanges(mutations: MutationRecord[]): void {
-        let needsReattachment = false;
-
         for (const mutation of mutations) {
             if (mutation.type === 'childList') {
-                // Check if any of our tracked elements were removed
                 mutation.removedNodes.forEach(node => {
                     if (node.nodeType === Node.ELEMENT_NODE) {
-                        const element = node as HTMLElement;
-                        this.handleElementRemoved(element);
-                        needsReattachment = true;
+                        this.handleElementRemoved();
+                        this.reattachMissingListeners();
                     }
                 });
             }
-        }
-
-        if (needsReattachment) {
-            this.reattachMissingListeners();
         }
     }
 
     /**
      * Handle element removal and cleanup
      */
-    private handleElementRemoved(_removedElement: HTMLElement): void {
+    private handleElementRemoved(): void {
         // Clean up direct events for removed elements
         this.directEvents = this.directEvents.filter(eventInfo => {
             if (!document.contains(eventInfo.element)) {
@@ -290,11 +281,8 @@ export class EventManager {
                 !document.contains(eventInfo.element)) {
                 
                 const newElement = document.querySelector(eventInfo.elementSelector) as HTMLElement;
-                if (newElement) {
-                    // Update the event info with the new element
-                    eventInfo.element = newElement;
-                    newElement.addEventListener(eventInfo.eventType, eventInfo.handler);
-                }
+                eventInfo.element = newElement;
+                newElement.addEventListener(eventInfo.eventType, eventInfo.handler);
             }
         });
     }
@@ -320,7 +308,7 @@ export class EventManager {
         this.cleanupQueue = [];
 
         // Stop observing
-        this.observer?.disconnect();
+        this.observer.disconnect();
     }
 
     /**

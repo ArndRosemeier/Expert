@@ -172,8 +172,8 @@ export class SelectableNodeTree {
         // Find the row for this node
         const rows = this.container.querySelectorAll('.selectable-tree-item');
         for (const row of Array.from(rows)) {
-            const cb = row.querySelector('input[type="checkbox"]') as HTMLInputElement | null;
-            if (cb && cb.dataset['nodeId'] === nodeId) {
+            const cb = row.querySelector('input[type="checkbox"]') as HTMLInputElement;
+            if (cb.dataset['nodeId'] === nodeId) {
                 row.classList.add('tree-batch-active');
                 break;
             }

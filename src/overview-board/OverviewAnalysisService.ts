@@ -11,7 +11,8 @@ import {
   AnalysisRequest, 
   AnalysisResult,
   RawAnalysisResponse,
-  CachedOverviewAnalysis
+  CachedOverviewAnalysis,
+  SerializedOverviewData
 } from './types/OverviewTypes';
 // Prompts are now managed through PromptManager
 
@@ -111,7 +112,7 @@ export class OverviewAnalysisService {
     const contentParts: string[] = [];
     
     for (const node of nodes) {
-      if (node.content && node.content.trim()) {
+      if (node.content.trim()) {
         contentParts.push(`=== ${node.title} ===\n${node.content}\n`);
       }
     }
@@ -168,14 +169,7 @@ export class OverviewAnalysisService {
         cleanResponse = cleanResponse.substring(0, cleanResponse.length - 3);
       }
       
-      const parsed = JSON.parse(cleanResponse.trim());
-      
-      // Validate the structure
-      if (!parsed.events || !parsed.characters || !parsed.places) {
-        throw new Error('Invalid response structure - missing required arrays');
-      }
-      
-      return parsed as RawAnalysisResponse;
+      return JSON.parse(cleanResponse.trim()) as RawAnalysisResponse;
       
     } catch (error) {
       console.error('Failed to parse AI response:', response);
@@ -205,14 +199,14 @@ export class OverviewAnalysisService {
       characterNameToId.set(rawChar.name.toLowerCase(), charId);
       
       // Also map aliases to the same ID
-      for (const alias of rawChar.aliases || []) {
+      for (const alias of rawChar.aliases) {
         characterNameToId.set(alias.toLowerCase(), charId);
       }
 
       const characterData: CharacterData = {
         id: charId,
         name: rawChar.name,
-        aliases: rawChar.aliases || [],
+        aliases: rawChar.aliases,
         role: rawChar.role,
         connectedEvents: [],
         connectedPlaces: [],
@@ -254,11 +248,11 @@ export class OverviewAnalysisService {
       // Find connected character and place IDs
       const connectedCharacters = rawEvent.characters
         .map(name => characterNameToId.get(name.toLowerCase()))
-        .filter(id => id !== undefined) as string[];
+        .filter((id): id is string => id !== undefined);
         
       const connectedPlaces = rawEvent.places
         .map(name => placeNameToId.get(name.toLowerCase()))
-        .filter(id => id !== undefined) as string[];
+        .filter((id): id is string => id !== undefined);
 
       events.set(eventId, {
         id: eventId,
@@ -388,7 +382,7 @@ export class OverviewAnalysisService {
         const levelName = nodesAtLevel[0]?.template[absoluteLevel] ?? `Level ${absoluteLevel}`;
         layers.push({
           name: levelName,
-          nodes: nodesAtLevel.filter((node: DocumentNode) => node.content && node.content.trim()) // Only nodes with content
+          nodes: nodesAtLevel.filter(node => node.content.trim()) // Only nodes with content
         });
       }
     }
@@ -400,49 +394,9 @@ export class OverviewAnalysisService {
    * Check if there's a valid cached analysis for this layer
    */
   private checkCache(triggeringNode: DocumentNode, layerName: string, nodes: DocumentNode[]): CachedOverviewAnalysis | null {
-    const cached = triggeringNode.overviewBoardCache.get(layerName) as CachedOverviewAnalysis;
-    if (!cached) {
+    const cached = triggeringNode.overviewBoardCache.get(layerName);
+    if (cached === undefined) {
       return null;
-    }
-
-    // FAIL LOUDLY: Validate cache structure - corruption should not be silently handled
-    if (!cached.timestamp || !cached.data || !cached.analyzedNodeIds) {
-      const errorMsg = `❌ CACHE CORRUPTION DETECTED: Malformed cache data for layer "${layerName}". Missing: ${!cached.timestamp ? 'timestamp ' : ''}${!cached.data ? 'data ' : ''}${!cached.analyzedNodeIds ? 'analyzedNodeIds' : ''}`;
-      console.error(errorMsg);
-      // Remove corrupted cache but FAIL LOUDLY
-      triggeringNode.overviewBoardCache.delete(layerName);
-      throw new Error(errorMsg);
-    }
-
-    // FAIL LOUDLY: Invalid timestamp is a serious deserialization error
-    if (!(cached.timestamp instanceof Date)) {
-      const errorMsg = `❌ CACHE CORRUPTION DETECTED: Timestamp is not a Date object for layer "${layerName}". Got: ${typeof cached.timestamp} = ${cached.timestamp}`;
-      console.error(errorMsg);
-      // Remove corrupted cache but FAIL LOUDLY  
-      triggeringNode.overviewBoardCache.delete(layerName);
-      throw new Error(errorMsg);
-    }
-
-    // FAIL LOUDLY: Validate Map objects exist and are functional
-    if (!cached.data.events || typeof cached.data.events.values !== 'function') {
-      const errorMsg = `❌ CACHE CORRUPTION DETECTED: Events is not a proper Map for layer "${layerName}". Type: ${typeof cached.data.events}, hasValues: ${Boolean(cached.data.events?.values)}`;
-      console.error(errorMsg);
-      triggeringNode.overviewBoardCache.delete(layerName);
-      throw new Error(errorMsg);
-    }
-
-    if (!cached.data.characters || typeof cached.data.characters.values !== 'function') {
-      const errorMsg = `❌ CACHE CORRUPTION DETECTED: Characters is not a proper Map for layer "${layerName}". Type: ${typeof cached.data.characters}, hasValues: ${Boolean(cached.data.characters?.values)}`;
-      console.error(errorMsg);
-      triggeringNode.overviewBoardCache.delete(layerName);
-      throw new Error(errorMsg);
-    }
-
-    if (!cached.data.places || typeof cached.data.places.values !== 'function') {
-      const errorMsg = `❌ CACHE CORRUPTION DETECTED: Places is not a proper Map for layer "${layerName}". Type: ${typeof cached.data.places}, hasValues: ${Boolean(cached.data.places?.values)}`;
-      console.error(errorMsg);
-      triggeringNode.overviewBoardCache.delete(layerName);
-      throw new Error(errorMsg);
     }
 
     // Check if all analyzed nodes are still older than or equal to the cache timestamp
@@ -450,7 +404,6 @@ export class OverviewAnalysisService {
     const cacheTimestamp = cached.timestamp.getTime();
 
     for (const node of nodes) {
-      // Get the node's last modified time from its master version
       const masterVersion = node.getMasterVersion();
       if (masterVersion && masterVersion.timestamp.getTime() > cacheTimestamp) {
         console.log(`🔄 Cache invalid: Node "${node.title}" modified after cache (${masterVersion.timestamp.toLocaleString()} > ${cached.timestamp.toLocaleString()})`);
@@ -476,13 +429,12 @@ export class OverviewAnalysisService {
    * Cache the analysis result in the triggering node
    */
   private async cacheResult(triggeringNode: DocumentNode, layerName: string, data: OverviewData, nodes: DocumentNode[]): Promise<void> {
-    // Create a serializable version of the data with Maps converted to arrays
     const serializableData = this.serializeOverviewData(data);
     
     const cached: CachedOverviewAnalysis = {
       layerName,
       timestamp: new Date(),
-      data: serializableData as OverviewData, // Cast back to maintain type compatibility
+      data: serializableData as unknown as OverviewData,
       analyzedNodeIds: nodes.map(n => n.id),
       sourceNodeId: triggeringNode.id
     };
@@ -490,72 +442,34 @@ export class OverviewAnalysisService {
     triggeringNode.overviewBoardCache.set(layerName, cached);
     console.log(`💾 Cached analysis for layer "${layerName}" with ${nodes.length} nodes`);
 
-    // Persist cache to storage - FAIL LOUDLY if save fails
+    const { getActiveProject } = await import('../state');
+    const projectManager = getActiveProject();
+    if (!projectManager) {
+      triggeringNode.overviewBoardCache.delete(layerName);
+      throw new Error(`❌ CRITICAL: No active project found to save cache for layer "${layerName}". Cache will be lost on page refresh.`);
+    }
+
     try {
-      const { getActiveProject } = await import('../state');
-      const projectManager = getActiveProject();
-      if (!projectManager) {
-        throw new Error(`❌ CRITICAL: No active project found to save cache for layer "${layerName}". Cache will be lost on page refresh.`);
-      }
       await projectManager.saveToStorage();
       console.log(`💾 Project saved with cached analysis for layer "${layerName}"`);
     } catch (error) {
-      const errorMsg = `❌ CRITICAL CACHE SAVE FAILURE: Failed to persist cache for layer "${layerName}" to storage. Cache will be lost on page refresh. Error: ${error}`;
-      console.error(errorMsg);
-      // Remove the cache since it's not persisted
       triggeringNode.overviewBoardCache.delete(layerName);
-      throw new Error(errorMsg);
+      throw new Error(`❌ CRITICAL CACHE SAVE FAILURE: Failed to persist cache for layer "${layerName}" to storage. Cache will be lost on page refresh. Error: ${error}`);
     }
   }
 
   /**
-   * Convert OverviewData Maps to serializable format - FAIL LOUDLY on invalid data
+   * Convert OverviewData Maps to serializable format for JSON persistence.
    */
-  private serializeOverviewData(data: OverviewData): any {
-    // FAIL LOUDLY: Validate input data structure
-    if (!data || typeof data !== 'object') {
-      throw new Error(`❌ SERIALIZATION ERROR: Invalid OverviewData - expected object, got: ${typeof data}`);
-    }
-
-    // FAIL LOUDLY: Validate Map objects exist and are functional
-    if (!data.events || typeof data.events.entries !== 'function') {
-      throw new Error(`❌ SERIALIZATION ERROR: events is not a proper Map. Type: ${typeof data.events}, hasEntries: ${Boolean(data.events?.entries)}`);
-    }
-
-    if (!data.characters || typeof data.characters.entries !== 'function') {
-      throw new Error(`❌ SERIALIZATION ERROR: characters is not a proper Map. Type: ${typeof data.characters}, hasEntries: ${Boolean(data.characters?.entries)}`);
-    }
-
-    if (!data.places || typeof data.places.entries !== 'function') {
-      throw new Error(`❌ SERIALIZATION ERROR: places is not a proper Map. Type: ${typeof data.places}, hasEntries: ${Boolean(data.places?.entries)}`);
-    }
-
-    // FAIL LOUDLY: Validate required fields
-    if (!data.layerName || typeof data.layerName !== 'string') {
-      throw new Error(`❌ SERIALIZATION ERROR: Invalid layerName - expected string, got: ${typeof data.layerName} = ${data.layerName}`);
-    }
-
-    if (!Array.isArray(data.sourceNodes)) {
-      throw new Error(`❌ SERIALIZATION ERROR: Invalid sourceNodes - expected array, got: ${typeof data.sourceNodes}`);
-    }
-
-    if (!data.lastUpdated || !(data.lastUpdated instanceof Date)) {
-      throw new Error(`❌ SERIALIZATION ERROR: Invalid lastUpdated - expected Date, got: ${typeof data.lastUpdated} = ${data.lastUpdated}`);
-    }
-
-    // Serialize with validation
-    try {
-      return {
-        events: Array.from(data.events.entries()),
-        characters: Array.from(data.characters.entries()),
-        places: Array.from(data.places.entries()),
-        layerName: data.layerName,
-        sourceNodes: data.sourceNodes,
-        lastUpdated: data.lastUpdated
-      };
-    } catch (error) {
-      throw new Error(`❌ SERIALIZATION ERROR: Failed to serialize OverviewData: ${error}`);
-    }
+  private serializeOverviewData(data: OverviewData): SerializedOverviewData {
+    return {
+      events: Array.from(data.events.entries()),
+      characters: Array.from(data.characters.entries()),
+      places: Array.from(data.places.entries()),
+      layerName: data.layerName,
+      sourceNodes: data.sourceNodes,
+      lastUpdated: data.lastUpdated
+    };
   }
 
   /**
@@ -570,7 +484,6 @@ export class OverviewAnalysisService {
       console.log(`🗑️ Cleared all overview board cache`);
     }
 
-    // Persist cache changes to storage
     try {
       const { getActiveProject } = await import('../state');
       const projectManager = getActiveProject();
@@ -584,49 +497,19 @@ export class OverviewAnalysisService {
   }
 
   /**
-   * Get cache info for debugging - FAIL LOUDLY on corruption
+   * Get cache info for debugging
    */
   public getCacheInfo(triggeringNode: DocumentNode): Array<{layerName: string; timestamp: Date; nodeCount: number}> {
     const info: Array<{layerName: string; timestamp: Date; nodeCount: number}> = [];
     
     for (const [layerName, cached] of triggeringNode.overviewBoardCache.entries()) {
-      const cachedAnalysis = cached as CachedOverviewAnalysis;
-      
-      // FAIL LOUDLY: Don't silently skip corrupted cache entries
-      if (!cachedAnalysis) {
-        throw new Error(`❌ CACHE CORRUPTION: Null cache entry for layer "${layerName}"`);
-      }
-      
-      if (!cachedAnalysis.timestamp) {
-        throw new Error(`❌ CACHE CORRUPTION: Missing timestamp in cache entry for layer "${layerName}"`);
-      }
-      
-      if (!cachedAnalysis.analyzedNodeIds) {
-        throw new Error(`❌ CACHE CORRUPTION: Missing analyzedNodeIds in cache entry for layer "${layerName}"`);
-      }
-
-      // FAIL LOUDLY: Invalid timestamp should crash, not be silently handled
-      let timestamp: Date;
-      if (cachedAnalysis.timestamp instanceof Date) {
-        timestamp = cachedAnalysis.timestamp;
-      } else {
-        try {
-          timestamp = new Date(cachedAnalysis.timestamp);
-          if (isNaN(timestamp.getTime())) {
-            throw new Error(`Invalid timestamp value: ${cachedAnalysis.timestamp}`);
-          }
-        } catch (error) {
-          throw new Error(`❌ CACHE CORRUPTION: Invalid timestamp in cache entry for layer "${layerName}": ${cachedAnalysis.timestamp}. Error: ${error}`);
-        }
-      }
-      
       info.push({
         layerName,
-        timestamp,
-        nodeCount: cachedAnalysis.analyzedNodeIds.length
+        timestamp: cached.timestamp,
+        nodeCount: cached.analyzedNodeIds.length
       });
     }
     
     return info;
   }
-} 
+}

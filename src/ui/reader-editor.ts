@@ -5,14 +5,16 @@ import { TextEditorWithHighlighting } from './text-editor-with-highlighting';
 import { 
     EditState, 
     EditContext,
-    TextSelection
+    TextSelection,
+    ReaderEditAction
 } from '../types/ReaderEditingTypes';
 
-interface NodeEditor {
+export interface ReaderNodeEditor {
     nodeId: string;
     element: HTMLElement;
     editor: TextEditorWithHighlighting;
     originalContent: string;
+    isDirty: boolean;
 }
 
 /**
@@ -23,8 +25,8 @@ export class ReaderEditor {
     private projectManager: ProjectManager;
     private editManager: ReaderEditManager;
     private editState: EditState;
-    private nodeEditors: Map<string, NodeEditor> = new Map();
-    private currentActiveEditor: NodeEditor | null = null;
+    private nodeEditors: Map<string, ReaderNodeEditor> = new Map();
+    private currentActiveEditor: ReaderNodeEditor | null = null;
     private configLoadedPromise!: Promise<void>;
     private activeActionsCount: number = 0; // Track number of active AI actions
     
@@ -79,6 +81,27 @@ export class ReaderEditor {
      */
     public getEditState(): EditState {
         return { ...this.editState };
+    }
+
+    /**
+     * Iterate all per-node text editors (used by ReaderGUI search/replace).
+     */
+    public forEachReaderNodeEditor(fn: (editor: ReaderNodeEditor, nodeId: string) => void): void {
+        this.nodeEditors.forEach(fn);
+    }
+
+    /**
+     * Get a single node editor by node id.
+     */
+    public getReaderNodeEditor(nodeId: string): ReaderNodeEditor | undefined {
+        return this.nodeEditors.get(nodeId);
+    }
+
+    /**
+     * List all node ids that currently have editors mounted.
+     */
+    public getReaderNodeEditorIds(): string[] {
+        return Array.from(this.nodeEditors.keys());
     }
 
     /**
@@ -137,20 +160,16 @@ export class ReaderEditor {
             
             // UPDATE: Save current editor content to node before executing AI action
             // This ensures {{content}} placeholder uses the latest edited content
-            if (this.currentActiveEditor) {
-                const currentContent = this.currentActiveEditor.editor.getText();
-                const { findNodeGlobally } = await import('../state');
-                const result = findNodeGlobally(this.currentActiveEditor.nodeId);
-                if (result) {
-                    // Use version management system to update content with Edited tag
-                    result.node.setContent(currentContent, 'Edited');
-                    // Updated node content before AI action
+            const currentContent = this.currentActiveEditor.editor.getText();
+            const { findNodeGlobally } = await import('../state');
+            const nodeLookup = findNodeGlobally(this.currentActiveEditor.nodeId);
+                if (nodeLookup) {
+                    nodeLookup.node.setContent(currentContent, 'Edited');
                 }
-            }
             
             // Get smart word-boundary selection if user has text selected
             let processedContext = context;
-            if (context.selection && context.selection.text) {
+            if (context.selection?.text) {
                 const smartBounds = this.currentActiveEditor.editor.expandToWordBoundaries(
                     context.selection.startOffset,
                     context.selection.endOffset
@@ -185,7 +204,7 @@ export class ReaderEditor {
             if (error instanceof Error && error.message === 'ACTION_CANCELED') {
                 // Action was canceled by user
                 // Clear any preview highlights that might be showing
-                if (this.currentActiveEditor && this.currentActiveEditor.editor.hasPreviewHighlight()) {
+                if (this.currentActiveEditor.editor.hasPreviewHighlight()) {
                     this.currentActiveEditor.editor.clearAllHighlights();
                 }
                 return; // Exit gracefully without applying any changes
@@ -201,10 +220,10 @@ export class ReaderEditor {
     /**
      * Apply AI result to the current node with highlighting
      */
-    private applyAIResult(editor: NodeEditor, context: EditContext, result: string): void {
+    private applyAIResult(editor: ReaderNodeEditor, context: EditContext, result: string): void {
         const selection = context.selection;
 
-        if (selection && selection.text) {
+        if (selection?.text) {
             // Check if we have a preview highlight to convert
             if (editor.editor.hasPreviewHighlight()) {
                 // Convert preview to result highlight
@@ -252,15 +271,15 @@ export class ReaderEditor {
             if (!node) return;
 
             // Use preserved content if available, otherwise use node content
-            const content = preservedContent?.get(nodeId) ?? node.content ?? '';
-            this.createNodeEditor(nodeId, htmlElement, content, preservedContent?.has(nodeId) ?? false);
+            const content = preservedContent?.get(nodeId) ?? node.content;
+            this.createReaderNodeEditor(nodeId, htmlElement, content, preservedContent?.has(nodeId) ?? false);
         });
     }
 
     /**
      * Create a single node editor
      */
-    private createNodeEditor(nodeId: string, element: HTMLElement, content: string, isRestoredContent: boolean = false): void {
+    private createReaderNodeEditor(nodeId: string, element: HTMLElement, content: string, isRestoredContent: boolean = false): void {
         // Check if editor already exists for this node
         if (this.nodeEditors.has(nodeId)) {
             return;
@@ -276,18 +295,19 @@ export class ReaderEditor {
         textEditor.setText(content);
         
         // Create editor record
-        const editor: NodeEditor = {
+        const editor: ReaderNodeEditor = {
             nodeId,
             element,
             editor: textEditor,
-            originalContent: isRestoredContent ? content : (content || '')
+            originalContent: isRestoredContent ? content : (content || ''),
+            isDirty: false
         };
         
         this.nodeEditors.set(nodeId, editor);
         this.editState.editableNodes.set(nodeId, element);
         
         // Set up event handlers
-        textEditor.onTextChange((_text) => {
+        textEditor.onTextChange(() => {
             // Do absolutely nothing during text changes
         });
         
@@ -296,7 +316,7 @@ export class ReaderEditor {
         });
         
         textEditor.onBlur(() => {
-            this.handleEditorBlur(editor);
+            this.handleEditorBlur();
         });
         
 
@@ -322,7 +342,7 @@ export class ReaderEditor {
     /**
      * Handle editor focus
      */
-    private handleEditorFocus(editor: NodeEditor): void {
+    private handleEditorFocus(editor: ReaderNodeEditor): void {
         this.currentActiveEditor = editor;
         
         // Do minimal work on focus to avoid interference
@@ -331,7 +351,7 @@ export class ReaderEditor {
     /**
      * Handle editor blur
      */
-    private handleEditorBlur(_editor: NodeEditor): void {
+    private handleEditorBlur(): void {
         // No saving on blur - just mark as dirty for tracking
         // All content will be copied back when reader closes
     }
@@ -381,10 +401,8 @@ export class ReaderEditor {
         // AI action started
         
         const button = document.querySelector(`[data-action-id="${actionId}"]`) as HTMLButtonElement;
-        if (button) {
-            button.disabled = true;
-            button.textContent = '⏳ Processing...';
-        }
+        button.disabled = true;
+        button.textContent = '⏳ Processing...';
     }
 
     /**
@@ -395,12 +413,10 @@ export class ReaderEditor {
         // AI action completed
         
         const button = document.querySelector(`[data-action-id="${actionId}"]`) as HTMLButtonElement;
-        if (button) {
-            button.disabled = false;
-            const originalText = button.getAttribute('data-original-text');
-            if (originalText) {
-                button.textContent = originalText;
-            }
+        button.disabled = false;
+        const originalText = button.getAttribute('data-original-text');
+        if (originalText) {
+            button.textContent = originalText;
         }
     }
 
@@ -428,7 +444,7 @@ export class ReaderEditor {
     /**
      * Update an existing action
      */
-    public async updateAction(id: string, updates: any): Promise<boolean> {
+    public async updateAction(id: string, updates: Partial<ReaderEditAction>): Promise<boolean> {
         return this.editManager.updateAction(id, updates);
     }
 
@@ -442,7 +458,7 @@ export class ReaderEditor {
     /**
      * Add a new action
      */
-    public async addAction(action: any): Promise<string> {
+    public async addAction(action: Omit<ReaderEditAction, 'id'>): Promise<string> {
         return this.editManager.addAction(action);
     }
 
@@ -522,9 +538,7 @@ export class ReaderEditor {
         
         // Hide the edit mode button since it's no longer needed
         const editModeBtn = container.querySelector('#reader-edit-mode') as HTMLButtonElement;
-        if (editModeBtn) {
-            editModeBtn.style.display = 'none';
-        }
+        editModeBtn.style.display = 'none';
     }
 
     /**

@@ -7,7 +7,7 @@ export interface ServiceResponse {
     message: string;
 }
 
-export interface ServiceResponseWithData<T = any> extends ServiceResponse {
+export interface ServiceResponseWithData<T = unknown> extends ServiceResponse {
     data?: T;
 }
 

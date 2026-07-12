@@ -62,7 +62,7 @@ export class ToolPanel {
     this.createToolButtons();
     
     // Load saved model purpose and refresh dropdown
-    this.loadModelPurposeFromStorage();
+    void this.loadModelPurposeFromStorage();
   }
 
   private createContainer(): HTMLElement {
@@ -419,12 +419,10 @@ export class ToolPanel {
   private positionColorPicker(): void {
     if (!this.colorPicker) return;
 
-    const colorButton = this.container.children[1] as HTMLElement; // Color button is second
-    if (colorButton) {
-      const colorButtonRect = colorButton.getBoundingClientRect();
-      this.colorPicker.style.top = `${colorButtonRect.bottom + 8}px`;
-      this.colorPicker.style.left = `${colorButtonRect.left}px`;
-    }
+    const colorButton = this.container.children[1] as HTMLElement;
+    const colorButtonRect = colorButton.getBoundingClientRect();
+    this.colorPicker.style.top = `${colorButtonRect.bottom + 8}px`;
+    this.colorPicker.style.left = `${colorButtonRect.left}px`;
   }
 
   private selectColor(color: string): void {
@@ -548,12 +546,10 @@ export class ToolPanel {
   private positionSearchBox(): void {
     if (!this.searchBox) return;
 
-    const searchButton = this.container.children[2] as HTMLElement; // Search button is third
-    if (searchButton) {
-      const searchButtonRect = searchButton.getBoundingClientRect();
-      this.searchBox.style.top = `${searchButtonRect.bottom + 8}px`;
-      this.searchBox.style.left = `${searchButtonRect.left}px`;
-    }
+    const searchButton = this.container.children[2] as HTMLElement;
+    const searchButtonRect = searchButton.getBoundingClientRect();
+    this.searchBox.style.top = `${searchButtonRect.bottom + 8}px`;
+    this.searchBox.style.left = `${searchButtonRect.left}px`;
   }
 
   private performSearch(query: string, resultsContainer: HTMLElement): void {
@@ -714,7 +710,7 @@ export class ToolPanel {
       const target = e.target as HTMLSelectElement;
       this.selectedModelPurpose = target.value;
       this.config.onModelChange(target.value);
-      this.saveModelPurposeToStorage(); // Save the selection
+      void this.saveModelPurposeToStorage();
       console.log(`🤖 AI model changed to: ${target.value}`);
     });
 

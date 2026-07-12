@@ -19,7 +19,7 @@ import type { DocumentNode, ChildScope } from './DocumentNode';
  * consistent. It uses only the node's public API.
  */
 export function applyConditionalContextItems(rootNode: DocumentNode, aiContext: string): void {
-    if (!aiContext?.trim()) {
+    if (!aiContext.trim()) {
         return;
     }
 
@@ -55,7 +55,7 @@ export function applyConditionalContextItems(rootNode: DocumentNode, aiContext: 
  * before they have been generated).
  */
 export function parseContentSections(content: string): Array<{ title: string; content: string }> {
-    if (!content?.trim()) {
+    if (!content.trim()) {
         return [];
     }
 
@@ -154,7 +154,7 @@ export function restoreConditionalContextItems(node: DocumentNode, rawItems: unk
  * @returns Array of context items (paragraphs)
  */
 export function getContextItems(context: string): string[] {
-    if (!context?.trim()) {
+    if (!context.trim()) {
         return [];
     }
     

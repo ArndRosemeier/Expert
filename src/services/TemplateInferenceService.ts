@@ -234,7 +234,13 @@ export class TemplateInferenceService {
     if (!consistent) {
       const deepest = levels[levels.length - 1];
       const deepestLarge = deepest !== undefined && deepest.medianChars > LARGE_LEAF_THRESHOLD_CHARS;
-      below = Number.isFinite(below) ? Math.max(0, Math.min(below, extra)) : (deepestLarge ? Math.min(1, extra) : 0);
+      if (Number.isFinite(below)) {
+        below = Math.max(0, Math.min(below, extra));
+      } else if (deepestLarge) {
+        below = Math.min(1, extra);
+      } else {
+        below = 0;
+      }
       above = extra - below;
     }
 

@@ -2,7 +2,9 @@
  * Type definitions for export functionality
  */
 
-import { DocumentNode, ChildScope } from '../../../DocumentNode';
+import { ChildScope, DocumentNode, GenerationSession } from '../../../DocumentNode';
+import { LoopHistoryItem } from '../../../LoopOrchestrator';
+import { Rating } from '../../../types/RatingTypes';
 import { FileDownloadResult } from '../../../utils/FileDownloadService';
 
 /**
@@ -91,8 +93,8 @@ export interface NodeExportData {
     }>;
     // Generation metadata
     creatorModel?: string;
-    generationHistory?: any[];
-    generationSessions?: any[];
+    generationHistory?: LoopHistoryItem[];
+    generationSessions?: GenerationSession[];
     // Enhanced: Complete version and tagging system
     versions?: ContentVersionExportData[];
     // UI state
@@ -102,16 +104,15 @@ export interface NodeExportData {
 /**
  * Content version data for export/import
  */
-interface ContentVersionExportData {
+export interface ContentVersionExportData {
     id: string;
     content: string;
     title: string;
-    context: string;
-    tags: string[]; // Array instead of Set for JSON serialization
-    timestamp: string; // ISO string for JSON serialization
-    ratings?: any[]; // Rating array from LoopOrchestrator
+    tags: string[];
+    timestamp: string;
+    ratings?: Rating[];
     creatorModel?: string;
-    metadata?: { [key: string]: any };
+    metadata?: Record<string, unknown>;
 }
 
  

@@ -138,13 +138,16 @@ const defaultTemplates: Record<string, ProjectTemplate> = {
     )
 };
 
-function areValidTemplates(data: any): data is Record<string, ProjectTemplate> {
+function areValidTemplates(data: unknown): data is Record<string, ProjectTemplate> {
     if (typeof data !== 'object' || data === null) return false;
 
-    return Object.values(data).every((template: any) => {
+    return Object.values(data).every((template: unknown) => {
         return (
-            template &&
+            typeof template === 'object' &&
+            template !== null &&
+            'name' in template &&
             typeof template.name === 'string' &&
+            'hierarchyLevels' in template &&
             Array.isArray(template.hierarchyLevels)
         );
     });

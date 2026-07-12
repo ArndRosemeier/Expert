@@ -27,6 +27,18 @@ import { ProjectTemplate } from '../ProjectTemplate';
 import { AI_ASSISTANT_EMOJI } from '../constants';
 import { LoopProgress } from '../LoopOrchestrator';
 import { dragDropManager } from './DragDropManager';
+import type { IdeaBoard } from '../idea-board/IdeaBoard';
+import { EventEmitter } from '../EventEmitter';
+import {
+  type AiProgressDetail,
+  type ExpertDocument,
+  type ExpertTrackedElement,
+  type ConditionalContextHostElement,
+  type NodeImportData,
+  type ProgressUIData,
+  type ProgressInfo,
+  syncDeterministicChildCreationGlobal,
+} from './types/ProjectUiTypes';
 
 /**
  * Calculate model name based on phase and node for progress display
@@ -43,17 +55,12 @@ function getModelNameForPhase(nodeId: string, phase: 'create' | 'rate' | 'edit')
     const profile = settingsManager.getLastUsedProfile();
     if (!profile?.selectedModels) return undefined;
     
-    let modelKey: string;
-    if (phase === 'create') {
-        // Use appropriate creator model based on node type
-        modelKey = node.isLeaf ? 'prose' : 'creator';
-    } else if (phase === 'rate') {
-        modelKey = 'rater';
-    } else if (phase === 'edit') {
-        modelKey = 'editor';
-    } else {
-        modelKey = node.isLeaf ? 'prose' : 'creator';
-    }
+    const modelKeyByPhase: Record<'create' | 'rate' | 'edit', string> = {
+        create: node.isLeaf ? 'prose' : 'creator',
+        rate: 'rater',
+        edit: 'editor',
+    };
+    const modelKey = modelKeyByPhase[phase];
     
     const modelName = profile.selectedModels[modelKey];
     if (!modelName) return undefined;
@@ -331,34 +338,16 @@ function getNodeStatusTooltip(node: DocumentNode): string {
         return 'Pure draft - no content version available';
     }
     
-    const hasContent = node.content && node.content.trim().length > 0;
+    const hasContent = node.content.trim().length > 0;
     const isDraft = masterVersion.tags.has('draft');
-    const isContextAdjusted = false; // Context adjustment removed with traditional context
     const isConsistentWithParent = node.isConsistentToParent();
     
-    // Finished: all conditions met
-    if (hasContent && !isDraft && isContextAdjusted && isConsistentWithParent) {
-        return 'Finished - content complete, context adjusted, and consistent with parent';
+    if (hasContent && !isDraft && isConsistentWithParent) {
+        return 'Finished - content complete and consistent with parent';
     }
     
-    // Content done, coherent with parent (but no context adjustment)
-    if (hasContent && !isDraft && !isContextAdjusted && isConsistentWithParent) {
-        return 'Content done and coherent with parent - ready for context adjustment';
-    }
-    
-    // Content done, context adjusted (but no coherence check)
-    if (hasContent && !isDraft && isContextAdjusted) {
-        return 'Content done with context adjusted';
-    }
-    
-    // Content done, nothing much else
     if (hasContent && !isDraft) {
         return 'Content done - basic state';
-    }
-    
-    // Draft with adjusted context
-    if (hasContent && isDraft && isContextAdjusted) {
-        return 'Draft with adjusted context';
     }
     
     // Pure draft
@@ -383,7 +372,7 @@ export function setSelectedNodeAndRedraw(nodeId: string): void {
     throw new Error('No project is currently loaded - this is a programming error');
   }
   selectedNodeId = nodeId;
-  renderProjectUI(projectManager);
+  void renderProjectUI(projectManager);
 }
 let selectedNodeId: string | null = null;
 
@@ -402,7 +391,7 @@ let autoRetryEnabledState: boolean = false;
 let autoRetryCountState: number = 10;
 
 // Export for use by DocumentNode
-(globalThis as any).deterministicChildCreationState = deterministicChildCreationState;
+syncDeterministicChildCreationGlobal(deterministicChildCreationState);
 // pruneScopeState removed - prune scope UI removed
 
 
@@ -419,10 +408,14 @@ function getAllNodesRecursively(node: DocumentNode): DocumentNode[] {
 }
 
 // Event handler for expand button clicks with modifier key support
-const handleExpandButtonClick = async (e: Event) => {
+const handleExpandButtonClick = (e: Event): void => {
+    void handleExpandButtonClickAsync(e);
+};
+
+const handleExpandButtonClickAsync = async (e: Event) => {
     const mouseEvent = e as MouseEvent;
-    const target = (e.target as HTMLElement).closest('.tree-expand-btn') as HTMLElement;
-    if (!target) return;
+    const target = (e.target as HTMLElement).closest('.tree-expand-btn');
+    if (!(target instanceof HTMLElement)) return;
 
     e.stopPropagation();
     e.preventDefault();
@@ -544,7 +537,7 @@ async function saveLevelStates() {
             autoRetryCount: autoRetryCountState
             // pruneScope removed - prune scope UI removed
         });
-    } catch (error) {
+    } catch {
         // Failed to save level states
     }
 }
@@ -553,20 +546,28 @@ async function loadLevelStates() {
     try {
         const { StorageService } = await import('../StorageService');
         const storage = await StorageService.getInstance();
-        const saved = await storage.get<{draftLevel: number, contentLevel: number, contextPruneLevel: number, coherenceLevel: number, autofixSeverity: number, deterministicChildCreation: boolean, autoRetryEnabled?: boolean, autoRetryCount?: number}>('expert_app_level_states');
+        const saved = await storage.get<{
+            draftLevel?: number;
+            contentLevel?: number;
+            contextPruneLevel?: number;
+            coherenceLevel?: number;
+            autofixSeverity?: number;
+            deterministicChildCreation?: boolean;
+            autoRetryEnabled?: boolean;
+            autoRetryCount?: number;
+        }>('expert_app_level_states');
         if (saved) {
             draftLevelState = saved.draftLevel ?? -1;
             contentLevelState = saved.contentLevel ?? -1;
-            // contextPruneLevelState removed with traditional context system
             coherenceLevelState = saved.coherenceLevel ?? -1;
             autofixSeverityState = saved.autofixSeverity ?? 5;
             deterministicChildCreationState = saved.deterministicChildCreation ?? true;
-            (globalThis as any).deterministicChildCreationState = deterministicChildCreationState;
+            syncDeterministicChildCreationGlobal(deterministicChildCreationState);
             autoRetryEnabledState = saved.autoRetryEnabled ?? false;
             autoRetryCountState = saved.autoRetryCount ?? 10;
             // pruneScopeState removed - prune scope UI removed
         }
-    } catch (error) {
+    } catch {
         // Failed to load level states
     }
 }
@@ -574,34 +575,34 @@ async function loadLevelStates() {
 // Function to capture current dropdown values from DOM
 function captureCurrentDropdownValues() {
     try {
-        const draftSelector = document.getElementById('draft-level-selector') as HTMLSelectElement;
-        const contentSelector = document.getElementById('content-level-selector') as HTMLSelectElement;
+        const draftSelector = document.getElementById('draft-level-selector');
+        const contentSelector = document.getElementById('content-level-selector');
         // contextPruneSelector removed - using conditional context system
-        const coherenceSelector = document.getElementById('coherence-level-selector') as HTMLSelectElement;
-        const autofixSeveritySelector = document.getElementById('autofix-severity-selector') as HTMLSelectElement;
+        const coherenceSelector = document.getElementById('coherence-level-selector');
+        const autofixSeveritySelector = document.getElementById('autofix-severity-selector');
         // pruneScopeSelector removed - prune scope UI removed
         
-        if (draftSelector) {
+        if (draftSelector instanceof HTMLSelectElement) {
             draftLevelState = parseInt(draftSelector.value);
         }
-        if (contentSelector) {
+        if (contentSelector instanceof HTMLSelectElement) {
             contentLevelState = parseInt(contentSelector.value);
         }
         // contextPruneSelector removed with traditional context system
-        if (coherenceSelector) {
+        if (coherenceSelector instanceof HTMLSelectElement) {
             coherenceLevelState = parseInt(coherenceSelector.value);
         }
-        if (autofixSeveritySelector) {
+        if (autofixSeveritySelector instanceof HTMLSelectElement) {
             autofixSeverityState = parseInt(autofixSeveritySelector.value);
         }
         
         // Update deterministic child creation state
-        const deterministicCheckbox = document.getElementById('deterministic-child-creation-checkbox') as HTMLInputElement;
-        if (deterministicCheckbox) {
+        const deterministicCheckbox = document.getElementById('deterministic-child-creation-checkbox');
+        if (deterministicCheckbox instanceof HTMLInputElement) {
             deterministicChildCreationState = deterministicCheckbox.checked;
         }
         // pruneScopeSelector removed - prune scope UI removed
-    } catch (error) {
+    } catch {
         // Failed to capture dropdown values
     }
 }
@@ -805,7 +806,7 @@ let actionsDropdownInstance: Dropdown | null = null;
 function showActionsDropdown(node: DocumentNode): void {
     // Close any existing dropdown first
     if (actionsDropdownInstance) {
-        void actionsDropdownInstance.close();
+        actionsDropdownInstance.close();
         actionsDropdownInstance = null;
     }
 
@@ -832,14 +833,13 @@ function showActionsDropdown(node: DocumentNode): void {
     });
 
     // Open the dropdown
-    void actionsDropdownInstance.open();
-    void actionsDropdownInstance.open();
+    actionsDropdownInstance.open();
     // Add custom click handler for actions
     void setTimeout(() => {
         const dropdownElement = document.querySelector('.dropdown-menu.actions-dropdown');
         if (dropdownElement) {
             dropdownElement.addEventListener('click', (e) => {
-                const button = (e.target as HTMLElement).closest('[data-action]') as HTMLElement;
+                const button = (e.target as HTMLElement).closest('[data-action]');
                 if (button) {
                     const action = button.getAttribute('data-action');
                     if (action) {
@@ -874,7 +874,7 @@ function showActionsDropdown(node: DocumentNode): void {
                         if (action === 'send-content-to-idea-board') {
                             // Close dropdown first
                             if (actionsDropdownInstance) {
-                                void actionsDropdownInstance.close();
+                                actionsDropdownInstance.close();
                                 actionsDropdownInstance = null;
                             }
                             void handleSendToIdeaBoard('content');
@@ -883,7 +883,7 @@ function showActionsDropdown(node: DocumentNode): void {
                         if (action === 'send-context-to-idea-board') {
                             // Close dropdown first
                             if (actionsDropdownInstance) {
-                                void actionsDropdownInstance.close();
+                                actionsDropdownInstance.close();
                                 actionsDropdownInstance = null;
                             }
                             void handleSendToIdeaBoard('context');
@@ -892,7 +892,7 @@ function showActionsDropdown(node: DocumentNode): void {
                         if (action === 'send-both-to-idea-board') {
                             // Close dropdown first
                             if (actionsDropdownInstance) {
-                                void actionsDropdownInstance.close();
+                                actionsDropdownInstance.close();
                                 actionsDropdownInstance = null;
                             }
                             void handleSendToIdeaBoard('both');
@@ -904,7 +904,7 @@ function showActionsDropdown(node: DocumentNode): void {
                         if (deleteLayerMatch?.[1]) {
                             // Close dropdown first
                             if (actionsDropdownInstance) {
-                                void actionsDropdownInstance.close();
+                                actionsDropdownInstance.close();
                                 actionsDropdownInstance = null;
                             }
                             const relativeLevel = parseInt(deleteLayerMatch[1], 10);
@@ -916,7 +916,7 @@ function showActionsDropdown(node: DocumentNode): void {
                         if (handlerAction) {
                             // Close dropdown first
                             if (actionsDropdownInstance) {
-                                void actionsDropdownInstance.close();
+                                actionsDropdownInstance.close();
                                 actionsDropdownInstance = null;
                             }
                             // Execute action
@@ -966,7 +966,7 @@ async function handleNewTopLayer(oldRootNode: DocumentNode): Promise<void> {
         );
 
         // Create new root node with the extended template
-        const oldTitle: string = oldRootNode.title ?? 'Root';
+        const oldTitle: string = oldRootNode.title;
         const newRoot = new DocumentNode(
             0,
             oldTitle,
@@ -999,7 +999,7 @@ async function handleNewTopLayer(oldRootNode: DocumentNode): Promise<void> {
         await projectManager!.saveToStorage();
 
         // Refresh the project UI
-        renderProjectUI(projectManager!);
+        void renderProjectUI(projectManager!);
 
         alert(`Successfully created new top layer "${newLevelName}" with the old structure as its child.`);
 
@@ -1095,7 +1095,7 @@ async function handleCopyToNewProject(sourceNode: DocumentNode): Promise<void> {
             if (sourceLanguage) {
                 newProjectManager.setLanguage(sourceLanguage);
             }
-        } catch (e) {
+        } catch {
             // Failed to copy project language to new project
         }
 
@@ -1221,7 +1221,7 @@ function generateUniqueProjectTitle(baseTitle: string): string {
 function showActionsContextMenu(node: DocumentNode, mouseEvent: MouseEvent): void {
     // Close any existing dropdown first
     if (actionsDropdownInstance) {
-        void actionsDropdownInstance.close();
+        actionsDropdownInstance.close();
         actionsDropdownInstance = null;
     }
 
@@ -1261,14 +1261,14 @@ function showActionsContextMenu(node: DocumentNode, mouseEvent: MouseEvent): voi
     };
 
     // Open the dropdown
-    void actionsDropdownInstance.open();
+    actionsDropdownInstance.open();
     
     // Add custom click handler for actions (reuse existing logic)
     void setTimeout(() => {
         const dropdownElement = document.querySelector('.dropdown-menu.actions-dropdown');
         if (dropdownElement) {
             dropdownElement.addEventListener('click', (e) => {
-                const button = (e.target as HTMLElement).closest('[data-action]') as HTMLElement;
+                const button = (e.target as HTMLElement).closest('[data-action]');
                 if (button) {
                     const action = button.getAttribute('data-action');
                     if (action) {
@@ -1349,7 +1349,7 @@ function hasLeafNodes(node: DocumentNode): boolean {
     const countLeafNodes = (parentNode: DocumentNode): number => {
         let count = 0;
         const traverse = (currentNode: DocumentNode) => {
-            if (!currentNode.children || currentNode.children.length === 0) {
+            if (currentNode.children.length === 0) {
                 // Check if this leaf has content
                 if (currentNode.content && currentNode.content.trim().length > 0) {
                     count++;
@@ -1361,10 +1361,8 @@ function hasLeafNodes(node: DocumentNode): boolean {
             }
         };
         
-        if (parentNode.children) {
-            for (const child of parentNode.children) {
-                traverse(child);
-            }
+        for (const child of parentNode.children) {
+            traverse(child);
         }
         
         return count;
@@ -1467,12 +1465,12 @@ function createActionsDropdownContent(node: DocumentNode): string {
                     <button class="action-btn" data-action="copy-to-new-project">
                         📋 Copy to New Project
                     </button>
-                    ${node.children && node.children.length > 0 ? `
+                    ${node.children.length > 0 ? `
                         <button class="action-btn" data-action="check-coherence">
                             🔍 Check Coherence
                         </button>
                     ` : ''}
-                    ${node.children && node.children.length >= 2 ? `
+                    ${node.children.length >= 2 ? `
                         <button class="action-btn" data-action="detect-redundant-children">
                             🗑️ Find Redundant Children
                         </button>
@@ -1621,7 +1619,7 @@ export async function renderProjectUI(proj: ProjectManager) {
     try {
         const modalFactory = getDefaultModalFactory();
         modalFactory.updateDependencies({ projectManager: proj });
-    } catch (error) {
+    } catch {
         // Modal factory not initialized yet
     }
     
@@ -1639,7 +1637,7 @@ export async function renderProjectUI(proj: ProjectManager) {
 
     void refreshGlobalProfileSelector(); // Keep the profile selector up-to-date
     renderMultiProjectTree();
-    void void renderNodeDetails();
+    void renderNodeDetails();
     
     // Re-attach event listeners after DOM replacement in renderProjectUI
 
@@ -1650,8 +1648,8 @@ export async function renderProjectUI(proj: ProjectManager) {
 
 interface ManagerListeners {
     handleGenerationStarted: (e: { nodeId: string, node: DocumentNode }) => void;
-    handleCompletion: (e: { nodeId: string; success: boolean; error?: any, node: DocumentNode }) => void;
-    handleBulkGenerationComplete: (e: { nodeId: string; node: DocumentNode; operation: string; options: any; success: boolean }) => void;
+    handleCompletion: (e: { nodeId: string; success: boolean; error?: unknown; node: DocumentNode }) => void;
+    handleBulkGenerationComplete: (e: { nodeId: string; node: DocumentNode; operation: string; options: unknown; success: boolean }) => void;
     handleAborted: (e: { nodeId: string, node: DocumentNode }) => void;
     handleError: (message: string) => void;
     handleLoopProgress: (e: { nodeId: string, progress: LoopProgress }) => void;
@@ -1674,11 +1672,11 @@ function setupProjectManagerListeners(manager: ProjectManager) {
         // Only refresh node details if we're looking at the node being generated
         // This prevents unnecessary UI re-rendering that can cause button disappearance
         if (selectedNodeId === e['nodeId']) {
-            void void renderNodeDetails();
+            void renderNodeDetails();
         }
     };
 
-    const handleCompletion = (_e: { nodeId: string; success: boolean; error?: unknown, node: DocumentNode }) => {
+    const handleCompletion = () => {
         // Check if any operations are still in progress
         const operationsInProgress = manager.isAnyNodeGenerating();
         
@@ -1687,7 +1685,7 @@ function setupProjectManagerListeners(manager: ProjectManager) {
             // Just do the final project UI refresh
             // Capture current dropdown values before re-rendering to preserve user selections
             captureCurrentDropdownValues();
-            renderProjectUI(manager);
+            void renderProjectUI(manager);
             
             // Force clear progress UI as additional safety measure
         clearProgressUI();
@@ -1706,8 +1704,8 @@ function setupProjectManagerListeners(manager: ProjectManager) {
                     if (enhancedContentEditor) {
                         enhancedContentEditor.value = node.content;
                     } else {
-                        const contentTextArea = document.getElementById('node-content') as HTMLTextAreaElement;
-                        if (contentTextArea) contentTextArea.value = node.content;
+                        const contentTextArea = document.getElementById('node-content');
+                        if (contentTextArea instanceof HTMLTextAreaElement) contentTextArea.value = node.content;
                     }
                     
                     // Context editor removed - using conditional context system
@@ -1725,7 +1723,7 @@ function setupProjectManagerListeners(manager: ProjectManager) {
         }, 200);
     };
 
-    const handleAborted = (_e: { nodeId: string, node: DocumentNode }) => {
+    const handleAborted = () => {
         // Handle aborted generation - similar to completion but with different messaging
         // Clear bulk operation flag in case of abort
         isBulkOperationActive = false;
@@ -1736,7 +1734,7 @@ function setupProjectManagerListeners(manager: ProjectManager) {
             // UI cleanup is now handled by the coordinator
             // Capture current dropdown values before re-rendering to preserve user selections
             captureCurrentDropdownValues();
-            renderProjectUI(manager);
+            void renderProjectUI(manager);
         } else {
             renderMultiProjectTree();
         }
@@ -1748,7 +1746,7 @@ function setupProjectManagerListeners(manager: ProjectManager) {
         alert(`An error occurred: ${message}`);
         // Capture current dropdown values before re-rendering to preserve user selections
         captureCurrentDropdownValues();
-        renderProjectUI(manager);
+        void renderProjectUI(manager);
     };
     
     // Handle direct LoopOrchestrator progress events
@@ -1806,73 +1804,18 @@ function setupProjectManagerListeners(manager: ProjectManager) {
         }
     };
 
-    const handleBulkGenerationComplete = (e: { nodeId: string; node: DocumentNode; operation: string; options: unknown; success: boolean }) => {
+    const handleBulkGenerationComplete = () => {
         // Bulk generation complete for node
         
         // Clear bulk operation flag
         isBulkOperationActive = false;
-        
-        // Check if coherence check was requested for this generation
-        if (e.node && (e.node as any)._pendingCoherenceCheck && e.success) {
-            const completedNode = e.node;
-            // Auto-starting coherence analysis for node
-            
-            // Clear the pending flag
-            delete (completedNode as any)._pendingCoherenceCheck;
-            
-            // Open coherence check modal after a short delay
-            void void setTimeout(() => {
-                void import('./modals/CoherenceModal').then(({ CoherenceModal }) => {
-                    void import('./modals/services/CoherenceService').then(({ CoherenceService }) => {
-                        // Create coherence service instance
-                        const coherenceService = new CoherenceService(
-                            state.getOpenRouterClient()!,
-                            state.getSettingsManager()!
-                        );
-
-                        // Check if node is eligible for coherence analysis
-                        if (!coherenceService.isNodeEligible(completedNode)) {
-                            // Skipping auto-coherence check - node not eligible
-                            return;
-                        }
-
-                        // Create and show modal in loading state - pass the project root
-                        const analysisModal = new CoherenceModal(manager.rootNode);
-                        analysisModal.openInLoadingState(completedNode);
-                        
-                        // Prepare frozen settings using centralized utility
-                        void import('./utils/CoherenceUtils').then(({ CoherenceUtils }) => {
-                            const frozenSettings = CoherenceUtils.prepareFrozenSettings(state.getSettingsManager()!);
-                            
-                            // Perform analysis with proper frozen settings (same as UnifiedGenerationService)
-                            coherenceService.analyzeCoherence(completedNode, frozenSettings)
-                                .then((result) => {
-                                    console.log('Coherence analysis completed, updating modal with results:', result);
-                                    // Update modal with results
-                                    analysisModal.updateWithResults(result);
-                                })
-                                .catch((error) => {
-                                    console.error('Coherence analysis failed:', error);
-                                    // Close loading modal and show error
-                                    void analysisModal.close();
-                                    alert('Coherence analysis failed: ' + error.message);
-                                });
-                        });
-                    }).catch((error: unknown) => {
-                        console.error('Failed to load CoherenceService:', error);
-                    });
-                }).catch((error: unknown) => {
-                    console.error('Failed to open coherence modal:', error);
-                });
-            }, 1000);
-        }
     };
 
     const handleProjectLoaded = () => {
         // Refresh the entire project UI when project structure changes (e.g., after bulk child generation)
         // Capture current dropdown values before re-rendering to preserve user selections
         captureCurrentDropdownValues();
-        renderProjectUI(manager);
+        void renderProjectUI(manager);
     };
 
     // PERFORMANCE FIX: Debounced rendering to prevent rapid DOM rebuilds during generation
@@ -1898,7 +1841,7 @@ function setupProjectManagerListeners(manager: ProjectManager) {
             captureCurrentDropdownValues();
             
             // Execute the render
-            renderProjectUI(manager);
+            void renderProjectUI(manager);
             
             // Clear pending events
             pendingRenderEvents = [];
@@ -1922,7 +1865,7 @@ function setupProjectManagerListeners(manager: ProjectManager) {
             }
             // Immediate render for critical event (logging removed to reduce noise)
             captureCurrentDropdownValues();
-            renderProjectUI(manager);
+            void renderProjectUI(manager);
             pendingRenderEvents = [];
         } else {
             // For non-critical events, just update the tree display to reduce DOM churn
@@ -2013,8 +1956,8 @@ function setupProjectManagerListeners(manager: ProjectManager) {
 // --- Component Renders ---
 
 export async function refreshGlobalProfileSelector() {
-    const selector = document.getElementById('active-profile-selector') as HTMLSelectElement;
-    if (!selector) return;
+    const selector = document.getElementById('active-profile-selector');
+    if (!(selector instanceof HTMLSelectElement)) return;
 
     // Use centralized ProfileManagerService for consistent profile data
     const { getProfileManagerService } = await import('./services/ProfileManagerService');
@@ -2059,12 +2002,8 @@ export async function renderNodeDetails(retryOptions?: { _isRetry?: boolean }) {
     // Set up project manager listeners for the active project (only if not already set up)
     if (!projectManager._listenersSetup) {
         setupProjectManagerListeners(projectManager);
-        // @ts-ignore - Mark that listeners are set up to prevent duplication
         projectManager._listenersSetup = true;
     }
-    
-    const settingsManager = state.getSettingsManager();
-    settingsManager?.getProfileNames() ?? [];
 
     const detailsContainer = document.createElement('div');
     detailsContainer.className = 'node-details-container';
@@ -2678,7 +2617,7 @@ export async function renderNodeDetails(retryOptions?: { _isRetry?: boolean }) {
                     <span style="font-size: 0.7em; color: #6c757d; font-weight: normal;">(${getCurrentLevelName(node)})</span>
                     ${(() => {
                         const masterVersion = node.getMasterVersion();
-                        if (masterVersion && masterVersion.timestamp) {
+                        if (masterVersion?.timestamp) {
                             const timestamp = new Date(masterVersion.timestamp);
                             const now = new Date();
                             const diffMs = now.getTime() - timestamp.getTime();
@@ -2850,7 +2789,6 @@ export async function renderNodeDetails(retryOptions?: { _isRetry?: boolean }) {
                                 </label>
                                 <select id="coherence-level-selector" class="level-dropdown">
                                     <option value="-1" ${coherenceLevelState === -1 ? 'selected' : ''}>None</option>
-                                                                         // @ts-ignore - TypeScript incorrectly thinks map only expects 1 argument
                                     ${node.template.slice(node.level, -1).map((_, index) => {
                                         const actualLevel = node.level + index;
                                         // Show the child level name (one level down) but keep the parent level as value
@@ -3010,7 +2948,7 @@ export async function renderNodeDetails(retryOptions?: { _isRetry?: boolean }) {
     // Actions dropdown rendered successfully
 
     // --- Populate and Set States (No Listeners Here!) ---
-    const generateBtn = getElementById('node-generate-btn') as HTMLButtonElement;
+    const generateBtn = getElementById<HTMLButtonElement>('node-generate-btn');
 
     // Initialize version navigation
     initializeVersionNavigation(node);
@@ -3091,20 +3029,15 @@ export async function renderNodeDetails(retryOptions?: { _isRetry?: boolean }) {
 
     // Handle deterministic child creation checkbox visibility and events
     const deterministicContainer = document.getElementById('deterministic-child-creation-container');
-    const deterministicCheckbox = document.getElementById('deterministic-child-creation-checkbox') as HTMLInputElement;
+    const deterministicCheckbox = document.getElementById('deterministic-child-creation-checkbox');
     
-    if (deterministicContainer && deterministicCheckbox) {
-        // Show checkbox only for non-leaf nodes (outline nodes)
-        const templateLevels = Object.keys(node.template || {}).map(k => parseInt(k)).filter(n => !isNaN(n));
-        const maxLevel = templateLevels.length > 0 ? Math.max(...templateLevels) : -1;
-        const isLeafNode = node.template?.[node.level] && node.level === maxLevel;
-        
-        deterministicContainer.style.display = isLeafNode ? 'none' : 'flex';
+    if (deterministicContainer && deterministicCheckbox instanceof HTMLInputElement) {
+        deterministicContainer.style.display = node.isLeaf ? 'none' : 'flex';
         
         // Add change handler to update global state
         deterministicCheckbox.onchange = () => {
             deterministicChildCreationState = deterministicCheckbox.checked;
-            (globalThis as any).deterministicChildCreationState = deterministicChildCreationState;
+            syncDeterministicChildCreationGlobal(deterministicChildCreationState);
             console.log(`[UI] Checkbox changed: deterministicChildCreationState=${deterministicChildCreationState}`);
             void saveLevelStates(); // Save to storage like other level states
         };
@@ -3113,61 +3046,62 @@ export async function renderNodeDetails(retryOptions?: { _isRetry?: boolean }) {
     // Mount Conditional Context Editor into the panel
     try {
         const host = document.getElementById('conditional-context-host');
-        if (host && projectManager) {
+        if (host) {
+            const ccHost = host as ConditionalContextHostElement;
             // Lazy import to avoid bundling cost until needed
             const { ConditionalContextEditor } = await import('./components/ConditionalContextEditor');
             // Clean previous content (destroy old editor if any was mounted)
             host.innerHTML = '';
             const editor = new ConditionalContextEditor({ node, projectManager, showPreview: false, showInheritedByDefault: true });
             // Store instance on the host for cleanup on re-render
-            (host as any).__ccEditor?.destroy?.();
-            (host as any).__ccEditor = editor;
+            ccHost.__ccEditor?.destroy?.();
+            ccHost.__ccEditor = editor;
             editor.mount(host);
 
             // Wire click-through from ConditionalContextEditor to select nodes in main UI
             // Remove previous listener if present
-            const prevListener = (host as any).__ccSelectListener as EventListener | undefined;
+            const prevListener = ccHost.__ccSelectListener;
             if (prevListener) {
                 window.removeEventListener('cc-select-node', prevListener);
             }
 
             const onCcSelect = (ev: Event) => {
                 const detail = (ev as CustomEvent<{ nodeId: string }>).detail;
-                if (detail && detail.nodeId) {
+                if (detail.nodeId) {
                     setSelectedNodeAndRedraw(detail.nodeId);
                 }
             };
-            (host as any).__ccSelectListener = onCcSelect as EventListener;
-            window.addEventListener('cc-select-node', onCcSelect as EventListener);
+            ccHost.__ccSelectListener = onCcSelect;
+            window.addEventListener('cc-select-node', onCcSelect);
         }
     } catch (e) {
         console.error('Failed to mount Conditional Context Editor panel:', e);
     }
 
     // Set up event listeners for level-based generation controls
-    const draftLevelSelector = getElementById('draft-level-selector') as HTMLSelectElement;
-    const contentLevelSelector = getElementById('content-level-selector') as HTMLSelectElement;
+    const draftLevelSelector = getElementById<HTMLSelectElement>('draft-level-selector');
+    const contentLevelSelector = getElementById<HTMLSelectElement>('content-level-selector');
     // context-prune-level-selector removed - using conditional context system
-    const coherenceLevelSelector = getElementById('coherence-level-selector') as HTMLSelectElement;
-    const autofixSeveritySelector = getElementById('autofix-severity-selector') as HTMLSelectElement;
-    const validationMessage = getElementById('level-validation-message') as HTMLDivElement;
-    const validationText = getElementById('validation-text') as HTMLSpanElement;
+    const coherenceLevelSelector = getElementById<HTMLSelectElement>('coherence-level-selector');
+    const autofixSeveritySelector = getElementById<HTMLSelectElement>('autofix-severity-selector');
+    const validationMessage = getElementById<HTMLDivElement>('level-validation-message');
+    const validationText = getElementById<HTMLSpanElement>('validation-text');
     
     // Restore last generation parameters for this node if available
     if (node.lastGenerationParameters) {
         const params = node.lastGenerationParameters;
-        if (draftLevelSelector) draftLevelSelector.value = params.draftLevel.toString();
-        if (contentLevelSelector) contentLevelSelector.value = params.contentLevel.toString();
+        draftLevelSelector.value = params.draftLevel.toString();
+        contentLevelSelector.value = params.contentLevel.toString();
         // contextPruneLevelSelector removed - using conditional context system
-        if (coherenceLevelSelector) coherenceLevelSelector.value = params.coherenceLevel.toString();
-        if (autofixSeveritySelector) autofixSeveritySelector.value = params.autofixSeverity.toString();
+        coherenceLevelSelector.value = params.coherenceLevel.toString();
+        autofixSeveritySelector.value = params.autofixSeverity.toString();
         
         // Restore deterministic child creation checkbox
-        const deterministicCheckbox = document.getElementById('deterministic-child-creation-checkbox') as HTMLInputElement;
-        if (deterministicCheckbox && params.deterministicChildCreation !== undefined) {
+        const deterministicCheckbox = document.getElementById('deterministic-child-creation-checkbox');
+        if (deterministicCheckbox instanceof HTMLInputElement && params.deterministicChildCreation !== undefined) {
             deterministicCheckbox.checked = params.deterministicChildCreation;
             deterministicChildCreationState = params.deterministicChildCreation;
-            (globalThis as any).deterministicChildCreationState = deterministicChildCreationState;
+            syncDeterministicChildCreationGlobal(deterministicChildCreationState);
         }
         
         // Update global state variables to match restored values
@@ -3182,10 +3116,6 @@ export async function renderNodeDetails(retryOptions?: { _isRetry?: boolean }) {
     
     // Validation function
     const validateLevels = (): boolean => {
-        if (!draftLevelSelector || !contentLevelSelector || !coherenceLevelSelector) {
-            return true; // Skip validation if elements not found
-        }
-        
         const draftLevel = parseInt(draftLevelSelector.value);
         const contentLevel = parseInt(contentLevelSelector.value);
         const coherenceLevel = parseInt(coherenceLevelSelector.value);
@@ -3206,25 +3136,23 @@ export async function renderNodeDetails(retryOptions?: { _isRetry?: boolean }) {
         }
         
         // Show/hide validation message
-        if (validationMessage && validationText) {
-            if (isValid) {
-                validationMessage.style.display = 'none';
-                    } else {
-                validationText.textContent = errorMessage;
-                validationMessage.style.display = 'flex';
-            }
+        if (isValid) {
+            validationMessage.style.display = 'none';
+        } else {
+            validationText.textContent = errorMessage;
+            validationMessage.style.display = 'flex';
         }
         
         return isValid;
     };
     
     // --- Primary level ladder + live preview + Advanced popup ---
-    const levelLadder = getElementById('level-ladder') as HTMLDivElement;
-    const generationPreview = getElementById('generation-preview') as HTMLDivElement;
-    const levelsHelpBtn = getElementById('generation-levels-help-btn') as HTMLButtonElement;
-    const advancedBtn = getElementById('generation-advanced-btn') as HTMLButtonElement;
-    const advancedPopup = getElementById('generation-advanced-popup') as HTMLDivElement;
-    const advancedCloseBtn = getElementById('generation-advanced-close') as HTMLButtonElement;
+    const levelLadder = getElementById<HTMLDivElement>('level-ladder');
+    const generationPreview = getElementById<HTMLDivElement>('generation-preview');
+    const levelsHelpBtn = getElementById<HTMLButtonElement>('generation-levels-help-btn');
+    const advancedBtn = getElementById<HTMLButtonElement>('generation-advanced-btn');
+    const advancedPopup = getElementById<HTMLDivElement>('generation-advanced-popup');
+    const advancedCloseBtn = getElementById<HTMLButtonElement>('generation-advanced-close');
 
     // Coherence targets a parent level whose children are checked, so it can never
     // reach the leaf level; this is its deepest valid value.
@@ -3286,9 +3214,9 @@ export async function renderNodeDetails(retryOptions?: { _isRetry?: boolean }) {
 
         coherenceLevelState = coherence;
 
-        if (draftLevelSelector) draftLevelSelector.value = level.toString();
-        if (contentLevelSelector) contentLevelSelector.value = level.toString();
-        if (coherenceLevelSelector) coherenceLevelSelector.value = coherence.toString();
+        draftLevelSelector.value = level.toString();
+        contentLevelSelector.value = level.toString();
+        coherenceLevelSelector.value = coherence.toString();
 
         validateLevels();
         syncLadderFromAdvanced();
@@ -3299,14 +3227,12 @@ export async function renderNodeDetails(retryOptions?: { _isRetry?: boolean }) {
     // The ladder + preview re-derive from the (possibly decoupled) Advanced values.
     const advancedSelectors = [draftLevelSelector, contentLevelSelector, coherenceLevelSelector, autofixSeveritySelector];
     advancedSelectors.forEach(selector => {
-        if (selector) {
-            selector.addEventListener('change', () => {
+        selector.addEventListener('change', () => {
                 captureCurrentDropdownValues();
                 validateLevels();
                 syncLadderFromAdvanced();
                 void saveLevelStates();
             });
-        }
     });
 
     // Clicking a rung selects the target depth.
@@ -3329,23 +3255,17 @@ export async function renderNodeDetails(retryOptions?: { _isRetry?: boolean }) {
     syncLadderFromAdvanced();
 
     // Advanced popup open/close
-    if (advancedBtn && advancedPopup) {
-        advancedBtn.addEventListener('click', () => {
-            advancedPopup.style.display = 'flex';
-        });
-    }
+    advancedBtn.addEventListener('click', () => {
+        advancedPopup.style.display = 'flex';
+    });
     const closeAdvancedPopup = () => {
-        if (advancedPopup) advancedPopup.style.display = 'none';
+        advancedPopup.style.display = 'none';
     };
-    if (advancedCloseBtn) {
-        advancedCloseBtn.addEventListener('click', closeAdvancedPopup);
-    }
-    if (advancedPopup) {
-        // Clicking the dimmed backdrop (outside the content) closes the popup.
-        advancedPopup.addEventListener('click', (e) => {
-            if (e.target === advancedPopup) closeAdvancedPopup();
-        });
-    }
+    advancedCloseBtn.addEventListener('click', closeAdvancedPopup);
+    // Clicking the dimmed backdrop (outside the content) closes the popup.
+    advancedPopup.addEventListener('click', (e) => {
+        if (e.target === advancedPopup) closeAdvancedPopup();
+    });
 
     // Long-run auto-retry control (above the Advanced button).
     const autoRetryToggle = document.getElementById('auto-retry-toggle') as HTMLInputElement | null;
@@ -3378,12 +3298,12 @@ export async function renderNodeDetails(retryOptions?: { _isRetry?: boolean }) {
     // --- CRITICAL: Add missing event listeners for content and context textareas ---
     // This must happen AFTER the DOM elements are created and appended above
     // Use safe element access to prevent errors during DOM updates
-    const contentTextArea = document.getElementById('node-content') as HTMLTextAreaElement;
+    const contentTextArea = document.getElementById('node-content');
     // contextTextArea removed - using conditional context system
-    const nodeTitleDisplay = document.getElementById('node-title-display') as HTMLElement;
+    const nodeTitleDisplay = document.getElementById('node-title-display');
     
     // RACE CONDITION FIX: Ensure elements exist before proceeding (safety check with retry mechanism)  
-    if (!contentTextArea || !nodeTitleDisplay) {
+    if (!(contentTextArea instanceof HTMLTextAreaElement) || !nodeTitleDisplay) {
         // During rapid UI updates, DOM might be in transition state - retry once after a short delay
         const missingElements = {
             contentTextArea: Boolean(contentTextArea),
@@ -3400,54 +3320,51 @@ export async function renderNodeDetails(retryOptions?: { _isRetry?: boolean }) {
         // First attempt - schedule a retry after a short delay
         setTimeout(() => {
             // Mark this as a retry attempt to prevent infinite recursion
-            renderNodeDetails({ _isRetry: true });
+            void renderNodeDetails({ _isRetry: true });
         }, 25); // 25ms retry delay
         return;
     }
 
     // Upgrade content textarea to enhanced UniversalTextEditor - Drop-in replacement!
-    if (contentTextArea) {
-        enhancedContentEditor = UniversalTextEditor.replace(contentTextArea, {
-            mode: 'enhanced'  // Enable AI features and text transformation
-        });
-        
-        // Content textarea - save content changes to node only on blur (when focus is lost)
-        enhancedContentEditor.addEventListener('blur', () => {
-            if (projectManager && selectedNodeId) {
-                const node = projectManager.findNodeById(selectedNodeId);
-                if (node) {
-                    // Use version management system to update content with "edited" and "content_edited" tags
-                    node.setContentWithTags(enhancedContentEditor!.value, ['edited', 'content_edited']);
-                    // Save to storage immediately since this only happens on blur
-                    void projectManager.saveToStorage();
-                }
+    enhancedContentEditor = UniversalTextEditor.replace(contentTextArea, {
+        mode: 'enhanced'  // Enable AI features and text transformation
+    });
+    
+    // Content textarea - save content changes to node only on blur (when focus is lost)
+    enhancedContentEditor.addEventListener('blur', () => {
+        if (projectManager && selectedNodeId) {
+            const node = projectManager.findNodeById(selectedNodeId);
+            if (node) {
+                // Use version management system to update content with "edited" and "content_edited" tags
+                node.setContentWithTags(enhancedContentEditor!.value, ['edited', 'content_edited']);
+                // Save to storage immediately since this only happens on blur
+                void projectManager.saveToStorage();
             }
-        });
-    }
+        }
+    });
 
     // Enhanced context editor removed - using conditional context system
 
 
 
     // Node title - save title changes to node
-    if (nodeTitleDisplay) {
-        nodeTitleDisplay.addEventListener('input', () => {
-            if (projectManager && selectedNodeId) {
-                const node = projectManager.findNodeById(selectedNodeId);
-                if (node) {
-                    // Use version management system to update title with "edited" and "title_edited" tags
-                    node.setTitleWithTags(nodeTitleDisplay.textContent ?? '', ['edited', 'title_edited']);
-                    // Save to storage with debounced approach
-                    clearTimeout((nodeTitleDisplay as any)._saveTimeout);
-                    (nodeTitleDisplay as any)._saveTimeout = void void setTimeout(() => {
-                        void projectManager!.saveToStorage().catch(console.error);
-                        // Re-render tree to show updated title
-                        renderMultiProjectTree();
-                    }, 1000); // Save after 1 second of no typing
-                }
+    const titleDisplay = nodeTitleDisplay as ExpertTrackedElement;
+    titleDisplay.addEventListener('input', () => {
+        if (projectManager && selectedNodeId) {
+            const node = projectManager.findNodeById(selectedNodeId);
+            if (node) {
+                // Use version management system to update title with "edited" and "title_edited" tags
+                node.setTitleWithTags(nodeTitleDisplay.textContent ?? '', ['edited', 'title_edited']);
+                // Save to storage with debounced approach
+                clearTimeout(titleDisplay._saveTimeout);
+                titleDisplay._saveTimeout = setTimeout(() => {
+                    void projectManager!.saveToStorage().catch(console.error);
+                    // Re-render tree to show updated title
+                    renderMultiProjectTree();
+                }, 1000); // Save after 1 second of no typing
             }
-        });
-    }
+        }
+    });
 
     // Actions dropdown elements initialized
 }
@@ -3459,7 +3376,7 @@ function initializeVersionNavigation(node: DocumentNode) {
 
     // Helper function to calculate total score
     const calculateTotalScore = (ratings: Rating[]): number => {
-        if (!ratings || ratings.length === 0) return 0;
+        if (ratings.length === 0) return 0;
         return ratings.reduce((sum, rating) => sum + rating.actual, 0);
     };
 
@@ -3588,11 +3505,11 @@ async function initializeUILogger(): Promise<void> {
 function updateVersionNavigationUI() {
     const versionNav = document.getElementById('version-navigation');
     const versionIndicator = document.getElementById('version-indicator');
-    const prevBtn = document.getElementById('version-prev-btn') as HTMLButtonElement;
-    const nextBtn = document.getElementById('version-next-btn') as HTMLButtonElement;
-    const useVersionBtn = document.getElementById('use-this-version-btn') as HTMLButtonElement;
+    const prevBtn = document.getElementById('version-prev-btn');
+    const nextBtn = document.getElementById('version-next-btn');
+    const useVersionBtn = document.getElementById('use-this-version-btn');
 
-    if (!versionNav || !versionIndicator || !prevBtn || !nextBtn || !useVersionBtn) return;
+    if (!(versionNav && versionIndicator && prevBtn instanceof HTMLButtonElement && nextBtn instanceof HTMLButtonElement && useVersionBtn instanceof HTMLButtonElement)) return;
 
     // Show/hide navigation based on whether there are multiple versions
     if (availableVersions.length > 1) {
@@ -3615,21 +3532,20 @@ function updateVersionNavigationUI() {
 
 function updateVersionContentDisplay() {
     const currentVersion = availableVersions[currentVersionIndex]!;
-    if (!currentVersion) return;
     
     // Update the content textarea to show the selected version's content
     if (enhancedContentEditor) {
         enhancedContentEditor.value = currentVersion.content;
     } else {
-        const contentTextArea = document.getElementById('node-content') as HTMLTextAreaElement;
-        if (contentTextArea) {
+        const contentTextArea = document.getElementById('node-content');
+        if (contentTextArea instanceof HTMLTextAreaElement) {
             contentTextArea.value = currentVersion.content;
         }
     }
     
     // Update the ratings view if it's currently showing
-    const showRatingsCheckbox = document.getElementById('show-ratings-checkbox') as HTMLInputElement;
-    if (showRatingsCheckbox && showRatingsCheckbox.checked) {
+    const showRatingsCheckbox = document.getElementById('show-ratings-checkbox');
+    if (showRatingsCheckbox instanceof HTMLInputElement && showRatingsCheckbox.checked) {
         renderRatingsView();
     }
 }
@@ -3643,8 +3559,8 @@ function updateVersionContentDisplay() {
 
 
 function renderRatingsView() {
-    const ratingsDisplay = document.getElementById('ratings-display') as HTMLDivElement;
-    if (!ratingsDisplay) {
+    const ratingsDisplay = document.getElementById('ratings-display');
+    if (!(ratingsDisplay instanceof HTMLDivElement)) {
         throw new Error('Ratings display element not found - DOM structure corrupted');
     }
     if (!projectManager) {
@@ -3674,13 +3590,13 @@ function renderRatingsView() {
         } else if (currentVersion?.isCurrent) {
             // For current version, try to get ratings from chosen iteration
             const chosenIteration = node.getChosenIteration();
-            if (chosenIteration && chosenIteration.ratings) {
+            if (chosenIteration?.ratings) {
                 versionRatings = chosenIteration.ratings;
-                timestampToShow = chosenIteration.timestamp ?? null;
+                timestampToShow = chosenIteration.timestamp;
             }
         }
         
-        if (!versionRatings || versionRatings.length === 0) {
+        if (versionRatings.length === 0) {
             ratingsDisplay.innerHTML = `
                 <div style="padding: 2rem; text-align: center; color: #6c757d; background-color: #f8f9fa; border-radius: 8px; border: 1px solid #e9ecef;">
                     <h4 style="margin: 0 0 1rem 0; color: #495057;">No Ratings Available</h4>
@@ -3778,7 +3694,14 @@ function buildTreeHtml(node: DocumentNode, isProjectRoot: boolean = false): stri
     }
     
     // Node title
-    const nodeTypeClass = isProjectRoot ? 'project-root' : (hasChildren ? 'has-children' : 'leaf-node');
+    let nodeTypeClass: string;
+    if (isProjectRoot) {
+        nodeTypeClass = 'project-root';
+    } else if (hasChildren) {
+        nodeTypeClass = 'has-children';
+    } else {
+        nodeTypeClass = 'leaf-node';
+    }
     const nodeClasses = `tree-node ${isSelected ? 'selected' : ''} ${nodeTypeClass}`;
     const statusTooltip = getNodeStatusTooltip(node);
     const tooltipAttr = statusTooltip ? ` title="${statusTooltip}"` : '';
@@ -3852,7 +3775,7 @@ function handleDeleteLayer(relativeLevel: number): void {
             
             // Re-render the UI to reflect the changes
             renderMultiProjectTree();
-            void void renderNodeDetails();
+            void renderNodeDetails();
             
             if (deletedCount === nodesAtLevel.length) {
                 alert(`Successfully deleted all ${deletedCount} ${layerInfo.pluralName.toLowerCase()}.`);
@@ -3970,11 +3893,11 @@ This action cannot be undone.`;
                             contextService: projectManager.getContextService(),
                             promptService: projectManager.getPromptService(),
                             generationCoordinator: projectManager.getGenerationCoordinator(),
-                            loopOrchestrator: (projectManager as any).loopOrchestrator,
+                            loopOrchestrator: projectManager.getLoopOrchestrator(),
                             settingsManager: projectManager.getSettingsManager(),
-                            openRouterClient: (projectManager as any).openRouterClient,
-                            eventEmitter: projectManager as any,
-                            saveToStorage: () => projectManager!.saveToStorage(),
+                            openRouterClient: projectManager.getOpenRouterClient(),
+                            eventEmitter: projectManager as unknown as EventEmitter<Record<string, unknown[]>>,
+                            saveToStorage: async () => { await projectManager!.saveToStorage(); },
                             rootNode: projectManager.rootNode
                         });
                         
@@ -4059,11 +3982,11 @@ This action cannot be undone.`;
                             contextService: projectManager.getContextService(),
                             promptService: projectManager.getPromptService(),
                             generationCoordinator: projectManager.getGenerationCoordinator(),
-                            loopOrchestrator: (projectManager as any).loopOrchestrator,
+                            loopOrchestrator: projectManager.getLoopOrchestrator(),
                             settingsManager: projectManager.getSettingsManager(),
-                            openRouterClient: (projectManager as any).openRouterClient,
-                            eventEmitter: projectManager as any,
-                            saveToStorage: () => projectManager!.saveToStorage(),
+                            openRouterClient: projectManager.getOpenRouterClient(),
+                            eventEmitter: projectManager as unknown as EventEmitter<Record<string, unknown[]>>,
+                            saveToStorage: async () => { await projectManager!.saveToStorage(); },
                             rootNode: projectManager.rootNode
                         });
                         
@@ -4138,7 +4061,7 @@ This action cannot be undone.`;
 
                 // Open the Add Child Node Modal
                 openAddChildNodeModal(node, node.id)
-                    .then((_modal) => {
+                    .then(() => {
                         // Add Child Node modal opened
                         // The modal factory handles UI refresh automatically
                     })
@@ -4168,23 +4091,18 @@ This action cannot be undone.`;
                         state.removeProject(node.id);
                         
                         // Handle storage cleanup
-                        (async () => {
+                        void (async () => {
                             try {
                                 // If this was the last project, clear all storage
                                 const remainingProjects = state.getProjects();
                                 if (remainingProjects.length === 0) {
                                     // Clear all project storage
-                                    if (projectToDelete) {
-                                        await projectToDelete.clearAllProjectsFromStorage();
-                                    }
+                                    await projectToDelete.clearAllProjectsFromStorage();
                                 } else {
                                     // First, explicitly remove the deleted project from IndexedDB
                                     const storage = await import('../StorageService').then(async m => m.StorageService.getInstance());
                                     if (storage.isIndexedDB()) {
-                                        const indexedDBService = (storage as any).indexedDBService;
-                                        if (indexedDBService) {
-                                            await indexedDBService.delete('projects', node.id);
-                                        }
+                                        await storage.getIndexedDBService().delete('projects', node.id);
                                     }
                                     
                                     // Then save the updated project list
@@ -4233,7 +4151,7 @@ This action cannot be undone.`;
                             
                             // Re-render the UI
                             renderMultiProjectTree();
-                            void void renderNodeDetails();
+                            void renderNodeDetails();
                         } else {
                             alert('Failed to delete the node. It may be a root node or have an invalid parent.');
                         }
@@ -4294,7 +4212,7 @@ This action cannot be undone.`;
                 // Import and open export modal
                 void import('./modal-manager').then(({ openExportModal }) => {
                     openExportModal(projectManager!, node);
-                }).catch(_error => {
+                }).catch(() => {
                     alert('Failed to open export dialog. Please try again.');
                 });
             }
@@ -4327,7 +4245,7 @@ This action cannot be undone.`;
                                 importNodeData(projectManager, node.id, importData);
                                 
                                 // Refresh the UI to show imported content
-                                renderProjectUI(projectManager);
+                                void renderProjectUI(projectManager);
                             }
                             
                         } catch (error) {
@@ -4513,7 +4431,7 @@ This action cannot be undone.`;
                 const countLeafNodes = (parentNode: DocumentNode): number => {
                     let count = 0;
                     const traverse = (currentNode: DocumentNode) => {
-                        if (!currentNode.children || currentNode.children.length === 0) {
+                        if (currentNode.children.length === 0) {
                             count++;
                         } else {
                             for (const child of currentNode.children) {
@@ -4522,10 +4440,8 @@ This action cannot be undone.`;
                         }
                     };
                     
-                    if (parentNode.children) {
-                        for (const child of parentNode.children) {
-                            traverse(child);
-                        }
+                    for (const child of parentNode.children) {
+                        traverse(child);
                     }
                     
                     return count;
@@ -4582,7 +4498,6 @@ This action cannot be undone.`;
 
         case 'batch-update-btn':
             {
-                if (!projectManager || !selectedNodeId) return;
                 const node = projectManager.findNodeById(selectedNodeId);
                 if (!node) return;
 
@@ -4630,7 +4545,7 @@ This action cannot be undone.`;
                             document.body.removeChild(modalContainer);
                             // Refresh UI after batch update
                             if (projectManager) {
-                                renderProjectUI(projectManager);
+                                void renderProjectUI(projectManager);
                             }
                         }
                     });
@@ -4642,7 +4557,7 @@ This action cannot be undone.`;
                         if (e.target === modalContainer) {
                             document.body.removeChild(modalContainer);
                             if (projectManager) {
-                                renderProjectUI(projectManager);
+                                void renderProjectUI(projectManager);
                             }
                         }
                     });
@@ -4652,7 +4567,7 @@ This action cannot be undone.`;
                         if (e.key === 'Escape') {
                             document.body.removeChild(modalContainer);
                             if (projectManager) {
-                                renderProjectUI(projectManager);
+                                void renderProjectUI(projectManager);
                             }
                             document.removeEventListener('keydown', handleEscape);
                         }
@@ -4668,7 +4583,6 @@ This action cannot be undone.`;
 
         case 'tag-manager-btn':
             {
-                if (!projectManager || !selectedNodeId) return;
                 const node = projectManager.findNodeById(selectedNodeId);
                 if (!node) return;
 
@@ -4739,15 +4653,10 @@ export async function setupEventListeners() {
     removeAllListeners();
     
     // Set up event delegation using EventManager for all button clicks
-    const mainContent = getElementById('main-content');
-    if (!mainContent) {
-        console.error('❌ Main content not found for event setup');
-        return;
-    }
+    const mainContent = getElementById<ExpertTrackedElement>('main-content');
     
     // Remove existing event manager setup to prevent duplicates
-    if ((mainContent as any)._eventManagerSetup) {
-
+    if (mainContent._eventManagerSetup) {
         return;
     }
     
@@ -4755,7 +4664,7 @@ export async function setupEventListeners() {
     eventManager.addDelegatedEvent(mainContent, 'click', 'button[id]', (event: Event) => {
         // Use currentTarget (the button) instead of target (which might be a child element like an arrow span)
         const button = event.currentTarget as HTMLButtonElement;
-        if (!button?.id) return;
+        if (!button.id) return;
         
         const handler = buttonHandlers[button.id];
         if (handler) {
@@ -4767,13 +4676,14 @@ export async function setupEventListeners() {
     });
     
     // Mark as set up to prevent duplicate setup
-    (mainContent as any)._eventManagerSetup = true;
+    mainContent._eventManagerSetup = true;
     
     // Set up global Ctrl+F search handler
     setupGlobalSearchHandler();
     
     // Set up delegated change events using EventManager  
-    eventManager.addDelegatedEvent(mainContent, 'change', 'select[id], input[id]', async (e: Event) => {
+    eventManager.addDelegatedEvent(mainContent, 'change', 'select[id], input[id]', (e: Event) => {
+        void (async () => {
         if (!e.target || !(e.target instanceof HTMLElement)) return;
 
         if (e.target.id === 'active-profile-selector') {
@@ -4812,16 +4722,17 @@ export async function setupEventListeners() {
             // Handle generation type radio button changes
             const radio = e.target as HTMLInputElement;
             const childrenOptions = document.getElementById('children-generation-options');
-            const countContainer = document.querySelector('.count-container') as HTMLElement;
+            const countContainer = document.querySelector('.count-container');
             
             if (radio.value === 'children') {
                 if (childrenOptions) childrenOptions.style.display = 'block';
-                if (countContainer) countContainer.style.display = 'flex';
+                if (countContainer instanceof HTMLElement) countContainer.style.display = 'flex';
             } else {
                 if (childrenOptions) childrenOptions.style.display = 'none';
-                if (countContainer) countContainer.style.display = 'none';
+                if (countContainer instanceof HTMLElement) countContainer.style.display = 'none';
             }
         }
+        })();
     });
 }
 
@@ -4834,8 +4745,8 @@ export async function initializeProjectUI(manager?: ProjectManager) {
     const profileManager = getProfileManagerService();
     
     // Set up profile change synchronization for both selectors
-    profileManager.onProfileChange(async () => {
-        await refreshGlobalProfileSelector();
+    profileManager.onProfileChange(() => {
+        void refreshGlobalProfileSelector();
     });
     
     // Update modal factory dependencies if we have an active project
@@ -4845,7 +4756,7 @@ export async function initializeProjectUI(manager?: ProjectManager) {
         try {
             const modalFactory = getDefaultModalFactory();
             modalFactory.updateDependencies({ projectManager: activeProject });
-        } catch (error) {
+        } catch {
             // Modal factory not initialized yet
         }
     }
@@ -5227,15 +5138,17 @@ export async function initializeProjectUI(manager?: ProjectManager) {
     
     // Initialize language selector - DECOUPLED: only changes global default
     const languageContainer = getElementById('language-selector-container');
-    if (languageContainer && settingsManager) {
+    if (settingsManager) {
         new LanguageSelector(languageContainer, {
             currentLanguage: settingsManager.getGlobalLanguage(),
-            onLanguageChange: async (language: string) => {
+            onLanguageChange: (language: string) => {
+                void (async () => {
                 // Only update global default language
                 await settingsManager.setLanguage(language);
                 
                 // DECOUPLED: No longer automatically syncs to active project
                 // Users must use "Set Project Language" button to explicitly copy global to project
+                })();
             }
         });
     }
@@ -5262,9 +5175,10 @@ export async function initializeProjectUI(manager?: ProjectManager) {
     await aiInteractionsService.initialize();
     
     // Set up simple AI progress event listener
-    window.addEventListener('ai-progress', (event: any) => {
+    window.addEventListener('ai-progress', (event: Event) => {
+        const progressEvent = event as CustomEvent<AiProgressDetail>;
         const progressElement = document.getElementById('ai-progress-report')!; // Crash if not found!
-        const { type, message, characters } = event.detail;
+        const { type, message, characters } = progressEvent.detail;
         
         switch(type) {
             case 'start':
@@ -5282,20 +5196,6 @@ export async function initializeProjectUI(manager?: ProjectManager) {
 }
 
 
-
-interface ProgressInfo {
-    message: string;
-    current: number;
-    total: number;
-}
-
-interface ProgressUIData {
-    operations?: ProgressInfo;    // Top level: High-level operations (e.g., "Generating child 3 of 5")
-    iterations?: ProgressInfo;    // Middle level: LoopOrchestrator iterations (e.g., "Iteration 2 of 5")
-    stages?: ProgressInfo;        // Bottom level: Stage within iteration (Create, Rate, Edit)
-    detail?: string;              // Detail text below all progress bars
-    model?: string;               // Current model being used (e.g., "Grok 4")
-}
 
 // Global progress state to maintain all three progress bars
 let currentProgressState = {
@@ -5323,11 +5223,11 @@ function updateProgressUI(data: ProgressUIData) {
     }
 
     const operationsText = getElementById('progress-text-operations');
-    const operationsBar = getElementById('progress-bar-operations') as HTMLDivElement;
+    const operationsBar = getElementById<HTMLDivElement>('progress-bar-operations');
     const iterationsText = getElementById('progress-text-iterations');
-    const iterationsBar = getElementById('progress-bar-iterations') as HTMLDivElement;
+    const iterationsBar = getElementById<HTMLDivElement>('progress-bar-iterations');
     const stagesText = getElementById('progress-text-stages');
-    const stagesBar = getElementById('progress-bar-stages') as HTMLDivElement;
+    const stagesBar = getElementById<HTMLDivElement>('progress-bar-stages');
     const detailText = getElementById('progress-text-detail');
     let modelText = document.getElementById('progress-text-model');
     if (!modelText) {
@@ -5344,7 +5244,7 @@ function updateProgressUI(data: ProgressUIData) {
         `;
         // Insert after detail text if it exists, otherwise append to container
         const detailText = document.getElementById('progress-text-detail');
-        if (detailText && detailText.parentNode) {
+        if (detailText?.parentNode) {
             detailText.parentNode.insertBefore(modelText, detailText.nextSibling);
         } else {
             container.appendChild(modelText);
@@ -5411,20 +5311,15 @@ function updateProgressUI(data: ProgressUIData) {
 }
 
 // Expose UI functions globally for the GenerationCoordinator
-(window as any).updateProgressUI = updateProgressUI;
-(window as any).clearProgressUI = clearProgressUI;
-(window as any).showGenerationOverlay = showGenerationOverlay;
-(window as any).hideGenerationOverlay = hideGenerationOverlay;
+window.updateProgressUI = updateProgressUI;
+window.clearProgressUI = clearProgressUI;
+window.showGenerationOverlay = showGenerationOverlay;
+window.hideGenerationOverlay = hideGenerationOverlay;
 
 
 
 function showGenerationOverlay() {
     const contentDisplayArea = getElementById('content-display-area');
-    
-    if (!contentDisplayArea) {
-        console.warn('Content display area not found, cannot show overlay');
-        return;
-    }
     
     // Remove any existing overlay
     const existingOverlay = document.getElementById('generation-overlay');
@@ -5472,9 +5367,7 @@ function hideGenerationOverlay() {
     
     // Reset position if no overlay
     const contentDisplayArea = getElementById('content-display-area');
-    if (contentDisplayArea) {
-        contentDisplayArea.style.position = '';
-    }
+    contentDisplayArea.style.position = '';
 }
 
 // === LONG-RUN AUTO-RETRY ===
@@ -5565,7 +5458,7 @@ export function renderMultiProjectTree() {
     buildTodoIndicatorCacheForAllProjects(projects);
     
     let html = '';
-    projects.forEach((project, _index) => {
+    projects.forEach((project) => {
 
         html += buildTreeHtml(project.rootNode, true); // true indicates this is a project root
     });
@@ -5692,8 +5585,8 @@ export function renderMultiProjectTree() {
             
             if (node && nodeProject) {
                 // Get the parent tree-item element for drag operations
-                const treeItem = el.closest('.tree-item') as HTMLElement;
-                if (treeItem) {
+                const treeItem = el.closest('.tree-item');
+                if (treeItem instanceof HTMLElement) {
                     // Initialize drag functionality
                     dragDropManager.initializeDragNode(treeItem, node, nodeProject);
                     
@@ -5713,7 +5606,7 @@ export function renderMultiProjectTree() {
 /**
  * Calculate the maximum depth of a hierarchy in import data
  */
-function calculateImportDataDepth(data: any): number {
+function calculateImportDataDepth(data: NodeImportData): number {
     if (!data.children || !Array.isArray(data.children) || data.children.length === 0) {
         return 0; // No children = 0 additional depth
     }
@@ -5730,17 +5623,13 @@ function calculateImportDataDepth(data: any): number {
 /**
  * Import node data from JSON export and merge it into the specified target node
  */
-function importNodeData(projectManager: ProjectManager, targetNodeId: string, importData: any): void {
+function importNodeData(projectManager: ProjectManager, targetNodeId: string, importData: NodeImportData): void {
     const targetNode = projectManager.findNodeById(targetNodeId);
     if (!targetNode) {
         throw new Error('Target node not found');
     }
 
     // Validate import data structure
-    if (!importData || typeof importData !== 'object') {
-        throw new Error('Invalid import data: Expected JSON object');
-    }
-
     if (!importData.title) {
         throw new Error('Invalid import data: Missing title field');
     }
@@ -5772,26 +5661,7 @@ function importNodeData(projectManager: ProjectManager, targetNodeId: string, im
         // Now restore the version data and other properties
         importedNode.id = `imported_${Date.now()}_${importData.id ?? 'unknown'}`; // New ID to avoid conflicts
         
-        // Clear the default master version and restore all versions from import
-        (importedNode as any).versions = []; // Clear default versions
-        
-        if (importData.versions && Array.isArray(importData.versions)) {
-            // Restore all versions with proper tag handling
-            importData.versions.forEach((versionData: any) => {
-                const restoredVersion = {
-                    id: versionData.id,
-                    content: versionData.content,
-                    title: versionData.title,
-                    context: versionData.context,
-                    tags: new Set(Array.isArray(versionData.tags) ? versionData.tags : []),
-                    timestamp: new Date(versionData.timestamp),
-                    ratings: versionData.ratings ? [...versionData.ratings] : undefined,
-                    creatorModel: versionData.creatorModel,
-                    metadata: versionData.metadata ? { ...versionData.metadata } : {}
-                };
-                (importedNode as any).versions.push(restoredVersion);
-            });
-        }
+        importedNode.importVersionsFromExport(importData.versions);
         
         // Restore other properties
         if (importData.generationPrompt) {
@@ -5850,7 +5720,7 @@ function importNodeData(projectManager: ProjectManager, targetNodeId: string, im
 
     // Import children recursively
     if (importData.children && Array.isArray(importData.children)) {
-        importData.children.forEach((childData: any, index: number) => {
+        importData.children.forEach((childData, index) => {
             importChildNode(projectManager, importedNode.id, childData, index);
         });
     }
@@ -5868,7 +5738,7 @@ function importNodeData(projectManager: ProjectManager, targetNodeId: string, im
 /**
  * Recursively import a child node and its descendants
  */
-function importChildNode(projectManager: ProjectManager, parentId: string, childData: any, index: number): void {
+function importChildNode(projectManager: ProjectManager, parentId: string, childData: NodeImportData, index: number): void {
     if (!childData.title) {
         console.warn(`Skipping child node at index ${index}: Missing title`);
         return;
@@ -5892,26 +5762,7 @@ function importChildNode(projectManager: ProjectManager, parentId: string, child
         // Now restore the version data and other properties
         newNode.id = `imported_${Date.now()}_${childData.id ?? 'unknown'}`; // New ID to avoid conflicts
         
-        // Clear the default master version and restore all versions from import
-        (newNode as any).versions = []; // Clear default versions
-        
-        if (childData.versions && Array.isArray(childData.versions)) {
-            // Restore all versions with proper tag handling
-            childData.versions.forEach((versionData: any) => {
-                const restoredVersion = {
-                    id: versionData.id,
-                    content: versionData.content,
-                    title: versionData.title,
-                    context: versionData.context,
-                    tags: new Set(Array.isArray(versionData.tags) ? versionData.tags : []),
-                    timestamp: new Date(versionData.timestamp),
-                    ratings: versionData.ratings ? [...versionData.ratings] : undefined,
-                    creatorModel: versionData.creatorModel,
-                    metadata: versionData.metadata ? { ...versionData.metadata } : {}
-                };
-                (newNode as any).versions.push(restoredVersion);
-            });
-        }
+        newNode.importVersionsFromExport(childData.versions);
         
         // Restore other properties
         if (childData.generationPrompt) {
@@ -5970,7 +5821,7 @@ function importChildNode(projectManager: ProjectManager, parentId: string, child
 
     // Recursively import children
     if (childData.children && Array.isArray(childData.children)) {
-        childData.children.forEach((grandChildData: any, grandChildIndex: number) => {
+        childData.children.forEach((grandChildData, grandChildIndex) => {
             importChildNode(projectManager, newNode.id, grandChildData, grandChildIndex);
         });
     }
@@ -6025,19 +5876,13 @@ async function handleUnifiedGeneration(node: DocumentNode): Promise<void> {
     }
 
     // Get level values from dropdowns
-    const draftLevelSelector = getElementById('draft-level-selector') as HTMLSelectElement;
-    const contentLevelSelector = getElementById('content-level-selector') as HTMLSelectElement;
+    const draftLevelSelector = getElementById<HTMLSelectElement>('draft-level-selector');
+    const contentLevelSelector = getElementById<HTMLSelectElement>('content-level-selector');
     // context-prune-level-selector removed - using conditional context system
-    const coherenceLevelSelector = getElementById('coherence-level-selector') as HTMLSelectElement;
-    const autofixSeveritySelector = getElementById('autofix-severity-selector') as HTMLSelectElement;
+    const coherenceLevelSelector = getElementById<HTMLSelectElement>('coherence-level-selector');
+    const autofixSeveritySelector = getElementById<HTMLSelectElement>('autofix-severity-selector');
     // pruneScopeSelector removed - prune scope UI removed
     
-    if (!draftLevelSelector || !contentLevelSelector || !coherenceLevelSelector || !autofixSeveritySelector) {
-        console.error('Level selector dropdowns not found');
-        return;
-    }
-
-    // Get level values
     const draftLevel = parseInt(draftLevelSelector.value);
     const contentLevel = parseInt(contentLevelSelector.value);
     // contextPruneLevel removed - using conditional context system
@@ -6104,11 +5949,11 @@ async function handleUnifiedGeneration(node: DocumentNode): Promise<void> {
                     contextService: pm.getContextService(),
                     promptService: pm.getPromptService(),
                     generationCoordinator: pm.getGenerationCoordinator(),
-                    loopOrchestrator: (pm as any).loopOrchestrator,
+                    loopOrchestrator: pm.getLoopOrchestrator(),
                     settingsManager: pm.getSettingsManager(),
-                    openRouterClient: (pm as any).openRouterClient,
-                    eventEmitter: pm as any,
-                    saveToStorage: () => pm.saveToStorage(),
+                    openRouterClient: pm.getOpenRouterClient(),
+                    eventEmitter: pm as unknown as EventEmitter<Record<string, unknown[]>>,
+                    saveToStorage: async () => { await pm.saveToStorage(); },
                     rootNode: pm.rootNode
                 });
                 await unifiedService.generateWithLevels(node.id, levels);
@@ -6224,8 +6069,8 @@ async function ensureIdeaBoardOpen(): Promise<void> {
 /**
  * Get idea board instance from global window object
  */
-async function getIdeaBoardInstance(): Promise<any> {
-    const ideaBoard = (window as any).currentIdeaBoard;
+function getIdeaBoardInstance(): IdeaBoard {
+    const ideaBoard = (window as Window & { currentIdeaBoard?: IdeaBoard }).currentIdeaBoard;
     if (!ideaBoard) {
         throw new Error('Could not access idea board instance');
     }
@@ -6239,10 +6084,10 @@ async function getIdeaBoardInstance(): Promise<any> {
  */
 async function sendContentToIdeaBoard(node: DocumentNode): Promise<void> {
     await ensureIdeaBoardOpen();
-    const ideaBoard = await getIdeaBoardInstance();
+    const ideaBoard = getIdeaBoardInstance();
     
     // Find free space on the canvas
-    const freeSpace = findFreeSpaceOnCanvas(ideaBoard);
+    const freeSpace = ideaBoard.findFreePlacement(300, 400);
     
     // Create single content sticker at free space location
     const contentSticker = ideaBoard.createNewPostIt({ x: freeSpace.x, y: freeSpace.y }, node.content);
@@ -6258,10 +6103,10 @@ async function sendContentToIdeaBoard(node: DocumentNode): Promise<void> {
  */
 async function sendContextToIdeaBoard(node: DocumentNode): Promise<void> {
     await ensureIdeaBoardOpen();
-    const ideaBoard = await getIdeaBoardInstance();
+    const ideaBoard = getIdeaBoardInstance();
     
     // Find free space on the canvas
-    const freeSpace = findFreeSpaceOnCanvas(ideaBoard);
+    const freeSpace = ideaBoard.findFreePlacement(300, 400);
     
     // Create single context sticker at free space location
     const contextSticker = ideaBoard.createNewPostIt({ x: freeSpace.x, y: freeSpace.y }, 'Conditional context available'); // Traditional context removed
@@ -6277,10 +6122,10 @@ async function sendContextToIdeaBoard(node: DocumentNode): Promise<void> {
  */
 async function sendBothToIdeaBoard(node: DocumentNode): Promise<void> {
     await ensureIdeaBoardOpen();
-    const ideaBoard = await getIdeaBoardInstance();
+    const ideaBoard = getIdeaBoardInstance();
     
     // Find free space on the canvas
-    const freeSpace = findFreeSpaceOnCanvas(ideaBoard);
+    const freeSpace = ideaBoard.findFreePlacement(300, 400);
     
     try {
         // Create background rectangle (light blue)
@@ -6343,62 +6188,6 @@ async function openIdeaBoardModal(): Promise<void> {
     }
 }
 
-/**
- * Find free space on the idea board canvas
- */
-function findFreeSpaceOnCanvas(ideaBoard: any): { x: number; y: number; width: number; height: number } {
-    // Get all existing elements to avoid overlap
-    const existingElements: any[] = [];
-    
-    // Get elements from the idea board
-    for (const element of ideaBoard.elements.values()) {
-        if (element.position) {
-            existingElements.push(element);
-        }
-    }
-    
-    // Define the space we need (background + 2 stickers with padding)
-    const neededWidth = 300;
-    const neededHeight = 400;
-    
-    // Get the center of the current viewport (where user is looking)
-    const viewportCenterX = ideaBoard.viewport.x + ideaBoard.viewport.width / (2 * ideaBoard.viewport.zoom);
-    const viewportCenterY = ideaBoard.viewport.y + ideaBoard.viewport.height / (2 * ideaBoard.viewport.zoom);
-    
-    // Try to find free space in a spiral pattern starting from viewport center
-    for (let radius = 0; radius < 500; radius += 50) {
-        for (let angle = 0; angle < 360; angle += 45) {
-            const x = viewportCenterX + Math.cos(angle * Math.PI / 180) * radius - neededWidth / 2;
-            const y = viewportCenterY + Math.sin(angle * Math.PI / 180) * radius - neededHeight / 2;
-            
-            // Check if this position has enough free space
-            const hasOverlap = existingElements.some((element: any) => {
-                if (!element.position) return false;
-                
-                const elementRight = element.position.x + (element.size?.width ?? 225);
-                const elementBottom = element.position.y + (element.size?.height ?? 150);
-                const testRight = x + neededWidth;
-                const testBottom = y + neededHeight;
-                
-                return !(x > elementRight || testRight < element.position.x || 
-                        y > elementBottom || testBottom < element.position.y);
-            });
-            
-            if (!hasOverlap) {
-                return { x, y, width: neededWidth, height: neededHeight };
-            }
-        }
-    }
-    
-    // Fallback to a position near viewport center if no free space found
-    return { 
-        x: viewportCenterX - neededWidth / 2 + 300, 
-        y: viewportCenterY - neededHeight / 2, 
-        width: neededWidth, 
-        height: neededHeight 
-    };
-}
-
 // === CENTRALIZED EVENT LISTENER SYSTEM ===
 
 /**
@@ -6406,18 +6195,18 @@ function findFreeSpaceOnCanvas(ideaBoard: any): { x: number; y: number; width: n
  * TODO: Migrate to MainUIEventRegistry for better event management
  */
 export const buttonHandlers: Record<string, (event: Event) => void> = {
-    'node-generate-btn': (_e: Event) => {
+    'node-generate-btn': () => {
         if (!projectManager || !selectedNodeId) return;
         const node = projectManager.findNodeById(selectedNodeId);
         if (!node) return;
         void handleUnifiedGeneration(node);
     },
 
-    'generation-explainer-btn': (_e: Event) => {
+    'generation-explainer-btn': () => {
         window.open('./creation-loop.html', '_blank', 'width=1200,height=800,scrollbars=yes,resizable=yes');
     },
     
-    'xml-story-creation-btn': (_e: Event) => {
+    'xml-story-creation-btn': () => {
         // XML Story Creation button clicked - initialize with current node data
         if (!projectManager || !selectedNodeId) {
             // No active project/node - open empty modal
@@ -6454,7 +6243,7 @@ export const buttonHandlers: Record<string, (event: Event) => void> = {
         });
     },
 
-    'guided-review-btn': (_e: Event) => {
+    'guided-review-btn': () => {
         if (!projectManager || !selectedNodeId) {
             alert('Select a node first to start a guided review.');
             return;
@@ -6480,7 +6269,7 @@ export const buttonHandlers: Record<string, (event: Event) => void> = {
     
 
     
-    'context-info-btn': (_e: Event) => {
+    'context-info-btn': () => {
         if (!projectManager || !selectedNodeId) return;
         const node = projectManager.findNodeById(selectedNodeId);
         if (!node) return;
@@ -6489,7 +6278,7 @@ export const buttonHandlers: Record<string, (event: Event) => void> = {
         console.log('Context items editor removed - use conditional context editor instead');
     },
     
-    'edit-context-btn': (_e: Event) => {
+    'edit-context-btn': () => {
         if (!projectManager || !selectedNodeId) return;
         const node = projectManager.findNodeById(selectedNodeId);
         if (!node) return;
@@ -6499,7 +6288,7 @@ export const buttonHandlers: Record<string, (event: Event) => void> = {
             console.log('Context editor removed - use conditional context editor instead');
     },
     
-    'node-inspector-btn': (_e: Event) => {
+    'node-inspector-btn': () => {
         if (!projectManager || !selectedNodeId) return;
         const node = projectManager.findNodeById(selectedNodeId);
         if (!node) return;
@@ -6514,7 +6303,7 @@ export const buttonHandlers: Record<string, (event: Event) => void> = {
         });
     },
     
-    'open-reader-btn': (_e: Event) => {
+    'open-reader-btn': () => {
         if (!projectManager || !selectedNodeId) return;
         const selectedNode = projectManager.findNodeById(selectedNodeId);
         if (!selectedNode) return;
@@ -6528,7 +6317,8 @@ export const buttonHandlers: Record<string, (event: Event) => void> = {
         });
     },
     
-    'overview-board-btn': async (_e: Event) => {
+    'overview-board-btn': () => {
+        void (async () => {
         if (!projectManager) {
             alert('No active project found. Please select or create a project first.');
             return;
@@ -6569,17 +6359,18 @@ export const buttonHandlers: Record<string, (event: Event) => void> = {
                 closable: true
             });
             
-            modal.open();
+            void modal.open();
                             // Overview Board modal opened
         } catch (error) {
             console.error('❌ Failed to open Overview Board:', error);
             alert('Failed to open Overview Board. Please try again.');
         }
+        })();
     },
 
 
     
-    'version-prev-btn': (_e: Event) => {
+    'version-prev-btn': () => {
         if (currentVersionIndex > 0) {
             currentVersionIndex--;
             updateVersionNavigationUI();
@@ -6587,7 +6378,7 @@ export const buttonHandlers: Record<string, (event: Event) => void> = {
         }
     },
     
-    'version-next-btn': (_e: Event) => {
+    'version-next-btn': () => {
         if (currentVersionIndex < availableVersions.length - 1) {
             currentVersionIndex++;
             updateVersionNavigationUI();
@@ -6595,7 +6386,7 @@ export const buttonHandlers: Record<string, (event: Event) => void> = {
         }
     },
     
-    'use-this-version-btn': (_e: Event) => {
+    'use-this-version-btn': () => {
         if (!projectManager || !selectedNodeId) return;
         const node = projectManager.findNodeById(selectedNodeId);
         if (!node || !availableVersions[currentVersionIndex]) return;
@@ -6614,8 +6405,8 @@ export const buttonHandlers: Record<string, (event: Event) => void> = {
         if (enhancedContentEditor) {
             enhancedContentEditor.value = node.content;
         } else {
-            const contentTextArea = document.getElementById('node-content') as HTMLTextAreaElement;
-            if (contentTextArea) {
+            const contentTextArea = document.getElementById('node-content');
+            if (contentTextArea instanceof HTMLTextAreaElement) {
                 contentTextArea.value = node.content;
             }
         }
@@ -6635,7 +6426,7 @@ export const buttonHandlers: Record<string, (event: Event) => void> = {
         }
     },
 
-    'search-btn': (_e: Event) => {
+    'search-btn': () => {
         if (!projectManager || !selectedNodeId) return;
         const node = projectManager.findNodeById(selectedNodeId);
         if (!node) return;
@@ -6649,7 +6440,8 @@ export const buttonHandlers: Record<string, (event: Event) => void> = {
         });
     },
 
-    'set-project-language-btn': async (_e: Event) => {
+    'set-project-language-btn': () => {
+        void (async () => {
         if (!selectedNodeId || !projectManager) {
             alert('Please select a project root to set the project language.');
             return;
@@ -6667,6 +6459,7 @@ export const buttonHandlers: Record<string, (event: Event) => void> = {
             console.error('Failed to set project language:', error);
             alert('Failed to set project language. Please try again.');
         }
+        })();
     }
 };
 
@@ -6678,22 +6471,22 @@ function removeAllListeners() {
     
     // Remove click listeners from all tracked buttons
     Object.keys(buttonHandlers).forEach(buttonId => {
-        const button = document.getElementById(buttonId);
+        const button = document.getElementById(buttonId) as ExpertTrackedElement | null;
         if (button) {
-            const handler = (button as any)._expertHandler;
+            const handler = button._expertHandler;
             if (handler) {
                 button.removeEventListener('click', handler);
-                delete (button as any)._expertHandler;
+                delete button._expertHandler;
             }
         }
     });
     
     // Remove main content delegation listener
-    const mainContent = getElementById('main-content');
-    const existingListener = (mainContent as any)._expertEventListener;
+    const mainContent = getElementById<ExpertTrackedElement>('main-content');
+    const existingListener = mainContent._expertEventListener;
     if (existingListener) {
         mainContent.removeEventListener('click', existingListener);
-        delete (mainContent as any)._expertEventListener;
+        delete mainContent._expertEventListener;
     }
 }
 
@@ -6735,7 +6528,7 @@ function buildTodoIndicatorCache(rootNode: DocumentNode, clearCache: boolean = t
         let hasAnyTodos = false;
         
         // Check if this node itself has todos
-        if (node.todos && node.todos.length > 0) {
+        if (node.todos.length > 0) {
             // Only count incomplete todos
             const incompleteTodos = node.getIncompleteTodos();
             if (incompleteTodos.length > 0) {
@@ -6767,9 +6560,10 @@ function buildTodoIndicatorCache(rootNode: DocumentNode, clearCache: boolean = t
  * Set up global Ctrl+F search handler
  */
 function setupGlobalSearchHandler(): void {
+    const expertDocument = document as ExpertDocument;
     // Remove existing handler if any
-    if ((document as any)._globalSearchHandler) {
-        document.removeEventListener('keydown', (document as any)._globalSearchHandler);
+    if (expertDocument._globalSearchHandler) {
+        document.removeEventListener('keydown', expertDocument._globalSearchHandler);
     }
 
     const globalSearchHandler = (event: KeyboardEvent): void => {
@@ -6779,7 +6573,7 @@ function setupGlobalSearchHandler(): void {
             const activeElement = document.activeElement;
             
             // If the active element is within a text-editor-with-highlighting, let it handle Ctrl+F
-            if (activeElement && activeElement.closest('.text-editor-with-highlighting')) {
+            if (activeElement?.closest('.text-editor-with-highlighting')) {
                 return; // Let UniversalTextEditor handle this
             }
             
@@ -6820,5 +6614,5 @@ function setupGlobalSearchHandler(): void {
     document.addEventListener('keydown', globalSearchHandler);
     
     // Store reference for cleanup
-    (document as any)._globalSearchHandler = globalSearchHandler;
+    expertDocument._globalSearchHandler = globalSearchHandler;
 }

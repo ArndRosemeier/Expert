@@ -37,10 +37,20 @@ export interface LoopProgress {
     iteration: number;
     maxIterations: number;
     phase: 'create' | 'rate' | 'edit';
-    payload?: CreatorPayload | EditorPayload | any; // Allow payload for progress updates
+    payload?: CreatorPayload | EditorPayload | LoopRateProgressPayload | LoopRateResultPayload;
     ratings?: Rating[];
     failureScore?: number;
     progress?: number; // 0-100 percentage
+}
+
+interface LoopRateProgressPayload {
+    criterion: string;
+    rating: Rating;
+}
+
+interface LoopRateResultPayload {
+    ratings: Rating[];
+    goalResults: string[];
 }
 
 export interface LoopHistoryItem {
@@ -182,8 +192,8 @@ export class LoopOrchestrator extends EventEmitter<OrchestratorEvents> {
         return this.isRunning;
     }
 
-    public getCurrentIteration(): number {
-        return this.currentIteration;
+    private shouldAbort(): boolean {
+        return this.stopRequested;
     }
 
     /**
@@ -195,7 +205,7 @@ export class LoopOrchestrator extends EventEmitter<OrchestratorEvents> {
             throw new Error('No content provided for rating');
         }
 
-        if (!criteria || criteria.length === 0) {
+        if (criteria.length === 0) {
             throw new Error('No criteria provided for rating');
         }
 
@@ -322,7 +332,7 @@ export class LoopOrchestrator extends EventEmitter<OrchestratorEvents> {
             } else {
                 // For generation from scratch, we build the initial prompt from the template.
                 const context = PromptContextBuilder.fromLegacyParams(
-                    { getLanguage: () => this.language, getCriteria: () => [] } as any,
+                    { getLanguage: () => this.language, getCriteria: () => [] },
                     {
                         prompt: input.prompt,
                         // Include metric guidance so the creator is aware of the
@@ -333,7 +343,7 @@ export class LoopOrchestrator extends EventEmitter<OrchestratorEvents> {
                 );
                 initialPrompt = this.expansionService.expandPrompt(this.prompts.content_generation_initial, context, this.language);
                 
-                if (this.stopRequested) {
+                if (this.abortController.signal.aborted) {
                     aborted = true;
                     throw new Error('Generation aborted by user');
                 }
@@ -378,7 +388,7 @@ export class LoopOrchestrator extends EventEmitter<OrchestratorEvents> {
             for (let i = 1; i <= maxIterations; i++) {
                 this.currentIteration = i;
                 
-                if (this.stopRequested) {
+                if (this.abortController.signal.aborted) {
                     console.log(`🛑 LoopOrchestrator: Iteration ${i} aborted by user`);
                     aborted = true;
                     break;
@@ -406,7 +416,7 @@ export class LoopOrchestrator extends EventEmitter<OrchestratorEvents> {
                     ratingsFromAI = [];
                 } else {
                     for (let attempt = 0; attempt < maxRetries; attempt++) {
-                        if (this.stopRequested) {
+                        if (this.shouldAbort()) {
                             aborted = true;
                             break;
                         }
@@ -457,7 +467,7 @@ export class LoopOrchestrator extends EventEmitter<OrchestratorEvents> {
                 let allGoalsMet = true;
                 const goalResults: string[] = [];
                 for (const rating of combinedRatings) {
-                    if (this.stopRequested) {
+                    if (this.shouldAbort()) {
                         aborted = true;
                         break;
                     }
@@ -512,7 +522,7 @@ export class LoopOrchestrator extends EventEmitter<OrchestratorEvents> {
                         editorModelName
                     );
 
-                    if (this.stopRequested) {
+                    if (this.shouldAbort()) {
                         aborted = true;
                         break;
                     }
@@ -627,7 +637,7 @@ export class LoopOrchestrator extends EventEmitter<OrchestratorEvents> {
 
         
         const context = PromptContextBuilder.fromLegacyParams(
-            { getLanguage: () => this.language, getCriteria: () => [] } as any,
+            { getLanguage: () => this.language, getCriteria: () => [] },
             {
                 originalPrompt: prompt,
                 response: response,
@@ -726,7 +736,7 @@ export class LoopOrchestrator extends EventEmitter<OrchestratorEvents> {
             : 'a structured outline (not finished prose)';
 
         const context = PromptContextBuilder.fromLegacyParams(
-            { getLanguage: () => this.language, getCriteria: () => [] } as any,
+            { getLanguage: () => this.language, getCriteria: () => [] },
             {
                 originalPrompt: originalPrompt,
                 response: response,

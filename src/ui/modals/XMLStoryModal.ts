@@ -18,7 +18,8 @@ import { OpenRouterClient, OpenRouterMessage } from '../../OpenRouterClient';
 import { createXMLStorySystem } from '../../xml-story-creation';
 import type { XMLStoryEvent } from '../../xml-story-creation';
 import { DEFAULT_XML_STORY_CONFIG } from '../../xml-story-creation/types/XMLStoryTypes';
-import type { SystemCommand } from '../../xml-story-creation/types/XMLStoryTypes';
+import type { HumanEdit, SystemCommand } from '../../xml-story-creation/types/XMLStoryTypes';
+import { getElementById } from '../dom-elements';
 import { TargetedTextEditor } from '../../text-edit/TargetedTextEditor';
 import { createPromptExpansionService } from '../../services/PromptExpansionService';
 import { ModelSelector } from '../../ModelSelector';
@@ -126,16 +127,6 @@ const DEFAULT_ADVISOR_PRESETS: AdvisorPreset[] = [
     }
 ];
 
-interface XMLStoryCommand {
-    type: string;
-    content?: string;
-    markerId?: string;
-    parameters?: unknown;
-    searchText?: string;
-    replaceText?: string;
-    [key: string]: unknown;
-}
-
 export interface XMLStoryModalConfig extends ModalConfig {
     settingsManager: SettingsManager;
     openRouterClient: OpenRouterClient;
@@ -183,7 +174,7 @@ export class XMLStoryModal extends SimpleModal {
     // Legacy editing flag removed
     
     // Failed commands collection for user-prompted correction
-    private failedCommands: Array<{ command: XMLStoryCommand; error: string; rawXml: string }> = [];
+    private failedCommands: Array<{ command: SystemCommand; error: string; rawXml: string }> = [];
     
     // ARCHITECTURE NOTE: Outline content is stored here as text (outlineHistory),
     // while context items are stored as XML elements in XMLStoryService.
@@ -240,7 +231,7 @@ export class XMLStoryModal extends SimpleModal {
                             id: 'cancel',
                             label: 'Cancel',
                             type: 'outline',
-                            handler: async () => {
+                            handler: () => {
                                 // Do nothing, just close this confirmation modal
                                 resolve();
                             }
@@ -1459,9 +1450,9 @@ export class XMLStoryModal extends SimpleModal {
         });
 
         // Split into parts button
-        const splitBtn = container.querySelector('#split-into-parts-btn') as HTMLButtonElement | null;
-        if (!splitBtn) throw new Error('Split Into Parts button missing');
-        splitBtn.addEventListener('click', () => { void this.splitSourceNodeIntoParts(splitBtn); });
+        const splitBtnEl = container.querySelector('#split-into-parts-btn');
+        if (!(splitBtnEl instanceof HTMLButtonElement)) throw new Error('Split Into Parts button missing');
+        splitBtnEl.addEventListener('click', () => { void this.splitSourceNodeIntoParts(splitBtnEl); });
 
         // Close modal button with unsaved changes check (3 options)
         const closeBtn = container.querySelector('#close-modal-btn');
@@ -1520,7 +1511,7 @@ export class XMLStoryModal extends SimpleModal {
         
         // Apply initialization data if provided, or set default message
         if (this.pendingInitializationData) {
-            await this.applyInitializationData(this.pendingInitializationData);
+            this.applyInitializationData(this.pendingInitializationData);
             this.pendingInitializationData = undefined;
             
             // Re-initialize the outline editor now that we have proper history
@@ -1748,7 +1739,7 @@ export class XMLStoryModal extends SimpleModal {
      *
      * @returns true to approve (send to Editor), false to discard.
      */
-    private requestAdvisorApproval(): Promise<boolean> {
+    private async requestAdvisorApproval(): Promise<boolean> {
         return new Promise<boolean>((resolve) => {
             const sendBtn = this.sendButton;
             const advisorBtn = this.advisorButton;
@@ -2386,7 +2377,7 @@ export class XMLStoryModal extends SimpleModal {
                 .filter(el => el.type === 'context').length;
 
             // Process AI response through XML system (do not remove commands from text)
-            const parseResult = await this.storySystem.processAIResponse(response);
+            const parseResult = this.storySystem.processAIResponse(response);
 
             // Handle outline_replace commands and mark executed
             for (const command of parseResult.systemCommands) {
@@ -2394,7 +2385,7 @@ export class XMLStoryModal extends SimpleModal {
                     this.setOutlineContentFromAI(command.content);
                     // Reconstruct raw XML if parser didn't retain it
                     const reconstructed = `</outline_replace>${command.content}</outline_replace>`;
-                    (command as any).executedRaw = (command as any).rawXml ?? reconstructed;
+                    command.executedRaw = command.rawXml ?? reconstructed;
                 }
             }
 
@@ -2414,7 +2405,7 @@ export class XMLStoryModal extends SimpleModal {
                         // Apply trigger words / structural scope / leaves-only when provided.
                         this.applyContextCommandFields(newId, command.parameters ?? {}, false);
                         contextChanged = true;
-                        (command as any).executedRaw = (command as any).rawXml ?? '';
+                        command.executedRaw = command.rawXml ?? '';
                     } else if (command.type === 'context_edit') {
                         if (!command.parameters) {
                             throw new Error(`context_edit command missing parameters. Command: ${JSON.stringify(command)}`);
@@ -2426,16 +2417,16 @@ export class XMLStoryModal extends SimpleModal {
                         // Only the supplied facets are updated, leaving the rest intact.
                         this.applyContextCommandFields(id, command.parameters, true);
                         contextChanged = true;
-                        (command as any).executedRaw = (command as any).rawXml ?? '';
+                        command.executedRaw = command.rawXml ?? '';
                     } else if (command.type === 'context_remove') {
                         const id = command.parameters?.['id'];
                         if (!id) continue;
                         this.sourceNode!.removeConditionalContextItem(id);
                         contextChanged = true;
-                        (command as any).executedRaw = (command as any).rawXml ?? '';
+                        command.executedRaw = command.rawXml ?? '';
                     } else if (command.type === 'request_node') {
                         const path = command.parameters?.['path'] ?? '';
-                        (command as any).executedRaw = (command as any).rawXml ?? '';
+                        command.executedRaw = command.rawXml ?? '';
                         if (path.trim().length > 0) {
                             requestedPaths.push(path);
                         }
@@ -2444,8 +2435,8 @@ export class XMLStoryModal extends SimpleModal {
                     // Record the failure loudly (console + user-facing failure notice
                     // via showCommandFailureNotice below) and keep applying the rest.
                     const message = error instanceof Error ? error.message : String(error);
-                    const rawXml = command.rawXml ?? this.reconstructCommandXML(command as unknown as XMLStoryCommand);
-                    this.failedCommands.push({ command: command as unknown as XMLStoryCommand, error: message, rawXml });
+                    const rawXml = command.rawXml ?? this.reconstructCommandXML(command);
+                    this.failedCommands.push({ command, error: message, rawXml });
                     console.error('Context command failed (batch continues):', message, command);
                 }
             }
@@ -2464,7 +2455,7 @@ export class XMLStoryModal extends SimpleModal {
             this.failedCommands = [];
 
             // Display the original text (with commands left in) and apply generic XML formatting
-            const formatted = this.formatXMLBlocksGenerically(response, parseResult.systemCommands as unknown as XMLStoryCommand[], failures);
+            const formatted = this.formatXMLBlocksGenerically(response, parseResult.systemCommands, failures);
             this.updateStreamingMessageWithHTML(placeholderMessage, formatted);
             this.finalizeStreamingMessage(placeholderMessage);
 
@@ -2553,7 +2544,7 @@ export class XMLStoryModal extends SimpleModal {
         contentDiv.className = 'message-content';
         
         // Use markdown formatting for non-empty content
-        if (content && content.trim()) {
+        if (content.trim()) {
             contentDiv.innerHTML = this.parseMarkdownForChat(content);
         } else {
             contentDiv.textContent = content;
@@ -2650,10 +2641,10 @@ export class XMLStoryModal extends SimpleModal {
     }
 
     // Generic XML formatter: wrap any <.../> or <tag>...</tag> blocks in a styled box, command-agnostic.
-    private formatXMLBlocksGenerically(text: string, commands: XMLStoryCommand[] = [], failed: Array<{ rawXml: string; error: string }> = []): string {
+    private formatXMLBlocksGenerically(text: string, commands: SystemCommand[] = [], failed: Array<{ rawXml: string; error: string }> = []): string {
         const executedRawSet = new Set(
-            (commands || [])
-                .map(c => (c as any).executedRaw as string | undefined)
+            commands
+                .map(c => c.executedRaw)
                 .filter((s): s is string => typeof s === 'string' && s.length > 0)
         );
         // Fuzzy set to tolerate insignificant whitespace differences
@@ -2674,8 +2665,7 @@ export class XMLStoryModal extends SimpleModal {
         const matches = Array.from(text.matchAll(xmlRegex));
 
         for (const match of matches) {
-            const index = (match as any).index as number | undefined;
-            if (index === undefined) continue;
+            const index = match.index;
 
             if (index > lastIndex) {
                 const nonXml = text.slice(lastIndex, index);
@@ -2879,8 +2869,8 @@ export class XMLStoryModal extends SimpleModal {
      */
     private mountConditionalContextEditor(): void {
         if (!this.whiteboardContainer || !this.sourceNode) return;
-        const host = this.whiteboardContainer.querySelector('#conditional-context-host') as HTMLElement | null;
-        if (!host) return;
+        const hostEl = this.whiteboardContainer.querySelector('#conditional-context-host');
+        if (!(hostEl instanceof HTMLElement)) return;
 
         const project = findProjectByNode(this.sourceNode);
         if (!project) throw new Error('XMLStoryModal: source node is not part of a known project');
@@ -2897,7 +2887,7 @@ export class XMLStoryModal extends SimpleModal {
             // as orphaned.
             prospectiveChildTitles: () => this.getProspectiveChildTitles()
         });
-        this.ccEditor.mount(host);
+        this.ccEditor.mount(hostEl);
     }
 
     /**
@@ -3229,7 +3219,7 @@ export class XMLStoryModal extends SimpleModal {
         }
 
         let formatted = 'RECENT HUMAN EDITS:\n\n';
-        pendingEdits.forEach((edit: any) => {
+        pendingEdits.forEach((edit: HumanEdit) => {
             formatted += `${edit.elementType.toUpperCase()} EDIT (${edit.elementId}):\n`;
             formatted += `- ${edit.field} changed from: "${edit.oldValue}"\n`;
             formatted += `- ${edit.field} changed to: "${edit.newValue}"\n\n`;
@@ -3282,8 +3272,8 @@ export class XMLStoryModal extends SimpleModal {
     /**
      * Handle command failures by collecting them for user-prompted correction
      */
-    private async handleCommandFailure(event: XMLStoryEvent): Promise<void> {
-        const { command, error } = event.payload as { command: XMLStoryCommand; error: string };
+    private handleCommandFailure(event: XMLStoryEvent): void {
+        const { command, error } = event.payload as { command: SystemCommand; error: string };
         
         // Command failed during execution
         
@@ -3299,7 +3289,7 @@ export class XMLStoryModal extends SimpleModal {
     /**
      * Reconstruct XML command from command object for user display
      */
-    private reconstructCommandXML(command: XMLStoryCommand): string {
+    private reconstructCommandXML(command: SystemCommand): string {
         switch (command.type) {
             case 'replace_command':
                 return `<replace_command><search>${command.searchText ?? ''}</search><replace>${command.replaceText ?? ''}</replace></replace_command>`;
@@ -3308,32 +3298,32 @@ export class XMLStoryModal extends SimpleModal {
             case 'append':
                 return `<append>${command.content ?? ''}</append>`;
             case 'replace_section':
-                return `<replace_section section="${command['sectionTitle'] ?? ''}">${command.content ?? ''}</replace_section>`;
+                return `<replace_section section="${command.sectionTitle ?? ''}">${command.content ?? ''}</replace_section>`;
             case 'remove_section':
-                return `<remove_section section="${command['sectionTitle'] ?? ''}">`;
+                return `<remove_section section="${command.sectionTitle ?? ''}">`;
             case 'edit':
-                return `</edit id="${(command.parameters as any)?.id ?? 'unknown'}">${command.content ?? ''}</edit>`;
+                return `</edit id="${command.parameters?.['id'] ?? 'unknown'}">${command.content ?? ''}</edit>`;
             case 'delete':
-                return `</delete id="${(command.parameters as any)?.id ?? 'unknown'}">`;
+                return `</delete id="${command.parameters?.['id'] ?? 'unknown'}">`;
             case 'context_add': {
-                const p = (command.parameters as Record<string, unknown>) || {};
-                const text = typeof p['text'] === 'string' ? (p['text'] as string) : '';
+                const p = command.parameters ?? {};
+                const text = p['text'] ?? '';
                 return `<context text="${text}"${this.reconstructContextScopeAttrs(p)} />`;
             }
             case 'context_edit': {
-                const p = (command.parameters as Record<string, unknown>) || {};
-                const id = typeof p['id'] === 'string' && (p['id'] as string).length > 0 ? (p['id'] as string) : 'unknown';
-                const text = typeof p['text'] === 'string' ? ` text="${p['text'] as string}"` : '';
-                return `<context id="${id}"${text}${this.reconstructContextScopeAttrs(p)} />`;
+                const p = command.parameters ?? {};
+                const id = p['id']?.length ? p['id'] : 'unknown';
+                const textAttr = p['text']?.length ? ` text="${p['text']}"` : '';
+                return `<context id="${id}"${textAttr}${this.reconstructContextScopeAttrs(p)} />`;
             }
             case 'context_remove': {
-                const p = (command.parameters as Record<string, unknown>) || {};
-                const id = typeof p['id'] === 'string' && (p['id'] as string).length > 0 ? (p['id'] as string) : 'unknown';
+                const p = command.parameters ?? {};
+                const id = p['id']?.length ? p['id'] : 'unknown';
                 return `<context id="${id}" remove="true" />`;
             }
             case 'request_node': {
-                const p = (command.parameters as Record<string, unknown>) || {};
-                const path = typeof p['path'] === 'string' ? (p['path'] as string) : '';
+                const p = command.parameters ?? {};
+                const path = p['path'] ?? '';
                 return `<requestnode path="${path}" />`;
             }
             default:
@@ -3345,12 +3335,12 @@ export class XMLStoryModal extends SimpleModal {
      * Reconstruct the optional scope attributes (trigger/scope/children/leaves) for a
      * failed context command echo, including only the attributes that were supplied.
      */
-    private reconstructContextScopeAttrs(p: Record<string, unknown>): string {
+    private reconstructContextScopeAttrs(p: Record<string, string>): string {
         let attrs = '';
-        if (typeof p['trigger'] === 'string' && p['trigger'].length > 0) attrs += ` trigger="${p['trigger']}"`;
-        if (typeof p['scope'] === 'string' && p['scope'].length > 0) attrs += ` scope="${p['scope']}"`;
-        if (typeof p['children'] === 'string' && p['children'].length > 0) attrs += ` children="${p['children']}"`;
-        if (typeof p['leaves'] === 'string' && p['leaves'].length > 0) attrs += ` leaves="${p['leaves']}"`;
+        if (p['trigger']?.length) attrs += ` trigger="${p['trigger']}"`;
+        if (p['scope']?.length) attrs += ` scope="${p['scope']}"`;
+        if (p['children']?.length) attrs += ` children="${p['children']}"`;
+        if (p['leaves']?.length) attrs += ` leaves="${p['leaves']}"`;
         return attrs;
     }
 
@@ -3364,7 +3354,7 @@ export class XMLStoryModal extends SimpleModal {
      * to ask the AI to fix them. Because the button is a genuine user gesture, it
      * is not subject to the inactive-tab suppression that broke the old dialog.
      */
-    private showCommandFailureNotice(failures: Array<{ command: XMLStoryCommand; error: string; rawXml: string }>): void {
+    private showCommandFailureNotice(failures: Array<{ command: SystemCommand; error: string; rawXml: string }>): void {
         const count = failures.length;
         const reasonList = failures
             .map(f => `• ${f.command.type}: ${f.error}`)
@@ -3427,16 +3417,16 @@ export class XMLStoryModal extends SimpleModal {
      * handled here in the modal, not in the service layer.
      */
     private handleOutlineAppend(event: XMLStoryEvent): void {
-        const { command } = event.payload as { command: XMLStoryCommand };
+        const { command } = event.payload as { command: SystemCommand };
         const currentContent = this.getCurrentOutlineSafe();
-        const outcome = TargetedTextEditor.applyOne(currentContent, command as unknown as SystemCommand);
+        const outcome = TargetedTextEditor.applyOne(currentContent, command);
         if (!outcome.ok || outcome.newText === undefined) {
             this.emitCommandFailure(command, outcome.message);
             return;
         }
         this.setOutlineContentFromAI(outcome.newText);
         // Mark executed so chat can show the checkmark in a command-agnostic way
-        (command as any).executedRaw = (command as any).rawXml ?? '';
+        command.executedRaw = command.rawXml ?? '';
     }
 
     /**
@@ -3448,9 +3438,9 @@ export class XMLStoryModal extends SimpleModal {
      * matching/replacement logic lives in the shared TargetedTextEditor.
      */
     private handleOutlineReplace(event: XMLStoryEvent): void {
-        const { command } = event.payload as { command: XMLStoryCommand };
+        const { command } = event.payload as { command: SystemCommand };
         const currentContent = this.getCurrentOutlineSafe();
-        const outcome = TargetedTextEditor.applyOne(currentContent, command as unknown as SystemCommand);
+        const outcome = TargetedTextEditor.applyOne(currentContent, command);
         if (!outcome.ok || outcome.newText === undefined) {
             this.emitCommandFailure(command, outcome.message);
             return;
@@ -3471,7 +3461,7 @@ export class XMLStoryModal extends SimpleModal {
             );
         }
         // Mark executed so chat can show the checkmark in a command-agnostic way
-        (command as any).executedRaw = (command as any).rawXml ?? '';
+        command.executedRaw = command.rawXml ?? '';
     }
 
     /**
@@ -3479,16 +3469,16 @@ export class XMLStoryModal extends SimpleModal {
      * Replaces a specific ===<title>=== section with new content
      */
     private handleSectionReplace(event: XMLStoryEvent): void {
-        const { command } = event.payload as { command: XMLStoryCommand };
+        const { command } = event.payload as { command: SystemCommand };
         const currentContent = this.getCurrentOutlineSafe();
-        const outcome = TargetedTextEditor.applyOne(currentContent, command as unknown as SystemCommand);
+        const outcome = TargetedTextEditor.applyOne(currentContent, command);
         if (!outcome.ok || outcome.newText === undefined) {
             this.emitCommandFailure(command, outcome.message);
             return;
         }
         this.setOutlineContentFromAI(outcome.newText);
         // Mark executed so chat can show the checkmark in a command-agnostic way
-        (command as any).executedRaw = (command as any).rawXml ?? '';
+        command.executedRaw = command.rawXml ?? '';
     }
 
     /**
@@ -3496,22 +3486,22 @@ export class XMLStoryModal extends SimpleModal {
      * Removes a specific ===<title>=== section entirely
      */
     private handleSectionRemove(event: XMLStoryEvent): void {
-        const { command } = event.payload as { command: XMLStoryCommand };
+        const { command } = event.payload as { command: SystemCommand };
         const currentContent = this.getCurrentOutlineSafe();
-        const outcome = TargetedTextEditor.applyOne(currentContent, command as unknown as SystemCommand);
+        const outcome = TargetedTextEditor.applyOne(currentContent, command);
         if (!outcome.ok || outcome.newText === undefined) {
             this.emitCommandFailure(command, outcome.message);
             return;
         }
         this.setOutlineContentFromAI(outcome.newText);
         // Mark executed so chat can show the checkmark in a command-agnostic way
-        (command as any).executedRaw = (command as any).rawXml ?? '';
+        command.executedRaw = command.rawXml ?? '';
     }
 
     /**
      * Emit a command failure event for retry logic
      */
-    private emitCommandFailure(command: XMLStoryCommand, error: string): void {
+    private emitCommandFailure(command: SystemCommand, error: string): void {
         this.storySystem.service.emitEvent({
             type: 'command_failed',
             payload: { command, error },
@@ -3731,8 +3721,7 @@ export class XMLStoryModal extends SimpleModal {
      * Set visual feedback state for the update button
      */
     private setUpdateButtonState(state: 'loading' | 'success' | 'error' | 'normal', message?: string): void {
-        const updateButton = document.getElementById('create-project-btn') as HTMLButtonElement;
-        if (!updateButton) return;
+        const updateButton = getElementById<HTMLButtonElement>('create-project-btn');
 
         // Reset classes
         updateButton.classList.remove('loading', 'success', 'error');
@@ -4088,17 +4077,12 @@ export class XMLStoryModal extends SimpleModal {
      * Update outline control button states
      */
     private updateOutlineControls(): void {
-        const undoBtn = document.getElementById('outline-undo-btn') as HTMLButtonElement;
-        const redoBtn = document.getElementById('outline-redo-btn') as HTMLButtonElement;
+        const undoBtn = getElementById<HTMLButtonElement>('outline-undo-btn');
+        const redoBtn = getElementById<HTMLButtonElement>('outline-redo-btn');
         const versionInfo = document.querySelector('.outline-version-info');
 
-        if (undoBtn) {
-            undoBtn.disabled = this.currentOutlineVersion <= 0;
-        }
-
-        if (redoBtn) {
-            redoBtn.disabled = this.currentOutlineVersion >= this.outlineHistory.length - 1;
-        }
+        undoBtn.disabled = this.currentOutlineVersion <= 0;
+        redoBtn.disabled = this.currentOutlineVersion >= this.outlineHistory.length - 1;
 
         if (versionInfo) {
             const hasHistory = this.outlineHistory.length > 0;
@@ -4219,15 +4203,13 @@ export class XMLStoryModal extends SimpleModal {
     /**
      * Apply initialization data from an existing node
      */
-    private async applyInitializationData(data: {title: string, content: string, contextItems: string[], sourceNode: DocumentNode}): Promise<void> {
+    private applyInitializationData(data: {title: string, content: string, contextItems: string[], sourceNode: DocumentNode}): void {
 
         
         // Set title if provided and element exists
         if (data.title) {
-            this.titleInput ??= document.getElementById('project-title-input') as HTMLInputElement;
-            if (this.titleInput) {
-                this.titleInput.value = data.title;
-            }
+            this.titleInput ??= getElementById<HTMLInputElement>('project-title-input');
+            this.titleInput.value = data.title;
         }
 
         // Initialize outline with content if provided
@@ -4244,19 +4226,19 @@ export class XMLStoryModal extends SimpleModal {
         }
 
         // Add context items if provided
-        if (data.contextItems && data.contextItems.length > 0) {
+        if (data.contextItems.length > 0) {
             // Clear existing context items first
             const existingContextElements = this.storySystem.service.getElementsForContext()
                 .filter(el => el.type === 'context');
             for (const element of existingContextElements) {
-                await this.storySystem.service.deleteElement(element.id);
+                this.storySystem.service.deleteElement(element.id);
             }
             
             // Add new context items
             for (let index = 0; index < data.contextItems.length; index++) {
                 const contextItem = data.contextItems[index];
                 if (contextItem?.trim()) { // Only add non-empty items
-                    await this.storySystem.service.addNewEmptyElement('context');
+                    this.storySystem.service.addNewEmptyElement('context');
                     
                     // Update the empty element with content - need to find the actual element that was created
                     const createdElements = this.storySystem.service.getElementsForContext()
@@ -4264,7 +4246,7 @@ export class XMLStoryModal extends SimpleModal {
                     if (createdElements.length > 0) {
                         const newElement = createdElements[createdElements.length - 1]; // Get the last created empty element
                         if (newElement) {
-                            await this.storySystem.service.handleHumanEdit(newElement.id, contextItem.trim());
+                            this.storySystem.service.handleHumanEdit(newElement.id, contextItem.trim());
                         }
                     }
                 }
@@ -4287,26 +4269,22 @@ export class XMLStoryModal extends SimpleModal {
      * Load saved model selection from StorageService
      */
     private async loadSavedModelSelection(): Promise<void> {
-        try {
-            const storage = await StorageService.getInstance();
-            const savedModel = await storage.get(XML_STORY_MODEL_STORAGE_KEY);
+        const storage = await StorageService.getInstance();
+        const savedModel = await storage.get(XML_STORY_MODEL_STORAGE_KEY);
+        
+        if (savedModel && this.modelSelector) {
+            // Verify the saved model is still valid
+            const availableOptions = Array.from(this.modelSelector.options);
+            const isValidOption = availableOptions.some(option => option.value === savedModel);
             
-            if (savedModel && this.modelSelector) {
-                // Verify the saved model is still valid
-                const availableOptions = Array.from(this.modelSelector.options);
-                const isValidOption = availableOptions.some(option => option.value === savedModel);
-                
-                if (isValidOption) {
-                    this.modelSelector.value = savedModel as string;
-        
-                } else {
-        
-                    // Clean up invalid saved selection
-                    await storage.delete(XML_STORY_MODEL_STORAGE_KEY);
-                }
+            if (isValidOption) {
+                this.modelSelector.value = savedModel as string;
+
+            } else {
+
+                // Clean up invalid saved selection
+                await storage.delete(XML_STORY_MODEL_STORAGE_KEY);
             }
-        } catch (error) {
-            // Error loading saved model selection
         }
     }
 

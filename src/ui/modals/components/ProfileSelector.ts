@@ -17,6 +17,11 @@ export interface ProfileActionEvent {
     data?: unknown;
 }
 
+export interface ProfileSwitchEventData {
+    action: 'switched';
+    profileName: string;
+}
+
 export class ProfileSelector {
     private container: HTMLElement;
     private settingsService: SettingsService;
@@ -35,7 +40,7 @@ export class ProfileSelector {
         // Listen to settings service changes
         this.settingsService.onChange(this.handleSettingsChange.bind(this));
         
-        void this.render();
+        this.render();
         void this.populate();
     }
 
@@ -58,7 +63,7 @@ export class ProfileSelector {
      * Refreshes the profile list
      */
     public refresh(): void {
-        this.populate();
+        void this.populate();
         if (this.refreshCallback) {
             this.refreshCallback();
         }
@@ -184,26 +189,10 @@ export class ProfileSelector {
 
         this.profileSelect = createElement('select', {
             attributes: { id: 'profile-select' }
-        }) as HTMLSelectElement;
+        });
 
-        this.profileSelect.addEventListener('change', async () => {
-            const profileName = this.profileSelect.value;
-            
-            // Disable the select dropdown during profile switch
-            this.profileSelect.disabled = true;
-            
-            try {
-                // Use centralized ProfileManagerService for consistent profile switching
-                const { getProfileManagerService } = await import('../../../ui/services/ProfileManagerService');
-                const profileManager = getProfileManagerService();
-                
-                const profile = await profileManager.switchToProfile(profileName);
-                this.updateCurrentProfileDisplay(profileName);
-                this.emitSelection(profileName, profile);
-            } finally {
-                // Always re-enable the dropdown
-                this.profileSelect.disabled = false;
-            }
+        this.profileSelect.addEventListener('change', () => {
+            void this.handleProfileSelectChange();
         });
 
         this.currentProfileDisplay = createElement('span', {
@@ -231,7 +220,7 @@ export class ProfileSelector {
                 type: 'text',
                 placeholder: 'Enter profile name...'
             }
-        }) as HTMLInputElement;
+        });
 
         this.newProfileInput.addEventListener('keydown', (e) => {
             if (e.key === 'Enter') {
@@ -245,7 +234,9 @@ export class ProfileSelector {
             content: 'Create Profile'
         });
 
-        createButton.addEventListener('click', async () => this.createProfile());
+        createButton.addEventListener('click', () => {
+            void this.createProfile();
+        });
 
         creationSection.appendChild(creationLabel);
         const inputGroup = createElement('div', {
@@ -272,7 +263,9 @@ export class ProfileSelector {
             classes: ['btn-danger'],
             content: 'Delete'
         });
-        deleteButton.addEventListener('click', async () => this.deleteProfile());
+        deleteButton.addEventListener('click', () => {
+            void this.deleteProfile();
+        });
 
         const exportButton = createElement('button', {
             classes: ['btn-secondary'],
@@ -290,7 +283,9 @@ export class ProfileSelector {
             classes: ['btn-secondary'],
             content: 'Rename'
         });
-        renameButton.addEventListener('click', async () => this.renameProfile());
+        renameButton.addEventListener('click', () => {
+            void this.renameProfile();
+        });
 
         const resetToDefaultsButton = createElement('button', {
             classes: ['btn-secondary'],
@@ -314,14 +309,33 @@ export class ProfileSelector {
                 accept: '.json',
                 style: 'display: none;'
             }
-        }) as HTMLInputElement;
+        });
 
-        fileInput.addEventListener('change', async (e) => this.handleFileImport(e));
+        fileInput.addEventListener('change', (e) => {
+            void this.handleFileImport(e);
+        });
 
         this.container.appendChild(selectionSection);
         this.container.appendChild(creationSection);
         this.container.appendChild(actionsSection);
         this.container.appendChild(fileInput);
+    }
+
+    private async handleProfileSelectChange(): Promise<void> {
+        const profileName = this.profileSelect.value;
+
+        this.profileSelect.disabled = true;
+
+        try {
+            const { getProfileManagerService } = await import('../../../ui/services/ProfileManagerService');
+            const profileManager = getProfileManagerService();
+
+            const profile = await profileManager.switchToProfile(profileName);
+            this.updateCurrentProfileDisplay(profileName);
+            this.emitSelection(profileName, profile);
+        } finally {
+            this.profileSelect.disabled = false;
+        }
     }
 
     /**
@@ -346,7 +360,7 @@ export class ProfileSelector {
      * Updates the current profile display
      */
     private updateCurrentProfileDisplay(profileName: string): void {
-        if (this.currentProfileDisplay && profileName) {
+        if (profileName) {
             this.currentProfileDisplay.textContent = `(${profileName})`;
         }
     }
@@ -369,7 +383,7 @@ export class ProfileSelector {
             
             if (result.success) {
                 this.newProfileInput.value = '';
-                void this.refresh();
+                this.refresh();
                 this.setSelectedProfile(profileName);
                 
                 this.emitAction({
@@ -402,7 +416,7 @@ export class ProfileSelector {
             const result = await this.settingsService.deleteProfile(profileName);
             
             if (result.success) {
-                void this.refresh();
+                this.refresh();
                 
                 // Switch to default profile
                 const defaultProfile = this.settingsService.getProfile('default');
@@ -461,7 +475,10 @@ export class ProfileSelector {
      * Triggers profile import
      */
     private importProfile(): void {
-        const fileInput = this.container.querySelector('input[type="file"]') as HTMLInputElement;
+        const fileInput = this.container.querySelector('input[type="file"]');
+        if (!(fileInput instanceof HTMLInputElement)) {
+            throw new Error('Profile import file input not found');
+        }
         fileInput.click();
     }
 
@@ -476,13 +493,15 @@ export class ProfileSelector {
         try {
             const result = await this.settingsService.importProfileFromFile(
                 file,
-                async (profileName: string) => {
-                    return confirm(`Profile "${profileName}" already exists. Do you want to overwrite it?\n\nNote: Your existing OpenRouter API key will be preserved.`);
+                async (profileName: string): Promise<boolean> => {
+                    return await Promise.resolve(
+                        confirm(`Profile "${profileName}" already exists. Do you want to overwrite it?\n\nNote: Your existing OpenRouter API key will be preserved.`)
+                    );
                 }
             );
 
             if (result.success) {
-                void this.refresh();
+                this.refresh();
                 
                 // Switch to imported profile if available
                 if (result.profileName) {
@@ -532,7 +551,7 @@ export class ProfileSelector {
             const result = await this.settingsService.renameProfile(oldName, newName);
             
             if (result.success) {
-                void this.refresh();
+                this.refresh();
                 this.setSelectedProfile(newName);
                 
                 this.emitAction({
@@ -551,15 +570,23 @@ export class ProfileSelector {
         }
     }
 
+    private isProfileSwitchEventData(data: unknown): data is ProfileSwitchEventData {
+        return (
+            typeof data === 'object' &&
+            data !== null &&
+            'action' in data &&
+            data.action === 'switched' &&
+            'profileName' in data &&
+            typeof data.profileName === 'string'
+        );
+    }
+
     /**
      * Handles settings service changes
      */
     private handleSettingsChange(event: SettingsChangeEvent): void {
-        if (event.type === 'profile') {
-            const data = event.data as any; // Type assertion since data is unknown
-            if (data && data.action === 'switched' && data.profileName) {
-                this.updateCurrentProfileDisplay(data.profileName);
-            }
+        if (event.type === 'profile' && this.isProfileSwitchEventData(event.data)) {
+            this.updateCurrentProfileDisplay(event.data.profileName);
         }
     }
 

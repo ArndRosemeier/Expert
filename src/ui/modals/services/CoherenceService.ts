@@ -23,7 +23,7 @@ export class CoherenceService {
      * CRITICAL: This must align with stateless generation logic that uses node.getState() === 'Final'
      */
     isNodeEligible(node: DocumentNode): boolean {
-        if (!node.children || node.children.length === 0) {
+        if (node.children.length === 0) {
             return false;
         }
 
@@ -47,7 +47,7 @@ export class CoherenceService {
      * CRITICAL: This must align with stateless generation logic that uses node.getState() === 'Final'
      */
     getIneligibilityReason(node: DocumentNode): string {
-        if (!node.children || node.children.length === 0) {
+        if (node.children.length === 0) {
             return 'This node has no children to analyze.';
         }
 
@@ -114,7 +114,7 @@ export class CoherenceService {
                 id: child.id,
                 title: child.title || 'Untitled',
                 content: child.content || '',
-                isLeaf: !child.children || child.children.length === 0
+                isLeaf: child.children.length === 0
             }))
         };
     }
@@ -253,7 +253,7 @@ Original error: ${error.message}`);
                     const parsed = JSON.parse(candidate);
                     parsedValue = parsed;
                     break;
-                } catch (e) {
+                } catch {
                     // Try next candidate
                 }
             }
@@ -263,7 +263,7 @@ Original error: ${error.message}`);
             }
 
             // Accept either an array of items or a single item
-            const parsedArray: any[] = Array.isArray(parsedValue) ? parsedValue : [parsedValue];
+            const parsedArray: unknown[] = Array.isArray(parsedValue) ? parsedValue : [parsedValue];
 
             // Create a mapping from child title to child ID
             const titleToIdMap = new Map<string, string>();
@@ -277,14 +277,15 @@ Original error: ${error.message}`);
                     throw new Error(`Invalid contradiction at index ${index}`);
                 }
 
-                const offendingChildTitle = String(item.offending_child_title ?? '').trim();
+                const itemRecord = item as Record<string, unknown>;
+                const offendingChildTitle = String(itemRecord['offending_child_title'] ?? '').trim();
                 
                 const contradiction: CoherenceContradiction = {
-                    fact_in_outline: String(item.fact_in_outline ?? '').trim(),
-                    fact_in_expansion: String(item.fact_in_expansion ?? '').trim(),
-                    justification: String(item.justification ?? '').trim(),
+                    fact_in_outline: String(itemRecord['fact_in_outline'] ?? '').trim(),
+                    fact_in_expansion: String(itemRecord['fact_in_expansion'] ?? '').trim(),
+                    justification: String(itemRecord['justification'] ?? '').trim(),
                     offending_child_title: offendingChildTitle,
-                    severity: this.parseSeverity(item.severity)
+                    severity: this.parseSeverity(itemRecord['severity'])
                 };
 
                 // Add child ID using robust title matching
@@ -327,7 +328,7 @@ Original error: ${error.message}`);
     /**
      * Parse and validate severity from AI response
      */
-    private parseSeverity(severity: any): number {
+    private parseSeverity(severity: unknown): number {
         // Convert to number and validate
         const severityNum = Number(severity);
         

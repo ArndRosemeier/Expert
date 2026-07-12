@@ -1,3 +1,4 @@
+import './types/ReaderGuiTypes';
 import { ProjectManager } from '../ProjectManager';
 import { DocumentNode } from '../DocumentNode';
 import { ReaderEditor } from './reader-editor';
@@ -139,15 +140,15 @@ export class ReaderGUI {
         selectionEnd: number; 
         visible: boolean 
     } | null {
-        const findInput = this.container.querySelector('#find-input') as HTMLInputElement;
-        const replaceInput = this.container.querySelector('#replace-input') as HTMLInputElement;
-        if (!findInput) return null;
+        const findInput = this.container.querySelector('#find-input');
+        if (!(findInput instanceof HTMLInputElement)) return null;
+        const replaceInput = this.container.querySelector('#replace-input');
         
         return {
             findValue: findInput.value,
-            replaceValue: replaceInput ? replaceInput.value : '',
+            replaceValue: replaceInput instanceof HTMLInputElement ? replaceInput.value : '',
             findFocused: document.activeElement === findInput,
-            replaceFocused: replaceInput ? document.activeElement === replaceInput : false,
+            replaceFocused: replaceInput instanceof HTMLInputElement && document.activeElement === replaceInput,
             selectionStart: findInput.selectionStart ?? 0,
             selectionEnd: findInput.selectionEnd ?? 0,
             visible: this.isSearchVisible
@@ -168,11 +169,11 @@ export class ReaderGUI {
     } | null): void {
         if (!state) return;
         
-        const findInput = this.container.querySelector('#find-input') as HTMLInputElement;
-        const replaceInput = this.container.querySelector('#replace-input') as HTMLInputElement;
-        const findInterface = this.container.querySelector('#reader-find-interface') as HTMLElement;
+        const findInput = this.container.querySelector('#find-input');
+        const replaceInput = this.container.querySelector('#replace-input');
+        const findInterface = this.container.querySelector('#reader-find-interface');
         
-        if (!findInput || !findInterface) return;
+        if (!(findInput instanceof HTMLInputElement) || !(findInterface instanceof HTMLElement)) return;
         
         // Restore visibility
         if (state.visible) {
@@ -182,18 +183,18 @@ export class ReaderGUI {
         
         // Restore values
         findInput.value = state.findValue;
-        if (replaceInput) {
+        if (replaceInput instanceof HTMLInputElement) {
             replaceInput.value = state.replaceValue;
         }
         
         // Restore focus and cursor position
         if (state.findFocused) {
-            void void setTimeout(() => {
+            void setTimeout(() => {
                 findInput.focus();
                 findInput.setSelectionRange(state.selectionStart, state.selectionEnd);
             }, 0);
-        } else if (state.replaceFocused && replaceInput) {
-            void void setTimeout(() => {
+        } else if (state.replaceFocused && replaceInput instanceof HTMLInputElement) {
+            void setTimeout(() => {
                 replaceInput.focus();
             }, 0);
         }
@@ -221,8 +222,8 @@ export class ReaderGUI {
      * Restore settings panel to open state and setup its event listeners
      */
     private restoreSettingsPanel(): void {
-        const panel = this.container.querySelector('#reader-settings-panel') as HTMLElement;
-        if (panel) {
+        const panel = this.container.querySelector('#reader-settings-panel');
+        if (panel instanceof HTMLElement) {
             panel.style.display = 'block';
             this.setupSettingsEventListeners();
         }
@@ -232,7 +233,7 @@ export class ReaderGUI {
      * Refresh the reader content
      */
     public refresh(): void {
-        void this.render();
+        this.render();
     }
 
     /**
@@ -273,14 +274,14 @@ export class ReaderGUI {
      * Scroll to a specific node in the reader
      */
     public scrollToNode(nodeId: string): void {
-        const element = this.container.querySelector(`#node-${nodeId}`) as HTMLElement;
-        if (element) {
+        const element = this.container.querySelector(`#node-${nodeId}`);
+        if (element instanceof HTMLElement) {
             element.scrollIntoView({ behavior: 'smooth', block: 'start' });
             
             // Add a brief highlight effect to show which section was navigated to
             element.style.transition = 'box-shadow 0.3s ease';
             element.style.boxShadow = '0 0 20px rgba(66, 153, 225, 0.6)';
-            void void setTimeout(() => {
+            void setTimeout(() => {
                 element.style.boxShadow = '';
             }, 1500);
         }
@@ -355,7 +356,7 @@ export class ReaderGUI {
                     content: '', // Always empty - content handled by textareas only
                     level: node.level,
                     isLeaf: node.children.length === 0,
-                    hasContent: Boolean(node.content && node.content.trim()),
+                    hasContent: Boolean(node.content.trim()),
                     position: position++,
                     wordCount,
                     estimatedReadingTime: readingTime
@@ -378,7 +379,7 @@ export class ReaderGUI {
     private shouldDisplayNode(node: DocumentNode): boolean {
         if (this.config.showAllLevels) {
             // Show all levels mode: show nodes with content or leaf nodes without content
-            if (node.content && node.content.trim()) {
+            if (node.content.trim()) {
                 return true;
             }
             // For nodes without content, show if they have no children (leaf nodes)
@@ -399,7 +400,7 @@ export class ReaderGUI {
         } else {
             // Deepest content mode: only process children if current node doesn't have content
             // or if children might have deeper content
-            return node.children.length > 0 && (!node.content?.trim() || this.hasDeepContentInChildren(node));
+            return node.children.length > 0 && (!node.content.trim() || this.hasDeepContentInChildren(node));
         }
     }
 
@@ -408,7 +409,7 @@ export class ReaderGUI {
      */
     private isDeepestAvailableContent(node: DocumentNode): boolean {
         // If node has content and no children with content, it's the deepest
-        if (node.content && node.content.trim()) {
+        if (node.content.trim()) {
             const hasChildrenWithContent = node.children.some(child => this.hasAnyContentInSubtree(child));
             return !hasChildrenWithContent;
         }
@@ -421,7 +422,7 @@ export class ReaderGUI {
      * Check if node or any of its descendants have content
      */
     private hasAnyContentInSubtree(node: DocumentNode): boolean {
-        if (node.content && node.content.trim()) {
+        if (node.content.trim()) {
             return true;
         }
         return node.children.some(child => this.hasAnyContentInSubtree(child));
@@ -438,7 +439,7 @@ export class ReaderGUI {
      * Calculate word count for content
      */
     private calculateWordCount(content: string): number {
-        if (!content?.trim()) return 0;
+        if (!content.trim()) return 0;
         return content.trim().split(/\s+/).length;
     }
 
@@ -569,7 +570,7 @@ export class ReaderGUI {
 
         const processNode = (node: DocumentNode): void => {
             // For TOC, always include all nodes with content or leaf nodes
-            const hasContent = Boolean(node.content && node.content.trim());
+            const hasContent = Boolean(node.content.trim());
             const isLeaf = node.children.length === 0;
             
             if (hasContent || isLeaf) {
@@ -1878,10 +1879,10 @@ export class ReaderGUI {
      * Handle double-click events for navigation
      */
     private handleDoubleClick(event: MouseEvent): void {
-        const target = event.target as HTMLElement;
-        const nodeElement = target.closest('[data-node-id]') as HTMLElement;
+        if (!(event.target instanceof HTMLElement)) return;
+        const nodeElement = event.target.closest('[data-node-id]');
         
-        if (nodeElement && this.onNavigateToNode) {
+        if (nodeElement instanceof HTMLElement && this.onNavigateToNode) {
             const nodeId = nodeElement.dataset['nodeId'];
             if (nodeId) {
                 this.onNavigateToNode(nodeId);
@@ -1967,13 +1968,14 @@ export class ReaderGUI {
      */
     private setupSettingsEventListeners(): void {
         const panel = this.container.querySelector('#reader-settings-panel');
-        if (!panel) return;
+        if (!(panel instanceof HTMLElement)) return;
 
         // Font size slider
-        const fontSizeSlider = panel.querySelector('#reader-font-size') as HTMLInputElement;
-        if (fontSizeSlider) {
+        const fontSizeSlider = panel.querySelector('#reader-font-size');
+        if (fontSizeSlider instanceof HTMLInputElement) {
             fontSizeSlider.addEventListener('input', (e) => {
-                const value = parseInt((e.target as HTMLInputElement).value);
+                if (!(e.target instanceof HTMLInputElement)) return;
+                const value = parseInt(e.target.value);
                 this.config.fontSize = value;
                 this.updateFontSizeDisplay(value);
                 this.applySettings();
@@ -1981,10 +1983,11 @@ export class ReaderGUI {
         }
 
         // Line height slider
-        const lineHeightSlider = panel.querySelector('#reader-line-height') as HTMLInputElement;
-        if (lineHeightSlider) {
+        const lineHeightSlider = panel.querySelector('#reader-line-height');
+        if (lineHeightSlider instanceof HTMLInputElement) {
             lineHeightSlider.addEventListener('input', (e) => {
-                const value = parseFloat((e.target as HTMLInputElement).value);
+                if (!(e.target instanceof HTMLInputElement)) return;
+                const value = parseFloat(e.target.value);
                 this.config.lineHeight = value;
                 this.updateLineHeightDisplay(value);
                 this.applySettings();
@@ -1992,10 +1995,11 @@ export class ReaderGUI {
         }
 
         // Max width slider
-        const maxWidthSlider = panel.querySelector('#reader-max-width') as HTMLInputElement;
-        if (maxWidthSlider) {
+        const maxWidthSlider = panel.querySelector('#reader-max-width');
+        if (maxWidthSlider instanceof HTMLInputElement) {
             maxWidthSlider.addEventListener('input', (e) => {
-                const value = parseInt((e.target as HTMLInputElement).value);
+                if (!(e.target instanceof HTMLInputElement)) return;
+                const value = parseInt(e.target.value);
                 this.config.maxWidth = value;
                 this.updateMaxWidthDisplay(value);
                 this.applySettings();
@@ -2003,57 +2007,61 @@ export class ReaderGUI {
         }
 
         // Theme selector
-        const themeSelect = panel.querySelector('#reader-theme') as HTMLSelectElement;
-        if (themeSelect) {
+        const themeSelect = panel.querySelector('#reader-theme');
+        if (themeSelect instanceof HTMLSelectElement) {
             themeSelect.addEventListener('change', (e) => {
-                this.config.theme = (e.target as HTMLSelectElement).value as 'light' | 'dark' | 'sepia';
+                if (!(e.target instanceof HTMLSelectElement)) return;
+                this.config.theme = e.target.value as 'light' | 'dark' | 'sepia';
                 this.applySettings();
             });
         }
 
         // Separator style selector
-        const separatorSelect = panel.querySelector('#reader-separator-style') as HTMLSelectElement;
-        if (separatorSelect) {
+        const separatorSelect = panel.querySelector('#reader-separator-style');
+        if (separatorSelect instanceof HTMLSelectElement) {
             separatorSelect.addEventListener('change', (e) => {
-                this.config.separatorStyle = (e.target as HTMLSelectElement).value as 'minimal' | 'standard' | 'bold';
+                if (!(e.target instanceof HTMLSelectElement)) return;
+                this.config.separatorStyle = e.target.value as 'minimal' | 'standard' | 'bold';
                 this.applySettings();
             });
         }
 
         // Show all levels checkbox
-        const showAllLevelsCheckbox = panel.querySelector('#reader-show-all-levels') as HTMLInputElement;
-        if (showAllLevelsCheckbox) {
-            showAllLevelsCheckbox.addEventListener('change', async (e) => {
-                this.config.showAllLevels = (e.target as HTMLInputElement).checked;
-                
-                // Re-analyze content with new setting
-                this.contentNodes = this.analyzeProjectContent();
-                
-                // Update the content area in always-edit mode
-                const contentArea = this.container.querySelector('.reader-content-area');
-                if (contentArea) {
-                    // Destroy existing editors before regenerating content (save changes first)
-                    await this.readerEditor.destroy();
+        const showAllLevelsCheckbox = panel.querySelector('#reader-show-all-levels');
+        if (showAllLevelsCheckbox instanceof HTMLInputElement) {
+            showAllLevelsCheckbox.addEventListener('change', () => {
+                void (async () => {
+                    this.config.showAllLevels = showAllLevelsCheckbox.checked;
                     
-                    // Regenerate content HTML
-                    contentArea.innerHTML = this.generateContent();
+                    // Re-analyze content with new setting
+                    this.contentNodes = this.analyzeProjectContent();
                     
-                    // Recreate text editors for the new content
-                    this.readerEditor.initialize();
-                    
-                    // Update TOC if visible
-                    if (this.config.showTOC) {
-                        const tocElement = this.container.querySelector('.reader-toc');
-                        if (tocElement) {
-                            tocElement.innerHTML = this.generateTOCContent();
+                    // Update the content area in always-edit mode
+                    const contentArea = this.container.querySelector('.reader-content-area');
+                    if (contentArea instanceof HTMLElement) {
+                        // Destroy existing editors before regenerating content (save changes first)
+                        await this.readerEditor.destroy();
+                        
+                        // Regenerate content HTML
+                        contentArea.innerHTML = this.generateContent();
+                        
+                        // Recreate text editors for the new content
+                        void this.readerEditor.initialize();
+                        
+                        // Update TOC if visible
+                        if (this.config.showTOC) {
+                            const tocElement = this.container.querySelector('.reader-toc');
+                            if (tocElement instanceof HTMLElement) {
+                                tocElement.innerHTML = this.generateTOCContent();
+                            }
                         }
                     }
-                }
-                
-                // Refresh styles to apply/remove hierarchy level backgrounds
-                this.refreshStyles();
-                
-                this.saveReaderConfig();
+                    
+                    // Refresh styles to apply/remove hierarchy level backgrounds
+                    this.refreshStyles();
+                    
+                    void this.saveReaderConfig();
+                })();
             });
         }
 
@@ -2094,8 +2102,8 @@ export class ReaderGUI {
      * Apply current settings to the reader interface
      */
     private applySettings(): void {
-        const content = this.container.querySelector('.reader-content') as HTMLElement;
-        if (content) {
+        const content = this.container.querySelector('.reader-content');
+        if (content instanceof HTMLElement) {
             content.style.fontSize = `${this.config.fontSize}px`;
             content.style.lineHeight = this.config.lineHeight.toString();
             content.style.maxWidth = `${this.config.maxWidth}px`;
@@ -2105,7 +2113,7 @@ export class ReaderGUI {
         this.container.className = `reader-container reader-theme-${this.config.theme}`;
         
         // Save configuration to storage
-        this.saveReaderConfig();
+        void this.saveReaderConfig();
     }
 
     /**
@@ -2152,12 +2160,12 @@ export class ReaderGUI {
         this.config.showTOC = !this.config.showTOC;
         
         // Show/hide the TOC without full re-render (preserves editor state)
-        const tocElement = this.container.querySelector('.reader-toc') as HTMLElement;
-        if (tocElement) {
+        const tocElement = this.container.querySelector('.reader-toc');
+        if (tocElement instanceof HTMLElement) {
             tocElement.style.display = this.config.showTOC ? 'block' : 'none';
         }
         
-        this.saveReaderConfig();
+        void this.saveReaderConfig();
     }
 
     /**
@@ -2230,8 +2238,8 @@ export class ReaderGUI {
      * Toggle settings panel visibility
      */
     private toggleSettings(): void {
-        const panel = this.container.querySelector('#reader-settings-panel') as HTMLElement;
-        if (panel) {
+        const panel = this.container.querySelector('#reader-settings-panel');
+        if (panel instanceof HTMLElement) {
             const isVisible = panel.style.display !== 'none';
             this.isSettingsPanelOpen = !isVisible;
             panel.style.display = isVisible ? 'none' : 'block';
@@ -2278,16 +2286,11 @@ export class ReaderGUI {
                                 id: 'cancel',
                                 label: 'Cancel',
                                 type: 'secondary',
-                                handler: async () => {
+                                handler: () => {
                                     if (unsavedChanges && !confirm('You have unsaved changes. Cancel without saving?')) {
                                         throw new Error('Cancel prevented'); // Prevent modal from closing
                                     }
-                                    // Clean up event handler
-                                    const handler = (window as any).currentModalClickHandler;
-                                    if (handler) {
-                                        document.removeEventListener('click', handler);
-                                        delete (window as any).currentModalClickHandler;
-                                    }
+                                    this.cleanupModalClickHandler();
                                     void modal.close();
                                 }
                             },
@@ -2297,20 +2300,17 @@ export class ReaderGUI {
                                 type: 'primary',
                                 handler: async () => {
                                     // Get the current action ID from the form
-                                    const form = document.getElementById('action-editor-form') as HTMLFormElement;
-                                    const currentActionId = form?.getAttribute('data-action-id');
-                                    if (currentActionId) {
-                                        await this.saveCurrentActionFixed(currentActionId);
+                                    const form = document.getElementById('action-editor-form');
+                                    if (form instanceof HTMLFormElement) {
+                                        const currentActionId = form.getAttribute('data-action-id');
+                                        if (currentActionId) {
+                                            await this.saveCurrentActionFixed(currentActionId);
+                                        }
                                     }
                                     this.updateActionButtons();
                                     unsavedChanges = false;
                                     alert('All changes saved successfully!');
-                                    // Clean up event handler
-                                    const handler = (window as any).currentModalClickHandler;
-                                    if (handler) {
-                                        document.removeEventListener('click', handler);
-                                        delete (window as any).currentModalClickHandler;
-                                    }
+                                    this.cleanupModalClickHandler();
                                     void modal.close();
                                 }
                             }
@@ -2732,6 +2732,17 @@ export class ReaderGUI {
     }
 
     /**
+     * Remove the actions config modal click handler from document and window
+     */
+    private cleanupModalClickHandler(): void {
+        const handler = window.currentModalClickHandler;
+        if (handler) {
+            document.removeEventListener('click', handler);
+            delete window.currentModalClickHandler;
+        }
+    }
+
+    /**
      * Setup event listeners for the actions configuration modal
      */
     private setupActionsConfigEventListeners(
@@ -2742,12 +2753,13 @@ export class ReaderGUI {
     ): void {
         // Use simple event delegation with document - will work reliably
         const handleModalClicks = (e: MouseEvent) => {
-            const target = e.target as HTMLElement;
+            if (!(e.target instanceof HTMLElement)) return;
+            const target = e.target;
             
             // Find the element with data-action (walk up the tree)
-            let actionElement = target;
+            let actionElement: HTMLElement = target;
             let attempts = 0;
-            while (actionElement && attempts < 5) {
+            while (attempts < 5) {
                 const action = actionElement.getAttribute('data-action');
                 const targetId = actionElement.getAttribute('data-target');
                 
@@ -2797,9 +2809,9 @@ export class ReaderGUI {
                             })();
                             break;
                             
-                        case 'insert-placeholder':
-                            const textarea = document.getElementById('action-prompt') as HTMLTextAreaElement;
-                            if (textarea) {
+                        case 'insert-placeholder': {
+                            const textarea = document.getElementById('action-prompt');
+                            if (textarea instanceof HTMLTextAreaElement) {
                                 const start = textarea.selectionStart;
                                 const end = textarea.selectionEnd;
                                 const text = textarea.value;
@@ -2809,6 +2821,7 @@ export class ReaderGUI {
                                 setUnsavedChanges(true);
                             }
                             break;
+                        }
                     }
                     return; // Stop processing once we found and handled an action
                 }
@@ -2824,20 +2837,24 @@ export class ReaderGUI {
         document.addEventListener('click', handleModalClicks);
         
         // Store the handler so we can remove it later (add this to modal cleanup)
-        (window as any).currentModalClickHandler = handleModalClicks;
+        window.currentModalClickHandler = handleModalClicks;
 
         // Close button - removed, now handled by base modal
 
         // Add new action
         const addBtn = document.getElementById('add-new-action');
-        addBtn?.addEventListener('click', async (e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            await this.addNewAction();
-            this.refreshActionsList();
-            this.updateActionButtons(); // Refresh action buttons in reader view
-            setUnsavedChanges(true);
-        });
+        if (addBtn instanceof HTMLElement) {
+            addBtn.addEventListener('click', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                void (async () => {
+                    await this.addNewAction();
+                    this.refreshActionsList();
+                    this.updateActionButtons(); // Refresh action buttons in reader view
+                    setUnsavedChanges(true);
+                })();
+            });
+        }
 
         // Form change detection
         document.addEventListener('input', (e) => {
@@ -2854,23 +2871,27 @@ export class ReaderGUI {
                 e.preventDefault();
                 e.stopPropagation();
                 // Get the action ID from the form data attribute
-                const form = document.getElementById('action-editor-form') as HTMLFormElement;
-                const currentActionId = form?.getAttribute('data-action-id');
-                if (currentActionId) {
-                    void this.saveCurrentActionFixed(currentActionId).then(() => {
-                        setUnsavedChanges(false);
-                        
-                        // Show feedback to user
-                        const saveBtn = target as HTMLButtonElement;
-                        const originalText = saveBtn.textContent;
-                        saveBtn.textContent = '✅ Saved!';
-                        saveBtn.disabled = true;
-                        
-                        void void setTimeout(() => {
-                            saveBtn.textContent = originalText;
-                            saveBtn.disabled = false;
-                        }, 1500);
-                    });
+                const form = document.getElementById('action-editor-form');
+                if (form instanceof HTMLFormElement) {
+                    const currentActionId = form.getAttribute('data-action-id');
+                    if (currentActionId) {
+                        void this.saveCurrentActionFixed(currentActionId).then(() => {
+                            setUnsavedChanges(false);
+                            
+                            // Show feedback to user
+                            if (target instanceof HTMLButtonElement) {
+                                const saveBtn = target;
+                                const originalText = saveBtn.textContent;
+                                saveBtn.textContent = '✅ Saved!';
+                                saveBtn.disabled = true;
+                                
+                                void setTimeout(() => {
+                                    saveBtn.textContent = originalText;
+                                    saveBtn.disabled = false;
+                                }, 1500);
+                            }
+                        });
+                    }
                 }
             }
             
@@ -2878,17 +2899,19 @@ export class ReaderGUI {
                 e.preventDefault();
                 e.stopPropagation();
                 // Get the action ID from the form data attribute
-                const form = document.getElementById('action-editor-form') as HTMLFormElement;
-                const currentActionId = form?.getAttribute('data-action-id');
-                if (currentActionId) {
-                    if (confirm('Are you sure you want to delete this action?')) {
-                        void this.readerEditor.deleteAction(currentActionId).then(() => {
-                            this.refreshActionsList();
-                            this.updateActionButtons(); // Refresh action buttons in reader view
-                            setSelectedActionId(null);
-                            this.clearActionEditor();
-                            setUnsavedChanges(true);
-                        });
+                const form = document.getElementById('action-editor-form');
+                if (form instanceof HTMLFormElement) {
+                    const currentActionId = form.getAttribute('data-action-id');
+                    if (currentActionId) {
+                        if (confirm('Are you sure you want to delete this action?')) {
+                            void this.readerEditor.deleteAction(currentActionId).then(() => {
+                                this.refreshActionsList();
+                                this.updateActionButtons(); // Refresh action buttons in reader view
+                                setSelectedActionId(null);
+                                this.clearActionEditor();
+                                setUnsavedChanges(true);
+                            });
+                        }
                     }
                 }
             }
@@ -2949,15 +2972,28 @@ export class ReaderGUI {
      * Save the current action being edited - fixed version that handles both new and existing actions
      */
     private async saveCurrentActionFixed(actionId: string): Promise<void> {
-        const form = document.getElementById('action-editor-form') as HTMLFormElement;
-        if (!form) return;
+        const form = document.getElementById('action-editor-form');
+        if (!(form instanceof HTMLFormElement)) return;
+
+        const titleInput = document.getElementById('action-title');
+        const descriptionInput = document.getElementById('action-description');
+        const modelSelect = document.getElementById('action-model');
+        const orderInput = document.getElementById('action-order');
+        const promptTextarea = document.getElementById('action-prompt');
+        if (!(titleInput instanceof HTMLInputElement) ||
+            !(descriptionInput instanceof HTMLInputElement) ||
+            !(modelSelect instanceof HTMLSelectElement) ||
+            !(orderInput instanceof HTMLInputElement) ||
+            !(promptTextarea instanceof HTMLTextAreaElement)) {
+            return;
+        }
 
         const actionData = {
-            title: (document.getElementById('action-title') as HTMLInputElement).value,
-            description: (document.getElementById('action-description') as HTMLInputElement).value,
-            model: (document.getElementById('action-model') as HTMLSelectElement).value as 'creator' | 'editor' | 'rater' | 'prose',
-            order: parseInt((document.getElementById('action-order') as HTMLInputElement).value),
-            prompt: (document.getElementById('action-prompt') as HTMLTextAreaElement).value
+            title: titleInput.value,
+            description: descriptionInput.value,
+            model: modelSelect.value as 'creator' | 'editor' | 'rater' | 'prose',
+            order: parseInt(orderInput.value),
+            prompt: promptTextarea.value
         };
 
         // Check if this is a new action (not yet properly saved with user details)
@@ -2978,9 +3014,9 @@ export class ReaderGUI {
             form.setAttribute('data-action-id', newActionId);
             
             // Auto-select the new action in the list
-            void void setTimeout(() => {
-                const actionElement = document.querySelector(`[data-action="select"][data-target="${newActionId}"]`) as HTMLElement;
-                if (actionElement) {
+            void setTimeout(() => {
+                const actionElement = document.querySelector(`[data-action="select"][data-target="${newActionId}"]`);
+                if (actionElement instanceof HTMLElement) {
                     actionElement.click();
                 }
             }, 100);
@@ -3011,9 +3047,9 @@ export class ReaderGUI {
         const actionId = await this.readerEditor.addAction(newAction);
         
         // Auto-select the new action by dispatching a click event
-        void void setTimeout(() => {
-            const actionElement = document.querySelector(`[data-action="select"][data-target="${actionId}"]`) as HTMLElement;
-            if (actionElement) {
+        void setTimeout(() => {
+            const actionElement = document.querySelector(`[data-action="select"][data-target="${actionId}"]`);
+            if (actionElement instanceof HTMLElement) {
                 actionElement.click();
             }
         }, 100);
@@ -3045,10 +3081,10 @@ export class ReaderGUI {
      * Update action buttons based on current edit state and selection
      */
     public updateActionButtons(): void {
-        const actionButtonsContainer = this.container.querySelector('#reader-action-buttons') as HTMLElement;
-        const container = this.container.querySelector('#action-buttons-container') as HTMLElement;
+        const actionButtonsContainer = this.container.querySelector('#reader-action-buttons');
+        const container = this.container.querySelector('#action-buttons-container');
         
-        if (!actionButtonsContainer || !container) return;
+        if (!(actionButtonsContainer instanceof HTMLElement) || !(container instanceof HTMLElement)) return;
 
         // Get available actions
         const actions = this.readerEditor.getEnabledActions();
@@ -3110,8 +3146,8 @@ export class ReaderGUI {
      * Set up the selection mode toggle event listener
      */
     private setupSelectionModeToggle(): void {
-        const select = this.container.querySelector('#selection-mode-select') as HTMLSelectElement;
-        if (!select) return;
+        const select = this.container.querySelector('#selection-mode-select');
+        if (!(select instanceof HTMLSelectElement)) return;
 
         // Set current value
         const currentMode = this.readerEditor.getCurrentSelectionMode();
@@ -3129,8 +3165,8 @@ export class ReaderGUI {
      * Update the undo button state based on whether undo is available
      */
     private updateUndoButtonState(): void {
-        const undoButton = this.container.querySelector('[data-action-id="undo"]') as HTMLButtonElement;
-        if (!undoButton) return;
+        const undoButton = this.container.querySelector('[data-action-id="undo"]');
+        if (!(undoButton instanceof HTMLButtonElement)) return;
 
         const canUndo = this.readerEditor.canUndo();
         undoButton.disabled = !canUndo;
@@ -3149,8 +3185,8 @@ export class ReaderGUI {
      * Hide action buttons
      */
     public hideActionButtons(): void {
-        const actionButtonsContainer = this.container.querySelector('#reader-action-buttons') as HTMLElement;
-        if (actionButtonsContainer) {
+        const actionButtonsContainer = this.container.querySelector('#reader-action-buttons');
+        if (actionButtonsContainer instanceof HTMLElement) {
             actionButtonsContainer.style.display = 'none';
         }
     }
@@ -3159,17 +3195,17 @@ export class ReaderGUI {
      * Toggle the find interface visibility
      */
     private toggleFindInterface(): void {
-        const findInterface = this.container.querySelector('#reader-find-interface') as HTMLElement;
-        if (!findInterface) return;
+        const findInterface = this.container.querySelector('#reader-find-interface');
+        if (!(findInterface instanceof HTMLElement)) return;
 
         this.isSearchVisible = !this.isSearchVisible;
         findInterface.style.display = this.isSearchVisible ? 'block' : 'none';
 
         if (this.isSearchVisible) {
             // Focus the search input when opening
-            const findInput = this.container.querySelector('#find-input') as HTMLInputElement;
-            if (findInput) {
-                void void setTimeout(() => { findInput.focus(); }, 100);
+            const findInput = this.container.querySelector('#find-input');
+            if (findInput instanceof HTMLInputElement) {
+                void setTimeout(() => { findInput.focus(); }, 100);
             }
         } else {
             // Clear search results when closing
@@ -3182,8 +3218,8 @@ export class ReaderGUI {
      */
     private closeFindInterface(): void {
         this.isSearchVisible = false;
-        const findInterface = this.container.querySelector('#reader-find-interface') as HTMLElement;
-        if (findInterface) {
+        const findInterface = this.container.querySelector('#reader-find-interface');
+        if (findInterface instanceof HTMLElement) {
             findInterface.style.display = 'none';
         }
         this.clearSearchResults();
@@ -3193,8 +3229,8 @@ export class ReaderGUI {
      * Perform a new search
      */
     private performSearch(): void {
-        const findInput = this.container.querySelector('#find-input') as HTMLInputElement;
-        if (!findInput) return;
+        const findInput = this.container.querySelector('#find-input');
+        if (!(findInput instanceof HTMLInputElement)) return;
 
         // FIXED: Don't trim whitespace - preserve it for accurate searching
         const originalSearchTerm = findInput.value;
@@ -3204,8 +3240,8 @@ export class ReaderGUI {
         }
 
         // Check case sensitivity option
-        const caseSensitiveCheckbox = this.container.querySelector('#case-sensitive-checkbox') as HTMLInputElement;
-        const caseSensitive = caseSensitiveCheckbox?.checked || false;
+        const caseSensitiveCheckbox = this.container.querySelector('#case-sensitive-checkbox');
+        const caseSensitive = caseSensitiveCheckbox instanceof HTMLInputElement && caseSensitiveCheckbox.checked;
 
         // Store both original and processed search terms
         this.searchTerm = originalSearchTerm;
@@ -3217,7 +3253,7 @@ export class ReaderGUI {
         if (results.length > 0) {
             this.currentSearchIndex = 0;
             // Only auto-navigate if find input doesn't have focus (user pressed Enter vs auto-search)
-            const findInputHasFocus = findInput && document.activeElement === findInput;
+            const findInputHasFocus = document.activeElement === findInput;
             if (!findInputHasFocus) {
                 this.navigateToSearchResult(0);
             }
@@ -3246,15 +3282,10 @@ export class ReaderGUI {
     private searchInAllEditors(searchTerm: string, caseSensitive: boolean = false): Array<{nodeId: string, startPos: number, endPos: number}> {
         const results: Array<{nodeId: string, startPos: number, endPos: number}> = [];
         
-        // Get editors from ReaderEditor (scoped to this reader instance only)
-        const nodeEditors = (this.readerEditor as any).nodeEditors;
-        if (!nodeEditors) return results;
-
-        nodeEditors.forEach((editor: unknown, nodeId: string) => {
-            // FIXED: Respect case sensitivity option and preserve whitespace
+        this.readerEditor.forEachReaderNodeEditor((editor, nodeId) => {
             const text = caseSensitive 
-                ? (editor as any).editor.getText()
-                : (editor as any).editor.getText().toLowerCase();
+                ? editor.editor.getText()
+                : editor.editor.getText().toLowerCase();
             let index = 0;
             
             while ((index = text.indexOf(searchTerm, index)) !== -1) {
@@ -3279,10 +3310,7 @@ export class ReaderGUI {
         const result = this.searchResults[resultIndex];
         if (!result) return;
 
-        const nodeEditors = (this.readerEditor as any).nodeEditors;
-        if (!nodeEditors) return;
-
-        const editor = nodeEditors.get(result.nodeId);
+        const editor = this.readerEditor.getReaderNodeEditor(result.nodeId);
         if (!editor) return;
 
         // Clear previous current result highlighting and add new current result highlighting
@@ -3292,12 +3320,12 @@ export class ReaderGUI {
         this.scrollToNode(result.nodeId);
 
         // Check if find input is currently focused - if so, don't steal focus
-        const findInput = this.container.querySelector('#find-input') as HTMLInputElement;
-        const findInputHasFocus = findInput && document.activeElement === findInput;
+        const findInput = this.container.querySelector('#find-input');
+        const findInputHasFocus = findInput instanceof HTMLInputElement && document.activeElement === findInput;
 
         // Focus the editor and set selection to the found text
         // Also ensure the specific highlighted text is scrolled into view
-        void void setTimeout(() => {
+        void setTimeout(() => {
             if (!findInputHasFocus) {
                 editor.editor.focus();
             }
@@ -3324,24 +3352,24 @@ export class ReaderGUI {
         }
 
         // Update find next button state
-        const findNextBtn = this.container.querySelector('#find-next-button') as HTMLButtonElement;
-        if (findNextBtn) {
+        const findNextBtn = this.container.querySelector('#find-next-button');
+        if (findNextBtn instanceof HTMLButtonElement) {
             findNextBtn.disabled = results.length === 0;
         }
 
         // Update replace buttons state
-        const replaceBtn = this.container.querySelector('#replace-button') as HTMLButtonElement;
-        const replaceAllBtn = this.container.querySelector('#replace-all-button') as HTMLButtonElement;
-        if (replaceBtn) {
+        const replaceBtn = this.container.querySelector('#replace-button');
+        const replaceAllBtn = this.container.querySelector('#replace-all-button');
+        if (replaceBtn instanceof HTMLButtonElement) {
             replaceBtn.disabled = results.length === 0;
         }
-        if (replaceAllBtn) {
+        if (replaceAllBtn instanceof HTMLButtonElement) {
             replaceAllBtn.disabled = results.length === 0;
         }
 
         // Update results info
-        const resultsInfo = this.container.querySelector('#find-results-info') as HTMLElement;
-        if (resultsInfo) {
+        const resultsInfo = this.container.querySelector('#find-results-info');
+        if (resultsInfo instanceof HTMLElement) {
             if (results.length === 0) {
                 if (this.searchTerm) {
                     // Show the actual search term (with preserved whitespace) in quotes for clarity
@@ -3372,11 +3400,8 @@ export class ReaderGUI {
      * Clear all find highlights from all editors
      */
     private clearFindHighlights(): void {
-        const nodeEditors = (this.readerEditor as any).nodeEditors;
-        if (!nodeEditors) return;
-
         this.findHighlights.forEach((highlightIds, nodeId) => {
-            const editor = nodeEditors.get(nodeId);
+            const editor = this.readerEditor.getReaderNodeEditor(nodeId);
             if (editor) {
                 highlightIds.forEach(highlightId => {
                     editor.editor.removeHighlight(highlightId);
@@ -3391,11 +3416,8 @@ export class ReaderGUI {
      * Highlight all search results
      */
     private highlightAllResults(): void {
-        const nodeEditors = (this.readerEditor as any).nodeEditors;
-        if (!nodeEditors) return;
-
         this.searchResults.forEach((result, index) => {
-            const editor = nodeEditors.get(result.nodeId);
+            const editor = this.readerEditor.getReaderNodeEditor(result.nodeId);
             if (editor) {
                 const highlightId = `find-result-${index}`;
                 editor.editor.addHighlight(
@@ -3418,12 +3440,9 @@ export class ReaderGUI {
      * Highlight the current search result with special styling
      */
     private highlightCurrentResult(resultIndex: number): void {
-        const nodeEditors = (this.readerEditor as any).nodeEditors;
-        if (!nodeEditors) return;
-
         // First, reset all highlights to normal find-result style
         this.searchResults.forEach((result, index) => {
-            const editor = nodeEditors.get(result.nodeId);
+            const editor = this.readerEditor.getReaderNodeEditor(result.nodeId);
             if (editor) {
                 const highlightId = `find-result-${index}`;
                 editor.editor.removeHighlight(highlightId);
@@ -3440,7 +3459,7 @@ export class ReaderGUI {
         if (resultIndex >= 0 && resultIndex < this.searchResults.length) {
             const currentResult = this.searchResults[resultIndex];
             if (currentResult) {
-                const editor = nodeEditors.get(currentResult.nodeId);
+                const editor = this.readerEditor.getReaderNodeEditor(currentResult.nodeId);
                 if (editor) {
                     const highlightId = `find-result-${resultIndex}`;
                     editor.editor.removeHighlight(highlightId);
@@ -3460,12 +3479,12 @@ export class ReaderGUI {
      */
     private scrollHighlightIntoView(resultIndex: number): void {
         // Wait a bit longer to ensure highlighting is complete
-        void void setTimeout(() => {
+        void setTimeout(() => {
             // Find the highlight span element for the current result
             const highlightId = `find-result-${resultIndex}`;
-            const highlightSpan = this.container.querySelector(`[data-highlight-id="${highlightId}"]`) as HTMLElement;
+            const highlightSpan = this.container.querySelector(`[data-highlight-id="${highlightId}"]`);
             
-            if (highlightSpan) {
+            if (highlightSpan instanceof HTMLElement) {
                 // Use scrollIntoView with smooth scrolling and optimal positioning
                 highlightSpan.scrollIntoView({
                     behavior: 'smooth',
@@ -3480,9 +3499,8 @@ export class ReaderGUI {
                 // Fallback: try to scroll using the editor's container
                 const result = this.searchResults[resultIndex];
                 if (result) {
-                    const nodeEditors = (this.readerEditor as any).nodeEditors;
-                    const editor = nodeEditors?.get(result.nodeId);
-                    if (editor?.element) {
+                    const editor = this.readerEditor.getReaderNodeEditor(result.nodeId);
+                    if (editor) {
                         // Scroll the editor element into view as fallback
                         editor.element.scrollIntoView({
                             behavior: 'smooth',
@@ -3500,8 +3518,8 @@ export class ReaderGUI {
      * Update results info to show current position
      */
     private updateResultsInfoWithPosition(): void {
-        const resultsInfo = this.container.querySelector('#find-results-info') as HTMLElement;
-        if (resultsInfo && this.searchResults.length > 0) {
+        const resultsInfo = this.container.querySelector('#find-results-info');
+        if (resultsInfo instanceof HTMLElement && this.searchResults.length > 0) {
             const currentPos = this.currentSearchIndex + 1;
             const total = this.searchResults.length;
             resultsInfo.textContent = `${currentPos} of ${total} match${total === 1 ? '' : 'es'}`;
@@ -3516,19 +3534,15 @@ export class ReaderGUI {
             return;
         }
 
-        const replaceInput = this.container.querySelector('#replace-input') as HTMLInputElement;
-        if (!replaceInput) return;
+        const replaceInput = this.container.querySelector('#replace-input');
+        if (!(replaceInput instanceof HTMLInputElement)) return;
 
         const replaceText = replaceInput.value;
         const currentResult = this.searchResults[this.currentSearchIndex];
         
         if (!currentResult) return;
 
-        // Get the editor for this node
-        const nodeEditors = (this.readerEditor as any).nodeEditors;
-        if (!nodeEditors) return;
-
-        const editor = nodeEditors.get(currentResult.nodeId);
+        const editor = this.readerEditor.getReaderNodeEditor(currentResult.nodeId);
         if (!editor) return;
 
         // Replace the text
@@ -3546,12 +3560,10 @@ export class ReaderGUI {
             return;
         }
 
-        const replaceInput = this.container.querySelector('#replace-input') as HTMLInputElement;
-        if (!replaceInput) return;
+        const replaceInput = this.container.querySelector('#replace-input');
+        if (!(replaceInput instanceof HTMLInputElement)) return;
 
         const replaceText = replaceInput.value;
-        const nodeEditors = (this.readerEditor as any).nodeEditors;
-        if (!nodeEditors) return;
 
         // Group results by node to handle multiple replacements in same node
         const resultsByNode = new Map<string, Array<{startPos: number, endPos: number}>>();
@@ -3568,7 +3580,7 @@ export class ReaderGUI {
 
         // Replace all occurrences, working backwards to maintain correct positions
         resultsByNode.forEach((results, nodeId) => {
-            const editor = nodeEditors.get(nodeId);
+            const editor = this.readerEditor.getReaderNodeEditor(nodeId);
             if (!editor) return;
 
             // Sort by position descending to replace from end to beginning
@@ -3583,8 +3595,8 @@ export class ReaderGUI {
         this.performSearch();
 
         // Show replacement count
-        const resultsInfo = this.container.querySelector('#find-results-info') as HTMLElement;
-        if (resultsInfo) {
+        const resultsInfo = this.container.querySelector('#find-results-info');
+        if (resultsInfo instanceof HTMLElement) {
             const replacementCount = this.searchResults.length;
             resultsInfo.textContent = `Replaced ${replacementCount} occurrence${replacementCount === 1 ? '' : 's'}`;
         }
@@ -3595,8 +3607,8 @@ export class ReaderGUI {
      */
     private setupFindEventListeners(): void {
         // Add keyboard shortcuts for find input
-        const findInput = this.container.querySelector('#find-input') as HTMLInputElement;
-        if (findInput) {
+        const findInput = this.container.querySelector('#find-input');
+        if (findInput instanceof HTMLInputElement) {
             findInput.addEventListener('keydown', (e) => {
                 if (e.key === 'Enter') {
                     e.preventDefault();
@@ -3609,8 +3621,8 @@ export class ReaderGUI {
         }
 
         // Add keyboard shortcuts for replace input
-        const replaceInput = this.container.querySelector('#replace-input') as HTMLInputElement;
-        if (replaceInput) {
+        const replaceInput = this.container.querySelector('#replace-input');
+        if (replaceInput instanceof HTMLInputElement) {
             replaceInput.addEventListener('keydown', (e) => {
                 if (e.key === 'Enter') {
                     e.preventDefault();
@@ -3623,8 +3635,8 @@ export class ReaderGUI {
         }
 
         // Add event listener for case sensitivity checkbox
-        const caseSensitiveCheckbox = this.container.querySelector('#case-sensitive-checkbox') as HTMLInputElement;
-        if (caseSensitiveCheckbox) {
+        const caseSensitiveCheckbox = this.container.querySelector('#case-sensitive-checkbox');
+        if (caseSensitiveCheckbox instanceof HTMLInputElement) {
             caseSensitiveCheckbox.addEventListener('change', () => {
                 // Re-perform search when case sensitivity option changes
                 if (this.searchTerm) {
@@ -3676,9 +3688,7 @@ export class ReaderGUI {
         this.isSettingsPanelOpen = false;
         
         // Cleanup reader editor and save any pending changes
-        if (this.readerEditor) {
-            await this.readerEditor.destroy();
-        }
+        await this.readerEditor.destroy();
         
         // Remove styles
         const styleElement = document.getElementById('reader-styles');
@@ -3709,7 +3719,7 @@ export class ReaderGUI {
         // Import and call renderNodeDetails to refresh the main content UI
         void import('./project-ui').then(({ renderNodeDetails }) => {
             console.log('🔄 Refreshing main UI after reader close');
-            renderNodeDetails();
+            void renderNodeDetails();
         }).catch(console.error);
     }
 
@@ -3743,9 +3753,7 @@ export class ReaderGUI {
         this.stopListeningForUpdates();
         
         // Cleanup reader editor and save any pending changes
-        if (this.readerEditor) {
-            await this.readerEditor.destroy();
-        }
+        await this.readerEditor.destroy();
         
         // Trigger UI refresh to show updated content in main interface
         this.triggerMainUIRefresh();
@@ -3756,6 +3764,13 @@ export class ReaderGUI {
      */
     public getContainer(): HTMLElement {
         return this.container;
+    }
+
+    /**
+     * Get the root document node this reader view is scoped to
+     */
+    public getRootNode(): DocumentNode {
+        return this.rootNode;
     }
 
     /**
@@ -3797,7 +3812,7 @@ export class ReaderGUI {
      */
     private handleTreeUpdate(e: { nodeId: string, reason: string }): void {
         // Check if any AI actions are in progress - block all updates if so
-        if (this.readerEditor && this.readerEditor.isAIActionInProgress()) {
+        if (this.readerEditor.isAIActionInProgress()) {
             console.log(`🚫 Reader update blocked - AI action in progress, skipping update for node: ${e.nodeId} (${e.reason})`);
             return;
         }
@@ -3829,7 +3844,7 @@ export class ReaderGUI {
     /**
      * Handle node summary generation - update reader content without breaking editor
      */
-    private handleNodeSummaryGenerated(_e: { nodeId: string, summary: string }): void {
+    private handleNodeSummaryGenerated(): void {
         // Summary updates don't affect reader content directly since we show content, not summaries
         // But we could update any summary displays if needed in the future
     }
@@ -3838,49 +3853,43 @@ export class ReaderGUI {
      * Update content for a specific node in the reader without breaking the editor
      */
     private updateNodeContentInReader(nodeId: string, newContent: string): void {
-        // Access the ReaderEditor to update the content directly
-        if (this.readerEditor) {
-            // Check if any AI actions are in progress - block updates if so
-            if (this.readerEditor.isAIActionInProgress()) {
-                console.log(`🚫 Reader update blocked - AI action in progress for node: ${nodeId}`);
-                return;
-            }
+        // Check if any AI actions are in progress - block updates if so
+        if (this.readerEditor.isAIActionInProgress()) {
+            console.log(`🚫 Reader update blocked - AI action in progress for node: ${nodeId}`);
+            return;
+        }
+        
+        const nodeEditor = this.readerEditor.getReaderNodeEditor(nodeId);
+        if (nodeEditor) {
+            // Check if the user has unsaved changes or is currently editing
+            const editorElement = nodeEditor.element.querySelector('.text-editor-with-highlighting');
+            const isCurrentlyFocused = editorElement instanceof HTMLElement && document.activeElement === editorElement;
+            const hasUnsavedChanges = nodeEditor.isDirty;
             
-            const nodeEditor = (this.readerEditor as any).nodeEditors?.get(nodeId);
-            if (nodeEditor) {
-                // Check if the user has unsaved changes or is currently editing
-                const editorElement = nodeEditor.element.querySelector('.text-editor-with-highlighting') as HTMLElement;
-                const isCurrentlyFocused = editorElement && document.activeElement === editorElement;
-                const hasUnsavedChanges = nodeEditor.isDirty;
+            // Only update if there are no unsaved changes AND not currently focused
+            if (!hasUnsavedChanges && !isCurrentlyFocused) {
+                // Update the TextEditorWithHighlighting content
+                nodeEditor.editor.setText(newContent);
+                // Update the original content so it doesn't appear as dirty
+                nodeEditor.originalContent = newContent;
+                nodeEditor.isDirty = false;
                 
-                // Only update if there are no unsaved changes AND not currently focused
-                if (!hasUnsavedChanges && !isCurrentlyFocused) {
-                    // Update the TextEditorWithHighlighting content
-                    nodeEditor.editor.setText(newContent);
-                    // Update the original content so it doesn't appear as dirty
-                    nodeEditor.originalContent = newContent;
-                    nodeEditor.isDirty = false;
-                    
-                    // Update the word count in contentNodes and refresh TOC
-                    this.updateNodeWordCount(nodeId, newContent);
-                    
-                    console.log(`📝 Reader content updated successfully for node: ${nodeId}`);
-                } else {
-                    if (hasUnsavedChanges) {
-                        console.log(`⏭️ Reader update skipped - node ${nodeId} has unsaved changes`);
-                    } else if (isCurrentlyFocused) {
-                        console.log(`⏭️ Reader update skipped - node ${nodeId} is currently being edited by user`);
-                    }
-                }
+                // Update the word count in contentNodes and refresh TOC
+                this.updateNodeWordCount(nodeId, newContent);
+                
+                console.log(`📝 Reader content updated successfully for node: ${nodeId}`);
             } else {
-                console.log(`⚠️ Reader update failed - no editor found for node: ${nodeId}`);
-                // Debug: Let's see what editors are actually available
-                const availableEditors = (this.readerEditor as any).nodeEditors ? 
-                    Array.from((this.readerEditor as any).nodeEditors.keys()) : [];
-                console.log(`🔍 Available editors in reader:`, availableEditors);
+                if (hasUnsavedChanges) {
+                    console.log(`⏭️ Reader update skipped - node ${nodeId} has unsaved changes`);
+                } else if (isCurrentlyFocused) {
+                    console.log(`⏭️ Reader update skipped - node ${nodeId} is currently being edited by user`);
+                }
             }
         } else {
-            console.log(`⚠️ Reader update failed - ReaderEditor not initialized`);
+            console.log(`⚠️ Reader update failed - no editor found for node: ${nodeId}`);
+            // Debug: Let's see what editors are actually available
+            const availableEditors = this.readerEditor.getReaderNodeEditorIds();
+            console.log(`🔍 Available editors in reader:`, availableEditors);
         }
     }
 
@@ -3894,7 +3903,7 @@ export class ReaderGUI {
             const newWordCount = this.calculateWordCount(newContent);
             contentNode.wordCount = newWordCount;
             contentNode.estimatedReadingTime = Math.ceil(newWordCount / 200);
-            contentNode.hasContent = Boolean(newContent && newContent.trim());
+            contentNode.hasContent = Boolean(newContent.trim());
             
             // Refresh TOC if it's visible
             if (this.config.showTOC) {
@@ -3921,23 +3930,20 @@ export class ReaderGUI {
      */
     private refreshReaderForNewNodes(): void {
         // Check if any AI actions are in progress - block refresh if so
-        if (this.readerEditor && this.readerEditor.isAIActionInProgress()) {
+        if (this.readerEditor.isAIActionInProgress()) {
             console.log(`🚫 Reader refresh blocked - AI action in progress`);
             return;
         }
         
         // Preserve content from existing editors before destroying them
-        let preservedContent = new Map<string, string>();
-        if (this.readerEditor) {
-            preservedContent = this.readerEditor.preserveAllContent();
-        }
+        const preservedContent = this.readerEditor.preserveAllContent();
         
         // Re-analyze the project content to pick up new nodes
         this.contentNodes = this.analyzeProjectContent();
         
         // Rebuild the content area and TOC
         const contentArea = this.container.querySelector('.reader-content-area');
-        if (contentArea) {
+        if (contentArea instanceof HTMLElement) {
             contentArea.innerHTML = this.generateContent();
         }
         
@@ -3950,9 +3956,7 @@ export class ReaderGUI {
         this.buildClickMappings();
         
         // Reinitialize the editor with preserved content
-        if (this.readerEditor) {
-            this.readerEditor.initialize(preservedContent);
-        }
+        void this.readerEditor.initialize(preservedContent);
     }
 
     /**
@@ -3960,7 +3964,7 @@ export class ReaderGUI {
      */
     private handleProjectUpdate(): void {
         // Check if any AI actions are in progress - block updates if so
-        if (this.readerEditor && this.readerEditor.isAIActionInProgress()) {
+        if (this.readerEditor.isAIActionInProgress()) {
             console.log(`🚫 Project update blocked - AI action in progress`);
             return;
         }
@@ -3999,8 +4003,8 @@ let globalReaderInstance: ReaderGUI | null = null;
  */
 export async function openReaderView(projectManager: ProjectManager, rootNode?: DocumentNode, onNavigateToNode?: (nodeId: string) => void): Promise<ReaderGUI> {
     // Create a container for the reader
-    let readerContainer = document.getElementById('reader-container') as HTMLElement;
-    if (!readerContainer) {
+    let readerContainer = document.getElementById('reader-container');
+    if (!(readerContainer instanceof HTMLElement)) {
         readerContainer = document.createElement('div');
         readerContainer.id = 'reader-container';
         document.body.appendChild(readerContainer);
@@ -4010,7 +4014,7 @@ export async function openReaderView(projectManager: ProjectManager, rootNode?: 
     const currentRootNode = rootNode ?? projectManager.rootNode;
     if (!globalReaderInstance || 
         globalReaderInstance.projectManager !== projectManager || 
-        (globalReaderInstance as any).rootNode !== currentRootNode) {
+        globalReaderInstance.getRootNode() !== currentRootNode) {
         // Clean up existing instance if it exists
         if (globalReaderInstance) {
             await globalReaderInstance.hide();

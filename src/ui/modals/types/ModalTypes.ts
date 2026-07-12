@@ -4,7 +4,10 @@
 
 import { DocumentNode } from '../../../DocumentNode';
 import { ProjectManager } from '../../../ProjectManager';
-// ProjectTemplate import removed - not used in this file
+import { SettingsManager, SettingsProfile } from '../../../SettingsManager';
+import { ModelSelector } from '../../../ModelSelector';
+import { OrchestratorPrompts } from '../../../PromptManager';
+import { QualityCriterion, LLMCriterion } from '../../../types';
 
 /**
  * Base modal configuration interface
@@ -28,7 +31,7 @@ export interface ModalEvents {
     'modal:opened': { id: string };
     'modal:closing': { id: string };
     'modal:closed': { id: string };
-    'modal:action': { id: string; action: string; data?: any };
+    'modal:action': { id: string; action: string; data?: unknown };
 }
 
 /**
@@ -37,7 +40,7 @@ export interface ModalEvents {
 export interface ModalHooks {
     onOpen?: () => void | Promise<void>;
     onClose?: () => void | Promise<void>;
-    onAction?: (action: string, data?: any) => void | Promise<void>;
+    onAction?: (action: string, data?: unknown) => void | Promise<void>;
 }
 
 /**
@@ -100,7 +103,7 @@ export interface ModalState {
     isOpen: boolean;
     isOpening: boolean;
     isClosing: boolean;
-    data?: any;
+    data?: unknown;
 }
 
 /**
@@ -143,7 +146,7 @@ export interface PromptChangeEvent {
  * Event types for criteria changes
  */
 export interface CriteriaChangeEvent {
-    criteria: any[];
+    criteria: QualityCriterion[];
 }
 
 /**
@@ -151,7 +154,7 @@ export interface CriteriaChangeEvent {
  */
 export interface ProfileSelectionEvent {
     profileName: string;
-    profile: any | null;
+    profile: SettingsProfile | null;
 }
 
 /**
@@ -160,7 +163,7 @@ export interface ProfileSelectionEvent {
 export interface ProfileActionEvent {
     action: 'created' | 'deleted' | 'exported' | 'imported' | 'renamed' | 'duplicated';
     profileName: string;
-    data?: any;
+    data?: unknown;
 }
 
 /**
@@ -168,14 +171,14 @@ export interface ProfileActionEvent {
  */
 export interface SettingsChangeEvent {
     type: 'profile' | 'models' | 'criteria' | 'iterations' | 'aiLogging' | 'debugGeneration';
-    data: any;
+    data: unknown;
 }
 
 /**
  * Service interfaces
  */
 export interface IPromptManagementService {
-    getPrompts(): any;
+    getPrompts(): OrchestratorPrompts;
     updatePrompt(key: string, value: string): void;
     revertToDefaults(): Promise<void>;
     saveToStorage(): Promise<void>;
@@ -187,11 +190,11 @@ export interface IPromptManagementService {
 
 export interface ISettingsService {
     getProfileNames(): string[];
-    getProfile(name: string): any | null;
+    getProfile(name: string): SettingsProfile | null;
     getLastUsedProfileName(): string | null;
-    getLastUsedProfile(): any | null;
+    getLastUsedProfile(): SettingsProfile | null;
     createProfile(name: string): Promise<{ success: boolean; message: string }>;
-    switchToProfile(profileName: string): Promise<any | null>;
+    switchToProfile(profileName: string): Promise<SettingsProfile | null>;
     deleteProfile(profileName: string): Promise<{ success: boolean; message: string }>;
     exportProfile(profileName: string): { success: boolean; message: string };
     onChange(handler: (event: SettingsChangeEvent) => void): void;
@@ -201,9 +204,9 @@ export interface ISettingsService {
  * Component interfaces
  */
 export interface ICriteriaEditor {
-    getCriteria(): any[];
-    setCriteria(criteria: any[]): void;
-    addCriterion(criterion?: any): void;
+    getCriteria(): QualityCriterion[];
+    setCriteria(criteria: QualityCriterion[]): void;
+    addCriterion(criterion?: Partial<LLMCriterion>): void;
     removeCriterion(index: number): void;
     resetToDefaults(): void;
     copyCriteria(): Promise<void>;
@@ -223,10 +226,10 @@ export interface IProfileSelector {
  * Modal factory configuration
  */
 export interface ModalFactoryConfig {
-    settingsManager?: any;
-    modelSelector?: any;
-    projectManager?: any;
-    eventEmitter?: any;
+    settingsManager?: SettingsManager;
+    modelSelector?: ModelSelector;
+    projectManager?: ProjectManager;
+    eventEmitter?: ModalEventEmitter;
 }
 
 /**
@@ -234,6 +237,6 @@ export interface ModalFactoryConfig {
  */
 export interface ModalComponentConfig {
     container: HTMLElement;
-    config?: any;
-    dependencies?: any;
+    config?: unknown;
+    dependencies?: unknown;
 } 

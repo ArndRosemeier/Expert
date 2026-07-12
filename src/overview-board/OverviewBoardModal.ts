@@ -130,7 +130,7 @@ export class OverviewBoardModal extends BaseModal {
 
     this.layerSelect = createElement('select', {
       classes: ['layer-select']
-    }) as HTMLSelectElement;
+    });
 
     this.layerSelect.addEventListener('change', () => {
       this.handleLayerChange();
@@ -147,7 +147,7 @@ export class OverviewBoardModal extends BaseModal {
     this.refreshButton = createElement('button', {
       content: '🔄 Refresh',
       classes: ['toolbar-button']
-    }) as HTMLButtonElement;
+    });
 
     this.refreshButton.addEventListener('click', () => {
       this.handleRefresh();
@@ -169,7 +169,7 @@ export class OverviewBoardModal extends BaseModal {
     });
 
     clearCacheButton.addEventListener('click', () => {
-      this.handleClearCache();
+      void this.handleClearCache();
     });
 
     controlsGroup.appendChild(this.refreshButton);
@@ -199,7 +199,7 @@ export class OverviewBoardModal extends BaseModal {
 
     this.canvas = createElement('canvas', {
       classes: ['overview-canvas']
-    }) as HTMLCanvasElement;
+    });
 
     // Set canvas size
     this.canvas.width = 1200;
@@ -331,7 +331,7 @@ export class OverviewBoardModal extends BaseModal {
     if (selectedLayer !== this.currentLayer) {
       this.currentLayer = selectedLayer;
       this.updateButtonStates();
-      this.analyzeCurrentLayer();
+      void this.analyzeCurrentLayer();
     }
   }
 
@@ -343,7 +343,7 @@ export class OverviewBoardModal extends BaseModal {
       this.updateStatus('Please select a layer first.');
       return;
     }
-    this.analyzeCurrentLayer();
+    void this.analyzeCurrentLayer();
   }
 
   /**
@@ -368,7 +368,7 @@ export class OverviewBoardModal extends BaseModal {
       });
 
       document.body.appendChild(link);
-      (link as HTMLAnchorElement).click();
+      (link).click();
       document.body.removeChild(link);
 
       this.updateStatus('Image exported');

@@ -17,13 +17,7 @@ export class AILogService {
     public async initialize(): Promise<void> {
         try {
             const storageService = await StorageService.getInstance();
-            // Access the underlying IndexedDB service
-            this.indexedDBService = (storageService as any).indexedDBService;
-            
-            if (!this.indexedDBService) {
-                console.error('❌ Failed to get IndexedDBService from StorageService');
-                throw new Error('IndexedDBService not available');
-            }
+            this.indexedDBService = storageService.getIndexedDBService();
             
             console.log('✅ AILogService initialized successfully');
         } catch (error) {

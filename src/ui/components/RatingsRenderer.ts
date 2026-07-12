@@ -26,7 +26,7 @@ export class RatingsRenderer {
             showJustification = true
         } = options;
 
-        if (!ratings || ratings.length === 0) {
+        if (ratings.length === 0) {
             return this.renderNoRatings(title, compact);
         }
 

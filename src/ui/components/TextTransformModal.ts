@@ -536,16 +536,13 @@ export class TextTransformModal extends BaseModal {
     }
     
     // Model purpose selection
-    if (this.modelPurposeSelect) {
-      this.modelPurposeSelect.addEventListener('change', () => {
-        this.selectedModelPurpose = this.modelPurposeSelect!.value;
-        void this.saveModelPurpose();
-      });
-    }
+    this.modelPurposeSelect.addEventListener('change', () => {
+      this.selectedModelPurpose = this.modelPurposeSelect!.value;
+      void this.saveModelPurpose();
+    });
     
     // History item clicks
-    if (this.historyContainer) {
-      this.historyContainer.addEventListener('click', (event) => {
+    this.historyContainer.addEventListener('click', (event) => {
         const deleteButton = (event.target as HTMLElement).closest('.history-item-delete');
         if (deleteButton) {
           // Handle delete button click
@@ -574,18 +571,15 @@ export class TextTransformModal extends BaseModal {
           }
         }
       });
-    }
     
     // Enter key handling (Ctrl+Enter to submit)
     [this.textToChangeTextarea, this.contextTextarea, this.formatInstructionsTextarea, this.instructionTextarea].forEach(textarea => {
-      if (textarea) {
-        textarea.addEventListener('keydown', (event) => {
-          if (event.ctrlKey && event.key === 'Enter') {
-            event.preventDefault();
-            void this.handleTransform();
-          }
-        });
-      }
+      textarea.addEventListener('keydown', (event) => {
+        if (event.ctrlKey && event.key === 'Enter') {
+          event.preventDefault();
+          void this.handleTransform();
+        }
+      });
     });
   }
 

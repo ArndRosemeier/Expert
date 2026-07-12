@@ -426,6 +426,23 @@ export function serializeWorldState(state: RPGWorldState): RPGWorldStateSerializ
 }
 
 export function deserializeWorldState(serialized: RPGWorldStateSerialized): RPGWorldState {
+    type LegacyTurnFields = {
+        createdTurn?: number;
+        lastUsedTurn?: number;
+    };
+
+    type LegacyLocation = Omit<RPGLocation, 'createdTurn' | 'lastUsedTurn' | 'sceneState'> & LegacyTurnFields & {
+        sceneState?: Record<string, unknown>;
+    };
+
+    type LegacyCharacter = Omit<RPGCharacter, 'createdTurn' | 'lastUsedTurn' | 'sceneState' | 'goals'> & LegacyTurnFields & {
+        sceneState?: Record<string, unknown>;
+        goals?: RPGGoal[];
+    };
+
+    type LegacyLore = Omit<RPGLore, 'createdTurn' | 'lastUsedTurn'> & LegacyTurnFields;
+    type LegacyDistance = Omit<RPGDistance, 'createdTurn' | 'lastUsedTurn'> & LegacyTurnFields;
+
     const migratedRelationships = new Map<string, RPGRelationship>();
     for (const [id, rel] of Object.entries(serialized.relationships)) {
         migratedRelationships.set(id, migrateRelationship(rel));
@@ -433,47 +450,47 @@ export function deserializeWorldState(serialized: RPGWorldStateSerialized): RPGW
 
     const migratedLocations = new Map<string, RPGLocation>();
     for (const [id, loc] of Object.entries(serialized.locations)) {
-        const anyLoc = loc as RPGLocation & { createdTurn?: number; lastUsedTurn?: number; sceneState?: Record<string, unknown> };
-        const createdTurn = anyLoc.createdTurn ?? 0;
+        const legacyLoc = loc as LegacyLocation;
+        const createdTurn = legacyLoc.createdTurn ?? 0;
         migratedLocations.set(id, {
-            ...anyLoc,
+            ...legacyLoc,
             createdTurn,
-            lastUsedTurn: anyLoc.lastUsedTurn ?? createdTurn,
-            sceneState: anyLoc.sceneState ?? {}
+            lastUsedTurn: legacyLoc.lastUsedTurn ?? createdTurn,
+            sceneState: legacyLoc.sceneState ?? {}
         });
     }
 
     const migratedCharacters = new Map<string, RPGCharacter>();
     for (const [id, ch] of Object.entries(serialized.characters)) {
-        const anyCh = ch as RPGCharacter & { createdTurn?: number; lastUsedTurn?: number; sceneState?: Record<string, unknown>; goals?: RPGGoal[] };
-        const createdTurn = anyCh.createdTurn ?? 0;
+        const legacyCh = ch as LegacyCharacter;
+        const createdTurn = legacyCh.createdTurn ?? 0;
         migratedCharacters.set(id, {
-            ...anyCh,
+            ...legacyCh,
             createdTurn,
-            lastUsedTurn: anyCh.lastUsedTurn ?? createdTurn,
-            sceneState: anyCh.sceneState ?? {},
-            goals: anyCh.goals ?? []
+            lastUsedTurn: legacyCh.lastUsedTurn ?? createdTurn,
+            sceneState: legacyCh.sceneState ?? {},
+            goals: legacyCh.goals ?? []
         });
     }
 
     const migratedLore = new Map<string, RPGLore>();
     for (const [id, lore] of Object.entries(serialized.lore)) {
-        const anyLore = lore as RPGLore & { createdTurn?: number; lastUsedTurn?: number };
-        const createdTurn = anyLore.createdTurn ?? 0;
+        const legacyLore = lore as LegacyLore;
+        const createdTurn = legacyLore.createdTurn ?? 0;
         migratedLore.set(id, {
-            ...anyLore,
+            ...legacyLore,
             createdTurn,
-            lastUsedTurn: anyLore.lastUsedTurn ?? createdTurn
+            lastUsedTurn: legacyLore.lastUsedTurn ?? createdTurn
         });
     }
 
     const migratedDistances: RPGDistance[] = serialized.distances.map(d => {
-        const anyD = d as RPGDistance & { createdTurn?: number; lastUsedTurn?: number };
-        const createdTurn = anyD.createdTurn ?? 0;
+        const legacyD = d as LegacyDistance;
+        const createdTurn = legacyD.createdTurn ?? 0;
         return {
-            ...anyD,
+            ...legacyD,
             createdTurn,
-            lastUsedTurn: anyD.lastUsedTurn ?? createdTurn
+            lastUsedTurn: legacyD.lastUsedTurn ?? createdTurn
         };
     });
 
@@ -491,13 +508,17 @@ export function deserializeWorldState(serialized: RPGWorldStateSerialized): RPGW
 
 function migrateRelationship(rel: RPGRelationship | RPGLegacyRelationshipSerialized): RPGRelationship {
     if ('kind' in rel) {
-        const anyRel = rel as RPGRelationship & { createdTurn?: number; lastUsedTurn?: number };
-        const createdTurn = anyRel.createdTurn ?? 0;
-        return {
-            ...anyRel,
-            createdTurn,
-            lastUsedTurn: anyRel.lastUsedTurn ?? createdTurn
+        type LegacyRelationship = Omit<RPGRelationship, 'createdTurn' | 'lastUsedTurn'> & {
+            createdTurn?: number;
+            lastUsedTurn?: number;
         };
+        const legacyRel = rel as LegacyRelationship;
+        const createdTurn = legacyRel.createdTurn ?? 0;
+        return {
+            ...legacyRel,
+            createdTurn,
+            lastUsedTurn: legacyRel.lastUsedTurn ?? createdTurn
+        } as RPGRelationship;
     }
 
     // Legacy shape: { type, description } -> { kind, note } (+ typed payload when possible)

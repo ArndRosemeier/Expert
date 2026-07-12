@@ -37,9 +37,6 @@ export class XmlEchoRenderer {
 
         for (const match of matches) {
             const index = match.index;
-            if (index === undefined) {
-                continue;
-            }
             if (index > lastIndex) {
                 html += XmlEchoRenderer.escapeHtml(text.slice(lastIndex, index)).replace(/\n/g, '<br/>');
             }

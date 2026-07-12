@@ -157,17 +157,11 @@ export class GuidedOutlineCreator {
         const cancelBtn = container.querySelector('.guided-cancel-btn') as HTMLButtonElement;
         const loadBtn = container.querySelector('.guided-load-btn') as HTMLButtonElement;
 
-        if (startBtn) {
-            startBtn.addEventListener('click', () => void this.openGuidedChat());
-        }
+        startBtn.addEventListener('click', () => { void this.openGuidedChat(); });
 
-        if (cancelBtn) {
-            cancelBtn.addEventListener('click', () => { this.handleCancel(container); });
-        }
+        cancelBtn.addEventListener('click', () => { this.handleCancel(container); });
 
-        if (loadBtn) {
-            loadBtn.addEventListener('click', () => void this.openGuidedChat({ restorePreviousChat: true }));
-        }
+        loadBtn.addEventListener('click', () => { void this.openGuidedChat({ restorePreviousChat: true }); });
 
         // Reveal the "Load Last Chat" button only when a saved chat exists.
         void this.refreshLoadButtonVisibility();
@@ -189,7 +183,7 @@ export class GuidedOutlineCreator {
     private initializeTemplateSelector(): void {
         this.templateSelector = new TemplateSelector({
             containerId: 'guided-template-selector',
-            onSelectionChange: (template, _templateName) => {
+            onSelectionChange: (template) => {
                 this.selectedTemplate = template;
                 this.updateStartButtonState();
             },
@@ -206,8 +200,8 @@ export class GuidedOutlineCreator {
     }
 
     private updateStartButtonState(): void {
-        const startBtn = document.querySelector('.guided-start-btn') as HTMLButtonElement;
-        if (startBtn) {
+        const startBtn = document.querySelector('.guided-start-btn');
+        if (startBtn instanceof HTMLButtonElement) {
             startBtn.disabled = !this.selectedTemplate;
             startBtn.title = this.selectedTemplate ? 'Start the guided chat' : 'Please select a template first';
         }
@@ -426,15 +420,15 @@ export class GuidedOutlineCreator {
         }
 
         this.isProcessingResult = true;
-        await this.processStructuredResult(content);
+        this.processStructuredResult(content);
     }
 
     /**
      * Shows a preview of the parsed outline and asks the user to confirm creation.
      * Resolves true when the user confirms, false when they choose to keep refining.
      */
-    private showConfirmation(result: GuidedOutlineResult): Promise<boolean> {
-        return new Promise((resolve) => {
+    private async showConfirmation(result: GuidedOutlineResult): Promise<boolean> {
+        return await new Promise((resolve) => {
             const backdrop = document.createElement('div');
             backdrop.style.cssText = `
                 position: fixed;
@@ -551,7 +545,7 @@ export class GuidedOutlineCreator {
         return titleRegex.test(content) && content.includes(contextSeparator);
     }
 
-    private async processStructuredResult(content: string): Promise<void> {
+    private processStructuredResult(content: string): void {
         try {
             const result = this.parseStructuredResult(content);
             if (!result) {

@@ -26,6 +26,21 @@
  * This blocker serves as documentation and prevents accidental localStorage usage.
  */
 
+export class LocalStorageForbiddenError extends Error {
+    readonly forbiddenMethod: string;
+    readonly forbiddenKey?: string;
+    readonly suggestedSolution = 'Use StorageService instead of localStorage';
+
+    constructor(message: string, forbiddenMethod: string, forbiddenKey?: string) {
+        super(message);
+        this.name = 'LocalStorageForbiddenError';
+        this.forbiddenMethod = forbiddenMethod;
+        if (forbiddenKey !== undefined) {
+            this.forbiddenKey = forbiddenKey;
+        }
+    }
+}
+
 export interface LocalStorageBlockerConfig {
     /** Keys that are explicitly allowed to use localStorage */
     allowedKeys: string[];
@@ -202,9 +217,16 @@ export class LocalStorageBlocker {
             errorMessage += `   • Consistent API across the entire application\n\n`;
             
             if (key) {
+                let storageMethod = 'delete';
+                if (method === 'getItem') {
+                    storageMethod = 'get';
+                } else if (method === 'setItem') {
+                    storageMethod = 'set';
+                }
+                const storageArgs = method === 'setItem' ? ', data' : '';
                 errorMessage += `🔧 FOR KEY '${key}' SPECIFICALLY:\n`;
                 errorMessage += `   Replace: localStorage.${method}('${key}', ...)\n`;
-                errorMessage += `   With: await storage.${method === 'getItem' ? 'get' : method === 'setItem' ? 'set' : 'delete'}('${key}'${method === 'setItem' ? ', data' : ''})\n\n`;
+                errorMessage += `   With: await storage.${storageMethod}('${key}'${storageArgs})\n\n`;
             }
             
             errorMessage += `📚 DOCUMENTATION:\n`;
@@ -212,15 +234,7 @@ export class LocalStorageBlocker {
             errorMessage += `   All existing localStorage usage has been migrated to StorageService\n`;
         }
         
-        const error = new Error(errorMessage);
-        error.name = 'LocalStorageForbiddenError';
-        
-        // Add custom properties for programmatic handling
-        (error as any).forbiddenMethod = method;
-        (error as any).forbiddenKey = key;
-        (error as any).suggestedSolution = 'Use StorageService instead of localStorage';
-        
-        throw error;
+        throw new LocalStorageForbiddenError(errorMessage, method, key);
     }
 
     /**

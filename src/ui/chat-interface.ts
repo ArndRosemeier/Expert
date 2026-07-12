@@ -66,6 +66,138 @@ export class ChatInterface {
         return this.chatTitle === 'Guided Outline Creation';
     }
 
+    private getSidebarActionsTitle(): string {
+        if (this.isManualSupportMode()) {
+            return 'Quick Help';
+        }
+        if (this.isGuidedOutlineMode()) {
+            return 'Outline Creation';
+        }
+        return 'Standard Actions';
+    }
+
+    private getSidebarWelcomeHtml(): string {
+        if (!this.customSystemPrompt) {
+            return '<p>Select a model and start chatting. Your conversation will build context as you continue.</p>';
+        }
+        if (this.isManualSupportMode()) {
+            return '<p style="color: #10b981; margin-bottom: 0.5rem;"><strong>📚 Manual Support Ready</strong></p><p>I have access to the complete user manual and can help you understand how to use the Expert System. Ask me anything about the app features, workflows, or troubleshooting!</p>';
+        }
+        if (this.isGuidedOutlineMode()) {
+            return '<p style="color: #007bff; margin-bottom: 0.5rem;"><strong>🗣️ Guided Outline Creation</strong></p><p>I will help you create a structured story outline through conversation. Describe your story idea to get started!</p>';
+        }
+        return '<p style="color: #10b981; margin-bottom: 0.5rem;"><strong>✓ Context Loaded</strong></p><p>This chat has specific context about your document structure. Ask questions about the content, request edits, or get suggestions.</p>';
+    }
+
+    private getSidebarActionsContent(): string {
+        if (this.isManualSupportMode()) {
+            return `
+                            <button id="getting-started-btn" style="
+                                width: 100%;
+                                background: #28a745;
+                                color: white;
+                                border: 1px solid #218838;
+                                border-radius: 6px;
+                                padding: 0.75rem;
+                                font-size: 0.9rem;
+                                cursor: pointer;
+                                transition: background-color 0.2s;
+                                margin-bottom: 0.5rem;
+                                text-align: left;
+                            " onmouseover="this.style.backgroundColor='#218838'" onmouseout="this.style.backgroundColor='#28a745'">
+                                🚀 Getting Started Guide
+                            </button>
+                            <button id="features-overview-btn" style="
+                                width: 100%;
+                                background: #17a2b8;
+                                color: white;
+                                border: 1px solid #138496;
+                                border-radius: 6px;
+                                padding: 0.75rem;
+                                font-size: 0.9rem;
+                                cursor: pointer;
+                                transition: background-color 0.2s;
+                                margin-bottom: 0.5rem;
+                                text-align: left;
+                            " onmouseover="this.style.backgroundColor='#138496'" onmouseout="this.style.backgroundColor='#17a2b8'">
+                                📋 Features Overview
+                            </button>
+                            <button id="troubleshooting-btn" style="
+                                width: 100%;
+                                background: #dc3545;
+                                color: white;
+                                border: 1px solid #c82333;
+                                border-radius: 6px;
+                                padding: 0.75rem;
+                                font-size: 0.9rem;
+                                cursor: pointer;
+                                transition: background-color 0.2s;
+                                text-align: left;
+                            " onmouseover="this.style.backgroundColor='#c82333'" onmouseout="this.style.backgroundColor='#dc3545'">
+                                🔧 Troubleshooting Help
+                            </button>`;
+        }
+        if (this.isGuidedOutlineMode()) {
+            return `
+                            <div style="
+                                color: #007bff;
+                                font-size: 0.85rem;
+                                margin-bottom: 1rem;
+                                padding: 0.75rem;
+                                background: rgba(0, 123, 255, 0.1);
+                                border-radius: 6px;
+                                border-left: 3px solid #007bff;
+                            ">
+                                💡 Tell me about your story idea and I'll ask clarifying questions to create a detailed outline with context items.
+                            </div>`;
+        }
+        return `
+                            <button id="consistency-check-btn" style="
+                                width: 100%;
+                                background: #17a2b8;
+                                color: white;
+                                border: 1px solid #138496;
+                                border-radius: 6px;
+                                padding: 0.75rem;
+                                font-size: 0.9rem;
+                                cursor: pointer;
+                                transition: background-color 0.2s;
+                                margin-bottom: 0.5rem;
+                                text-align: left;
+                            " onmouseover="this.style.backgroundColor='#138496'" onmouseout="this.style.backgroundColor='#17a2b8'">
+                                📋 Check Consistency
+                            </button>
+                            <button id="story-improvements-btn" style="
+                                width: 100%;
+                                background: #28a745;
+                                color: white;
+                                border: 1px solid #218838;
+                                border-radius: 6px;
+                                padding: 0.75rem;
+                                font-size: 0.9rem;
+                                cursor: pointer;
+                                transition: background-color 0.2s;
+                                text-align: left;
+                                margin-bottom: 0.5rem;
+                            " onmouseover="this.style.backgroundColor='#218838'" onmouseout="this.style.backgroundColor='#28a745'">
+                                ✨ Suggest Improvements
+                            </button>
+                            <button id="roleplay-adventure-btn" style="
+                                width: 100%;
+                                background: #6f42c1;
+                                color: white;
+                                border: 1px solid #5a2d91;
+                                border-radius: 6px;
+                                padding: 0.75rem;
+                                font-size: 0.9rem;
+                                cursor: pointer;
+                                transition: background-color 0.2s;
+                                text-align: left;
+                            " onmouseover="this.style.backgroundColor='#5a2d91'" onmouseout="this.style.backgroundColor='#6f42c1'">
+                                🎭 Roleplay Adventure
+                            </button>`;
+    }
+
     /**
      * Load the last used chat model from storage
      */
@@ -186,110 +318,8 @@ export class ChatInterface {
                                 margin-bottom: 0.75rem;
                                 text-transform: uppercase;
                                 letter-spacing: 0.5px;
-                            ">${this.isManualSupportMode() ? 'Quick Help' : (this.isGuidedOutlineMode() ? 'Outline Creation' : 'Standard Actions')}</div>
-                            ${this.isManualSupportMode() ? `
-                            <button id="getting-started-btn" style="
-                                width: 100%;
-                                background: #28a745;
-                                color: white;
-                                border: 1px solid #218838;
-                                border-radius: 6px;
-                                padding: 0.75rem;
-                                font-size: 0.9rem;
-                                cursor: pointer;
-                                transition: background-color 0.2s;
-                                margin-bottom: 0.5rem;
-                                text-align: left;
-                            " onmouseover="this.style.backgroundColor='#218838'" onmouseout="this.style.backgroundColor='#28a745'">
-                                🚀 Getting Started Guide
-                            </button>
-                            <button id="features-overview-btn" style="
-                                width: 100%;
-                                background: #17a2b8;
-                                color: white;
-                                border: 1px solid #138496;
-                                border-radius: 6px;
-                                padding: 0.75rem;
-                                font-size: 0.9rem;
-                                cursor: pointer;
-                                transition: background-color 0.2s;
-                                margin-bottom: 0.5rem;
-                                text-align: left;
-                            " onmouseover="this.style.backgroundColor='#138496'" onmouseout="this.style.backgroundColor='#17a2b8'">
-                                📋 Features Overview
-                            </button>
-                            <button id="troubleshooting-btn" style="
-                                width: 100%;
-                                background: #dc3545;
-                                color: white;
-                                border: 1px solid #c82333;
-                                border-radius: 6px;
-                                padding: 0.75rem;
-                                font-size: 0.9rem;
-                                cursor: pointer;
-                                transition: background-color 0.2s;
-                                text-align: left;
-                            " onmouseover="this.style.backgroundColor='#c82333'" onmouseout="this.style.backgroundColor='#dc3545'">
-                                🔧 Troubleshooting Help
-                            </button>
-                            ` : this.isGuidedOutlineMode() ? `
-                            <div style="
-                                color: #007bff;
-                                font-size: 0.85rem;
-                                margin-bottom: 1rem;
-                                padding: 0.75rem;
-                                background: rgba(0, 123, 255, 0.1);
-                                border-radius: 6px;
-                                border-left: 3px solid #007bff;
-                            ">
-                                💡 Tell me about your story idea and I'll ask clarifying questions to create a detailed outline with context items.
-                            </div>
-                            ` : `
-                            <button id="consistency-check-btn" style="
-                                width: 100%;
-                                background: #17a2b8;
-                                color: white;
-                                border: 1px solid #138496;
-                                border-radius: 6px;
-                                padding: 0.75rem;
-                                font-size: 0.9rem;
-                                cursor: pointer;
-                                transition: background-color 0.2s;
-                                margin-bottom: 0.5rem;
-                                text-align: left;
-                            " onmouseover="this.style.backgroundColor='#138496'" onmouseout="this.style.backgroundColor='#17a2b8'">
-                                📋 Check Consistency
-                            </button>
-                            <button id="story-improvements-btn" style="
-                                width: 100%;
-                                background: #28a745;
-                                color: white;
-                                border: 1px solid #218838;
-                                border-radius: 6px;
-                                padding: 0.75rem;
-                                font-size: 0.9rem;
-                                cursor: pointer;
-                                transition: background-color 0.2s;
-                                text-align: left;
-                                margin-bottom: 0.5rem;
-                            " onmouseover="this.style.backgroundColor='#218838'" onmouseout="this.style.backgroundColor='#28a745'">
-                                ✨ Suggest Improvements
-                            </button>
-                            <button id="roleplay-adventure-btn" style="
-                                width: 100%;
-                                background: #6f42c1;
-                                color: white;
-                                border: 1px solid #5a2d91;
-                                border-radius: 6px;
-                                padding: 0.75rem;
-                                font-size: 0.9rem;
-                                cursor: pointer;
-                                transition: background-color 0.2s;
-                                text-align: left;
-                            " onmouseover="this.style.backgroundColor='#5a2d91'" onmouseout="this.style.backgroundColor='#6f42c1'">
-                                🎭 Roleplay Adventure
-                            </button>
-                            `}
+                            ">${this.getSidebarActionsTitle()}</div>
+                            ${this.getSidebarActionsContent()}
                         </div>
                         ` : ''}
                         <div style="
@@ -297,14 +327,7 @@ export class ChatInterface {
                             color: #888;
                             line-height: 1.4;
                         ">
-                            ${this.customSystemPrompt ? 
-                                (this.isManualSupportMode() ? 
-                                    '<p style="color: #10b981; margin-bottom: 0.5rem;"><strong>📚 Manual Support Ready</strong></p><p>I have access to the complete user manual and can help you understand how to use the Expert System. Ask me anything about the app features, workflows, or troubleshooting!</p>' 
-                                    : this.isGuidedOutlineMode() ?
-                                    '<p style="color: #007bff; margin-bottom: 0.5rem;"><strong>🗣️ Guided Outline Creation</strong></p><p>I will help you create a structured story outline through conversation. Describe your story idea to get started!</p>'
-                                    : '<p style="color: #10b981; margin-bottom: 0.5rem;"><strong>✓ Context Loaded</strong></p><p>This chat has specific context about your document structure. Ask questions about the content, request edits, or get suggestions.</p>')
-                                : '<p>Select a model and start chatting. Your conversation will build context as you continue.</p>'
-                            }
+                            ${this.getSidebarWelcomeHtml()}
                         </div>
                     </div>
                     <div class="sidebar-footer" style="
@@ -527,10 +550,7 @@ export class ChatInterface {
         this.rewindButton = this.chatContainer.querySelector('#rewind-btn') as HTMLButtonElement;
         this.modelPurposeSelect = this.chatContainer.querySelector('#model-purpose-select') as HTMLSelectElement;
         
-        // Set the selected model purpose
-        if (this.modelPurposeSelect) {
-            this.modelPurposeSelect.value = this.selectedModelPurpose;
-        }
+        this.modelPurposeSelect.value = this.selectedModelPurpose;
     }
 
     /**
@@ -596,7 +616,7 @@ export class ChatInterface {
         const copyConversationButton = this.chatContainer?.querySelector('#copy-conversation-btn');
         if (copyConversationButton) {
             copyConversationButton.addEventListener('click', () => {
-                this.copyConversationToClipboard();
+                void this.copyConversationToClipboard();
             });
         }
 
@@ -752,7 +772,7 @@ export class ChatInterface {
         const previousMessages = this.messages
             .filter(m => !m.isStreaming)
             .map(m => ({
-                role: m.role as 'user' | 'assistant',
+                role: m.role,
                 content: m.content
             }));
         
@@ -807,7 +827,7 @@ export class ChatInterface {
             await this.openRouterClient.chatStreamConversation(this.selectedModelPurpose, conversationMessages, callbacks);
         } catch (error) {
             console.error('Failed to start chat stream:', error);
-            callbacks.onError?.(error instanceof Error ? error : new Error('Unknown error'));
+            callbacks.onError(error instanceof Error ? error : new Error('Unknown error'));
         }
     }
 
@@ -817,14 +837,15 @@ export class ChatInterface {
     private stopGeneration(): void {
         if (this.isStreamingResponse) {
             this.openRouterClient.abort();
+            const streamingMessageId = this.currentStreamingMessageId;
             this.isStreamingResponse = false;
             this.currentStreamingMessageId = null;
             this.toggleButtons(false);
             this.updateSendButtonState();
 
             // Update the streaming message to indicate it was stopped
-            if (this.currentStreamingMessageId) {
-                const message = this.messages.find(m => m.id === this.currentStreamingMessageId);
+            if (streamingMessageId) {
+                const message = this.messages.find(m => m.id === streamingMessageId);
                 if (message) {
                     message.isStreaming = false;
                     message.content += '\n\n[Generation stopped by user]';
@@ -1190,16 +1211,12 @@ For each suggestion, provide clear justification for why the change would improv
             await navigator.clipboard.writeText(conversationText);
             
             // Show temporary success feedback
-            const button = this.chatContainer?.querySelector('#copy-conversation-btn') as HTMLElement;
-            if (button && button.textContent) {
-                const originalText = button.textContent;
-                button.textContent = '✅ Copied!';
-                setTimeout(() => {
-                    if (button) {
-                        button.textContent = originalText;
-                    }
-                }, 2000);
-            }
+            const button = this.chatContainer!.querySelector('#copy-conversation-btn') as HTMLElement;
+            const originalText = button.textContent;
+            button.textContent = '✅ Copied!';
+            setTimeout(() => {
+                button.textContent = originalText;
+            }, 2000);
             
         } catch (error) {
             console.error('Failed to copy conversation:', error);
@@ -1359,7 +1376,7 @@ For each suggestion, provide clear justification for why the change would improv
             await this.openRouterClient.chatStreamConversation(this.selectedModelPurpose, conversationMessages, callbacks);
         } catch (error) {
             console.error('Failed to start roleplay adventure stream:', error);
-            callbacks.onError?.(error instanceof Error ? error : new Error('Unknown error'));
+            callbacks.onError(error instanceof Error ? error : new Error('Unknown error'));
         }
     }
 

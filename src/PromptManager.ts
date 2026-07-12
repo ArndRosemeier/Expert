@@ -2786,15 +2786,15 @@ Object.keys(defaultPromptDefinitions).forEach(key => {
 
 // Helper functions for accessing metadata
 export function getPromptPlaceholders(promptKey: keyof OrchestratorPrompts): string[] {
-    return defaultPromptDefinitions[promptKey]?.placeholders || [];
+    return defaultPromptDefinitions[promptKey].placeholders;
 }
 
 export function getPromptDescription(promptKey: keyof OrchestratorPrompts): string {
-    return defaultPromptDefinitions[promptKey]?.description || '';
+    return defaultPromptDefinitions[promptKey].description;
 }
 
 export function getPromptText(promptKey: keyof OrchestratorPrompts): string {
-    return defaultPromptDefinitions[promptKey]?.text || '';
+    return defaultPromptDefinitions[promptKey].text;
 }
 
 // Simple prompt manager class for specific use cases (like context transformation)

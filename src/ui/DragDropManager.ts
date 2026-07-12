@@ -102,7 +102,7 @@ export class DragDropManager {
      * Calculate the maximum depth of a node and its entire subtree
      */
     private calculateNodeTreeDepth(node: DocumentNode): number {
-        if (!node.children || node.children.length === 0) {
+        if (node.children.length === 0) {
             return 1; // Just this node
         }
         
@@ -442,7 +442,8 @@ export class DragDropManager {
             }
         });
 
-        element.addEventListener('drop', async (e) => {
+        element.addEventListener('drop', (e) => {
+            void (async () => {
             e.preventDefault();
             
             if (!this.draggedNode || !this.draggedNodeProject) return;
@@ -492,6 +493,7 @@ export class DragDropManager {
             } else {
                 alert(result.message);
             }
+            })();
         });
     }
 

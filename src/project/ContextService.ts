@@ -50,7 +50,7 @@ export class ContextService {
         // 0. Add matching conditional context items for this node and its ancestors
         try {
             const conditional = targetNode.assembleConditionalContext(targetNode, rootNode);
-            if (conditional && conditional.trim()) {
+            if (conditional.trim()) {
                 contextParts.push(`CONDITIONAL CONTEXT (matching items):\n---\n${conditional}\n---`);
             }
         } catch (e) {
@@ -63,7 +63,7 @@ export class ContextService {
         // 2. Optionally add the parent's content (structural outline)
         if (includeParentContent && targetNode.parentId) {
             const parent = this.treeService.findNodeById(targetNode.parentId, rootNode);
-            if (parent && parent.content) {
+            if (parent?.content.trim()) {
                 const parentLevelName = parent.template[parent.level] ?? `Level ${parent.level}`;
                 contextParts.push(`STRUCTURAL CONTEXT FROM PARENT (${parentLevelName}: "${parent.title}"):\n---\n${parent.content}\n---`);
             }
@@ -71,7 +71,7 @@ export class ContextService {
 
         // 3. Add content from adjacent nodes at the same template level
         const previousNode = this.treeService.getPreviousNode(targetNode);
-        if (previousNode && previousNode.content && previousNode.content.trim()) {
+        if (previousNode?.content.trim()) {
             const nodeLevelName = targetNode.template[targetNode.level] ?? `Level ${targetNode.level}`;
             contextParts.push(`PREVIOUS ${nodeLevelName.toUpperCase()} CONTENT ("${previousNode.title}"):\n---\n${previousNode.content}\n---`);
         }
@@ -92,7 +92,7 @@ export class ContextService {
      * @param rootNode The root node of the tree.
      * @returns Array with parent context string (empty if no parent or parent has no context).
      */
-    public collectParentContextForSummary(targetNode: DocumentNode, _rootNode: DocumentNode): string[] {
+    public collectParentContextForSummary(targetNode: DocumentNode): string[] {
         const contextChain: string[] = [];
         
         if (!targetNode.parentId) {
@@ -126,12 +126,12 @@ export class ContextService {
 
         // Adjacent node context (new approach)
         const previousNode = this.treeService.getPreviousNode(node);
-        if (previousNode && previousNode.content && previousNode.content.trim()) {
+        if (previousNode?.content.trim()) {
             contextInfo.push(`Previous node: ${previousNode.content.length} chars`);
         }
         
         const nextNode = this.treeService.getNextNode(node);
-        if (nextNode && nextNode.content && nextNode.content.trim()) {
+        if (nextNode?.content.trim()) {
             contextInfo.push(`Next node: ${nextNode.content.length} chars`);
         }
 

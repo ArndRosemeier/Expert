@@ -31,13 +31,8 @@ export class IndexedDBService {
   /**
    * Initialize the IndexedDB connection and create/upgrade database schema
    */
-  async initialize(): Promise<void> {
+    async initialize(): Promise<void> {
     return new Promise((resolve, reject) => {
-      if (!window.indexedDB) {
-        reject(new Error('IndexedDB is not supported in this browser'));
-        return;
-      }
-
       const request = indexedDB.open(this.config.name, this.config.version);
 
       request.onerror = () => {
@@ -69,18 +64,21 @@ export class IndexedDBService {
         resolve();
       };
 
-      request.onupgradeneeded = (event) => {
-        const db = (event.target as IDBOpenDBRequest).result;
-        const oldVersion = (event as IDBVersionChangeEvent).oldVersion;
-        const newVersion = (event as IDBVersionChangeEvent).newVersion;
+      request.onupgradeneeded = (event: IDBVersionChangeEvent) => {
+        const db = event.target;
+        if (!(db instanceof IDBOpenDBRequest)) {
+          reject(new Error('IndexedDB upgrade event missing database request'));
+          return;
+        }
+        const database = db.result;
+        const oldVersion = event.oldVersion;
+        const newVersion = event.newVersion;
         
         console.log(`IndexedDB upgrade needed: ${oldVersion} -> ${newVersion}`);
         
         // Create object stores and indexes
         for (const storeConfig of this.config.stores) {
-          let objectStore: IDBObjectStore;
-          
-          if (db.objectStoreNames.contains(storeConfig.name)) {
+          if (database.objectStoreNames.contains(storeConfig.name)) {
             console.log(`Store '${storeConfig.name}' already exists, skipping`);
             continue;
           }
@@ -93,7 +91,7 @@ export class IndexedDBService {
           if (storeConfig.autoIncrement !== undefined) {
             options.autoIncrement = storeConfig.autoIncrement;
           }
-          objectStore = db.createObjectStore(storeConfig.name, options);
+          const objectStore = database.createObjectStore(storeConfig.name, options);
 
           // Create indexes
           if (storeConfig.indexes) {

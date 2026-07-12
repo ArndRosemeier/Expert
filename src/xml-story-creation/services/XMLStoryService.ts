@@ -77,7 +77,7 @@ export class XMLStoryService {
     /**
      * Process an AI response to extract story elements
      */
-    public async processAIResponse(aiResponse: string): Promise<ParsedResponse> {
+    public processAIResponse(aiResponse: string): ParsedResponse {
         try {
             // Log raw AI response for debugging
 
@@ -87,12 +87,12 @@ export class XMLStoryService {
             
             // Process extracted elements
             for (const element of parseResult.extractedElements) {
-                await this.addOrUpdateElement(element, 'ai');
+                this.addOrUpdateElement(element, 'ai');
             }
             
             // Handle system commands
             for (const command of parseResult.systemCommands) {
-                await this.handleSystemCommand(command);
+                this.handleSystemCommand(command);
             }
             
             // Clear pending human edits that have been addressed
@@ -116,7 +116,7 @@ export class XMLStoryService {
     /**
      * Delete an element from the whiteboard
      */
-    public async deleteElement(elementId: string): Promise<void> {
+    public deleteElement(elementId: string): void {
         const element = this.state.elements.get(elementId);
         if (!element) {
             throw new Error(`Element with id ${elementId} not found`);
@@ -148,10 +148,10 @@ export class XMLStoryService {
     /**
      * Handle human edit to an element
      */
-    public async handleHumanEdit(
+    public handleHumanEdit(
         elementId: ElementID,
         newValue: string
-    ): Promise<void> {
+    ): void {
         const element = this.state.elements.get(elementId);
         if (!element) {
             throw new Error(`Element not found: ${elementId}`);
@@ -245,7 +245,7 @@ export class XMLStoryService {
     /**
      * Add a new empty element that can be edited manually
      */
-    public async addNewEmptyElement(type: StoryElementType): Promise<void> {
+    public addNewEmptyElement(type: StoryElementType): void {
         // Generate a unique ID for the new element
         const id = this.idGenerator.generateId(type);
         
@@ -269,7 +269,7 @@ export class XMLStoryService {
         };
         
         // Add the element via the existing method (will trigger events)
-        await this.addOrUpdateElement(newElement, 'human');
+        this.addOrUpdateElement(newElement, 'human');
     }
     
     /**
@@ -286,7 +286,7 @@ export class XMLStoryService {
         const elements: StoryElement[] = [];
         
         // Get elements in their natural list order (as stored in elementsByType arrays)
-        for (const [_type, elementIds] of this.state.elementsByType) {
+        for (const elementIds of this.state.elementsByType.values()) {
             for (const elementId of elementIds) {
                 const element = this.state.elements.get(elementId);
                 if (element) {
@@ -436,7 +436,7 @@ export class XMLStoryService {
     /**
      * Add or update an element in the state
      */
-    private async addOrUpdateElement(element: StoryElement & { insertPosition?: number }, source: 'ai' | 'human'): Promise<void> {
+    private addOrUpdateElement(element: StoryElement & { insertPosition?: number }, source: 'ai' | 'human'): void {
         const existingElement = this.state.elements.get(element.id);
         
         if (existingElement) {
@@ -499,7 +499,7 @@ export class XMLStoryService {
     /**
      * Handle system commands from AI
      */
-    private async handleSystemCommand(command: SystemCommand): Promise<void> {
+    private handleSystemCommand(command: SystemCommand): void {
         switch (command.type) {
             case 'refresh':
                 this.emitEvent({
@@ -511,12 +511,12 @@ export class XMLStoryService {
                 
             case 'edit':
                 this.handleEditCommand(command);
-                (command as any).executedRaw = command.rawXml ?? '';
+                command.executedRaw = command.rawXml ?? '';
                 break;
                 
             case 'delete':
                 this.handleDeleteCommand(command);
-                (command as any).executedRaw = command.rawXml ?? '';
+                command.executedRaw = command.rawXml ?? '';
                 break;
                 
             case 'append':
@@ -820,7 +820,7 @@ export class XMLStoryService {
         }
         
         this.state.pendingHumanEdits = exportedState['pendingHumanEdits'] as HumanEdit[];
-        this.state.searchFilter = exportedState['searchFilter'] as string;
+        this.state.searchFilter = exportedState['searchFilter'];
         this.state.typeFilters = new Set(exportedState['typeFilters'] as StoryElementType[]);
         this.state.collapsedSections = new Set(exportedState['collapsedSections'] as StoryElementType[]);
         

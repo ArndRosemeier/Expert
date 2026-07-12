@@ -55,10 +55,16 @@ interface UndoState {
     nodeId?: string;
 }
 
+export type TextEditorHighlight = {
+    startPos: number;
+    endPos: number;
+    className: string;
+};
+
 export class TextEditorWithHighlighting {
     private container: HTMLElement;
     private editableDiv!: HTMLDivElement;
-    private highlights: Map<string, {startPos: number, endPos: number, className: string}> = new Map();
+    private highlights: Map<string, TextEditorHighlight> = new Map();
     private plainTextContent: string = '';  // Track plain text separately from HTML
     private selectionMode: SelectionMode = 'sentences';  // Default to sentence boundaries
     private changeCallback?: (text: string) => void;
@@ -268,6 +274,13 @@ export class TextEditorWithHighlighting {
         this.highlights.clear();
         // Preserve cursor when clearing all highlights
         this.renderWithHighlights();
+    }
+
+    /**
+     * Get the current highlight regions keyed by highlight id.
+     */
+    public getHighlights(): ReadonlyMap<string, TextEditorHighlight> {
+        return this.highlights;
     }
 
     /**
@@ -679,11 +692,14 @@ export class TextEditorWithHighlighting {
      */
     private getCaretCharacterOffset(): number {
         let caretOffset = 0;
-        const doc = this.editableDiv.ownerDocument || document;
+        const doc = this.editableDiv.ownerDocument;
         const win = doc.defaultView ?? window;
         const sel = win.getSelection();
+        if (!sel) {
+            return caretOffset;
+        }
         
-        if (sel && sel.rangeCount > 0) {
+        if (sel.rangeCount > 0) {
             const range = sel.getRangeAt(0);
             const preCaretRange = range.cloneRange();
             preCaretRange.selectNodeContents(this.editableDiv);
@@ -738,7 +754,7 @@ export class TextEditorWithHighlighting {
                 range.collapse(true);
                 sel.removeAllRanges();
                 sel.addRange(range);
-            } catch (error) {
+            } catch {
                 // Fallback: try to set cursor at the end of the content
                 try {
                     const endRange = document.createRange();
@@ -746,7 +762,7 @@ export class TextEditorWithHighlighting {
                     endRange.collapse(false);
                     sel.removeAllRanges();
                     sel.addRange(endRange);
-                } catch (fallbackError) {
+                } catch {
                     // Silent fallback failure
                 }
             }

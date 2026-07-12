@@ -106,7 +106,7 @@ export function attachWorldRpgFoldHandlers(container: HTMLElement): void {
       if (!foldId) {
         return;
       }
-      const foldable = container.querySelector(`[data-fold-id="${foldId}"]`) as HTMLElement | null;
+      const foldable = container.querySelector(`[data-fold-id="${foldId}"]`);
       const icon = toggle.querySelector('.world-rpg-xml-fold-icon');
       if (foldable && icon) {
         foldable.classList.toggle('xml-folded');

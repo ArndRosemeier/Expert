@@ -14,6 +14,8 @@ import { OpenRouterClient } from '../../../OpenRouterClient';
 import { SettingsManager } from '../../../SettingsManager';
 import { TaskModelService } from '../../../services/TaskModelService';
 
+import { ProjectManager } from '../../../ProjectManager';
+
 export class RedundancyDetectionService {
     private openRouterClient: OpenRouterClient;
     private settingsManager: SettingsManager;
@@ -207,11 +209,11 @@ export class RedundancyDetectionService {
             // - If analyzing entire project: traverse all children regardless of depth
             // - If limited analysis: respect depth limit
             const shouldContinue = this.recursiveConfig.analyzeEntireProject 
-                ? node.children && node.children.length > 0
-                : currentDepth < this.recursiveConfig.maxDepth && node.children;
+                ? node.children.length > 0
+                : currentDepth < this.recursiveConfig.maxDepth && node.children.length > 0;
                 
             if (shouldContinue) {
-                for (const child of node.children!) {
+                for (const child of node.children) {
                     traverse(child, currentDepth + 1);
                 }
             }
@@ -222,10 +224,8 @@ export class RedundancyDetectionService {
             traverse(rootNode, 1);
         } else {
             // Start from immediate children with depth 1 - respect depth limit
-            if (rootNode.children) {
-                for (const child of rootNode.children) {
-                    traverse(child, 1);
-                }
+            for (const child of rootNode.children) {
+                traverse(child, 1);
             }
         }
         
@@ -244,15 +244,15 @@ export class RedundancyDetectionService {
     /**
      * Simple delay utility
      */
-    private delay(ms: number): Promise<void> {
-        return new Promise(resolve => setTimeout(resolve, ms));
+    private async delay(ms: number): Promise<void> {
+        await new Promise(resolve => setTimeout(resolve, ms));
     }
 
     /**
      * Check if a node is eligible for redundancy analysis
      */
     isNodeEligible(node: DocumentNode): boolean {
-        if (!node.children || node.children.length < 2) {
+        if (node.children.length < 2) {
             return false;
         }
 
@@ -268,7 +268,7 @@ export class RedundancyDetectionService {
      * Get the reason why a node is not eligible (for user feedback)
      */
     getIneligibilityReason(node: DocumentNode): string {
-        if (!node.children || node.children.length === 0) {
+        if (node.children.length === 0) {
             return 'This node has no children to analyze.';
         }
 
@@ -405,7 +405,7 @@ Content: ${truncatedContent}`;
 
             const parsed: RedundancyAIResponse = JSON.parse(jsonMatch[0]);
             
-            if (!parsed.redundancies || !Array.isArray(parsed.redundancies)) {
+            if (!Array.isArray(parsed.redundancies)) {
                 console.warn('Invalid redundancies array in AI response');
                 return [];
             }
@@ -425,7 +425,7 @@ Content: ${truncatedContent}`;
                     nodeToDelete: nodeResult.nodeToDelete,
                     redundancyScore: item.redundancy,
                     reasoning: item.reasoning || 'No reasoning provided',
-                    plotLoss: item.plotLoss || 'none'
+                    plotLoss: item.plotLoss
                 });
             }
 
@@ -486,7 +486,7 @@ Content: ${truncatedContent}`;
     /**
      * Delete a redundant node safely
      */
-    async deleteRedundantNode(nodeId: string, projectManager: any): Promise<boolean> {
+    async deleteRedundantNode(nodeId: string, projectManager: ProjectManager): Promise<boolean> {
         try {
             const nodeToDelete = projectManager.findNodeById(nodeId);
             if (!nodeToDelete) {

@@ -250,7 +250,7 @@ export class Dropdown {
 
         // Handle clicks inside dropdown
         if (this.options.closeOnInsideClick) {
-            this.dropdown.addEventListener('click', (_e) => {
+            this.dropdown.addEventListener('click', () => {
                 // Allow event to bubble up, then close
                 setTimeout(() => { this.close(); }, 0);
             });

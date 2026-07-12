@@ -3,6 +3,8 @@
  */
 
 import { createServiceResponse, executeWithErrorHandling, ServiceResponse } from './ServiceUtils';
+import type { SettingsManager } from '../../SettingsManager';
+import type { SettingsProfile } from '../../SettingsManager';
 
 interface ProfileValidationResult {
     isValid: boolean;
@@ -10,11 +12,11 @@ interface ProfileValidationResult {
 }
 
 interface ProfileOperationContext {
-    settingsManager: any;
-    operation: string;
+    settingsManager: SettingsManager;
+    operation: 'create' | 'rename' | 'duplicate';
     profileName?: string;
     targetName?: string;
-    sourceProfile?: any;
+    sourceProfile?: SettingsProfile;
 }
 
 interface SettingsChangeEvent {
@@ -28,7 +30,7 @@ interface SettingsChangeEvent {
 function validateProfileName(name: string, context: 'create' | 'rename' | 'duplicate' = 'create'): ProfileValidationResult {
     const errors: string[] = [];
     
-    if (!name?.trim()) {
+    if (!name.trim()) {
         const actionMap = {
             create: 'enter a name for the new profile',
             rename: 'enter a new name for the profile', 
@@ -43,7 +45,7 @@ function validateProfileName(name: string, context: 'create' | 'rename' | 'dupli
 /**
  * Check if profile exists with appropriate error message
  */
-function validateProfileExists(settingsManager: any, profileName: string, shouldExist: boolean = true): ProfileValidationResult {
+function validateProfileExists(settingsManager: SettingsManager, profileName: string, shouldExist: boolean = true): ProfileValidationResult {
     const exists = Boolean(settingsManager.getProfile(profileName));
     const errors: string[] = [];
     
@@ -74,8 +76,7 @@ function validateProfileOperation(
     
     // Validate target name and uniqueness (for create/rename/duplicate operations)
     if (context.targetName) {
-        const operationType = context.operation as 'create' | 'rename' | 'duplicate';
-        const nameValidation = validateProfileName(context.targetName!, operationType);
+        const nameValidation = validateProfileName(context.targetName, context.operation);
         if (!nameValidation.isValid) {
             errors.push(...nameValidation.errors);
         }
@@ -146,9 +147,9 @@ export const ProfileOperations = {
      * Create profile operation pattern
      */
     create: async (
-        settingsManager: any,
+        settingsManager: SettingsManager,
         name: string,
-        profileData: any,
+        profileData: SettingsProfile,
         emitChange?: (event: SettingsChangeEvent) => void
     ): Promise<ServiceResponse> => {
         const context: ProfileOperationContext = {
@@ -178,7 +179,7 @@ export const ProfileOperations = {
      * Duplicate profile operation pattern
      */
     duplicate: async (
-        settingsManager: any,
+        settingsManager: SettingsManager,
         sourceName: string,
         targetName: string,
         emitChange?: (event: SettingsChangeEvent) => void
@@ -194,6 +195,9 @@ export const ProfileOperations = {
             context,
             async () => {
                 const sourceProfile = settingsManager.getProfile(sourceName);
+                if (!sourceProfile) {
+                    throw new Error(`Profile "${sourceName}" not found`);
+                }
                 await settingsManager.saveProfile(targetName, { ...sourceProfile });
                 
                 if (emitChange) {
@@ -211,7 +215,7 @@ export const ProfileOperations = {
      * Rename profile operation pattern
      */
     rename: async (
-        settingsManager: any,
+        settingsManager: SettingsManager,
         oldName: string,
         newName: string,
         emitChange?: (event: SettingsChangeEvent) => void
@@ -227,11 +231,14 @@ export const ProfileOperations = {
             context,
             async () => {
                 const profile = settingsManager.getProfile(oldName);
+                if (!profile) {
+                    throw new Error(`Profile "${oldName}" not found`);
+                }
                 await settingsManager.saveProfile(newName, profile);
-                settingsManager.deleteProfile(oldName);
+                void settingsManager.deleteProfile(oldName);
                 
                 // Update last used if it was the renamed profile
-                if (settingsManager.getLastUsedProfileName?.() === oldName) {
+                if (settingsManager.getLastUsedProfileName() === oldName) {
                     await settingsManager.setLastUsedProfile(newName);
                 }
                 
@@ -262,9 +269,9 @@ export const ProfileValidation = {
             return { isValid: false, errors };
         }
 
-        const p = profile as any;
+        const p = profile as SettingsProfile;
 
-        if (!p.selectedModels || typeof p.selectedModels !== 'object') {
+        if (typeof p.selectedModels !== 'object') {
             errors.push('Selected models must be an object');
         }
 

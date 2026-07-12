@@ -40,7 +40,7 @@ export function getEnabledMetricCriteria(criteria: QualityCriterion[]): MetricCr
  * aware of every constraint up front (including the deterministic ones).
  */
 export function formatCriteriaForCreator(criteria: QualityCriterion[]): string {
-    if (!criteria || criteria.length === 0) {
+    if (criteria.length === 0) {
         return 'No criteria defined';
     }
 

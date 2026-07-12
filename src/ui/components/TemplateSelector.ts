@@ -109,19 +109,22 @@ export class TemplateSelector {
         }
     }
 
-    private setupEventListeners(): void {
-        if (!this.container) return;
-
-        const select = this.container.querySelector('.template-selector-dropdown') as HTMLSelectElement;
-        if (select) {
-            const changeHandler = () => { this.handleSelectionChange(); };
-            select.addEventListener('change', changeHandler);
-            this.cleanupHandlers.push(() => { select.removeEventListener('change', changeHandler); });
+    private getContainer(): HTMLElement {
+        if (!this.container) {
+            throw new Error('TemplateSelector container is not initialized');
         }
+        return this.container;
+    }
+
+    private setupEventListeners(): void {
+        const select = this.getContainer().querySelector('.template-selector-dropdown') as HTMLSelectElement;
+        const changeHandler = () => { this.handleSelectionChange(); };
+        select.addEventListener('change', changeHandler);
+        this.cleanupHandlers.push(() => { select.removeEventListener('change', changeHandler); });
 
         // Management button handlers
         if (this.config.showManagement) {
-            const manageButtons = this.container.querySelectorAll('.template-manage-btn');
+            const manageButtons = this.getContainer().querySelectorAll('.template-manage-btn');
             manageButtons.forEach(button => {
                 const clickHandler = (e: Event) => { this.handleManagementAction(e); };
                 button.addEventListener('click', clickHandler);
@@ -131,23 +134,24 @@ export class TemplateSelector {
     }
 
     private handleSelectionChange(): void {
-        if (!this.container) return;
-
-        const select = this.container.querySelector('.template-selector-dropdown') as HTMLSelectElement;
-        const selectedName = select?.value || '';
+        const select = this.getContainer().querySelector('.template-selector-dropdown') as HTMLSelectElement;
+        const selectedName = select.value;
         this.currentSelection = selectedName;
 
         if (this.config.onSelectionChange) {
             const templateManager = state.getTemplateManager();
-            const template = selectedName ? templateManager?.getTemplate(selectedName) ?? null : null;
+            if (!templateManager) {
+                throw new Error('Template manager is not initialized');
+            }
+            const template = selectedName ? templateManager.getTemplate(selectedName) ?? null : null;
             this.config.onSelectionChange(template, selectedName);
         }
 
         // Update management button states
         if (this.config.showManagement) {
-            const manageButtons = this.container.querySelectorAll('.template-manage-btn') as NodeListOf<HTMLButtonElement>;
+            const manageButtons = this.getContainer().querySelectorAll('.template-manage-btn');
             manageButtons.forEach(button => {
-                button.disabled = !selectedName;
+                (button as HTMLButtonElement).disabled = !selectedName;
             });
         }
     }
@@ -225,14 +229,10 @@ export class TemplateSelector {
 
     public setSelection(templateName: string): void {
         this.currentSelection = templateName;
-        
-        if (this.container) {
-            const select = this.container.querySelector('.template-selector-dropdown') as HTMLSelectElement;
-            if (select) {
-                select.value = templateName;
-                this.handleSelectionChange();
-            }
-        }
+
+        const select = this.getContainer().querySelector('.template-selector-dropdown') as HTMLSelectElement;
+        select.value = templateName;
+        this.handleSelectionChange();
     }
 
     public refresh(): void {

@@ -43,7 +43,7 @@ function setupViewTemplateEditor(
     const editor = new SingleTemplateEditor({
         containerId: 'view-template-editor-container',
         template: templateCopy,
-        onTemplateChange: (_updatedTemplate) => {
+        onTemplateChange: () => {
             setDirty(true);
         },
         readonly: false,
@@ -65,7 +65,7 @@ export function showViewTemplateModal(rootNode: DocumentNode): void {
 
         // Get the template from the root node
         const templateHierarchy = rootNode.template;
-        if (!templateHierarchy || templateHierarchy.length === 0) {
+        if (templateHierarchy.length === 0) {
             alert("This project does not have a template.");
             return;
         }
@@ -131,7 +131,7 @@ export function showViewTemplateModal(rootNode: DocumentNode): void {
                         id: 'cancel',
                         label: '✕ Close',
                         type: 'secondary',
-                        handler: async () => {
+                        handler: () => {
                             if (isDirty && !confirm("You have unsaved changes. Are you sure you want to close?")) {
                                 throw new Error('__KEEP_MODAL_OPEN__');
                             }
@@ -187,14 +187,15 @@ export function showViewTemplateModal(rootNode: DocumentNode): void {
                                 if (activeProject && activeProject.rootNode.id === rootNode.id) {
                                     // Refresh the UI
                                     const { initializeProjectUI } = await import('../project-ui');
-                                    initializeProjectUI(activeProject);
+                                    void initializeProjectUI(activeProject);
                                 }
 
-                            } catch (error: any) {
-                                if (error.message === '__KEEP_MODAL_OPEN__') {
+                            } catch (error: unknown) {
+                                if (error instanceof Error && error.message === '__KEEP_MODAL_OPEN__') {
                                     throw error;
                                 }
-                                alert(`Error saving template: ${error.message}`);
+                                const message = error instanceof Error ? error.message : String(error);
+                                alert(`Error saving template: ${message}`);
                                 throw new Error('__KEEP_MODAL_OPEN__');
                             }
                         }

@@ -8,6 +8,7 @@ import { SettingsService } from './services/SettingsService';
 import { CriteriaEditor } from './components/CriteriaEditor';
 import { ProfileSelector } from './components/ProfileSelector';
 import { SettingsManager } from '../../SettingsManager';
+import type { SettingsProfile } from '../../SettingsManager';
 import { ModelSelector } from '../../ModelSelector';
 import { ModalConfig } from './types/ModalTypes';
 import { createElement } from './core/modal-utils';
@@ -71,14 +72,6 @@ export class SettingsModal extends BaseModal {
         });
 
         this.settingsService = new SettingsService(this.settingsManager, this.modelSelector);
-
-        // Setup service event handlers
-        this.setupServiceEventHandlers();
-    }
-
-    // Simple emit method for compatibility
-    private emit(_eventName: string, _data?: unknown): void {
-        // Silent event emitter stub
     }
 
     /**
@@ -109,8 +102,8 @@ export class SettingsModal extends BaseModal {
         container.appendChild(footer);
 
         // Initialize components after DOM is ready
-        void setTimeout(async () => {
-            await this.initializeComponents();
+        setTimeout(() => {
+            void this.initializeComponents();
         }, 0);
 
         return container;
@@ -353,7 +346,7 @@ export class SettingsModal extends BaseModal {
                 max: String(MAX_MAX_ITERATIONS),
                 value: String(DEFAULT_MAX_ITERATIONS)
             }
-        }) as HTMLInputElement;
+        });
 
         this.maxIterationsInput.addEventListener('input', () => {
             this.autoSave();
@@ -409,7 +402,9 @@ export class SettingsModal extends BaseModal {
                 type: 'checkbox',
                 id: 'ai-logging-checkbox'
             }
-        }) as HTMLInputElement;
+        });
+
+        const aiLoggingCheckbox = this.aiLoggingCheckbox;
 
         const label = createElement('label', {
             content: 'Enable AI conversation logging',
@@ -422,18 +417,21 @@ export class SettingsModal extends BaseModal {
             attributes: { id: 'view-ai-logs-btn' }
         });
 
-        this.aiLoggingCheckbox.addEventListener('change', async () => {
-            await this.settingsService.setAILoggingEnabled(this.aiLoggingCheckbox!.checked);
-            this.autoSave();
+        aiLoggingCheckbox.addEventListener('change', () => {
+            void (async () => {
+                await this.settingsService.setAILoggingEnabled(aiLoggingCheckbox.checked);
+                this.autoSave();
+            })();
         });
 
-        viewLogsButton.addEventListener('click', async () => {
-            // Import and open the modern AI Log modal
-            const { openAILogModal } = await import('./AILogModal');
-            openAILogModal();
+        viewLogsButton.addEventListener('click', () => {
+            void (async () => {
+                const { openAILogModal } = await import('./AILogModal');
+                openAILogModal();
+            })();
         });
 
-        checkboxContainer.appendChild(this.aiLoggingCheckbox);
+        checkboxContainer.appendChild(aiLoggingCheckbox);
         checkboxContainer.appendChild(label);
 
         section.appendChild(title);
@@ -502,7 +500,9 @@ export class SettingsModal extends BaseModal {
                 type: 'checkbox',
                 id: 'debug-generation-checkbox'
             }
-        }) as HTMLInputElement;
+        });
+
+        const debugGenerationCheckbox = this.debugGenerationCheckbox;
 
         const label = createElement('label', {
             content: 'Enable debug logging for stateless generation',
@@ -516,12 +516,14 @@ export class SettingsModal extends BaseModal {
             }
         });
 
-        this.debugGenerationCheckbox.addEventListener('change', async () => {
-            await this.settingsService.setDebugGenerationEnabled(this.debugGenerationCheckbox!.checked);
-            this.autoSave();
+        debugGenerationCheckbox.addEventListener('change', () => {
+            void (async () => {
+                await this.settingsService.setDebugGenerationEnabled(debugGenerationCheckbox.checked);
+                this.autoSave();
+            })();
         });
 
-        checkboxContainer.appendChild(this.debugGenerationCheckbox);
+        checkboxContainer.appendChild(debugGenerationCheckbox);
         checkboxContainer.appendChild(label);
         checkboxContainer.appendChild(description);
 
@@ -586,40 +588,39 @@ export class SettingsModal extends BaseModal {
      */
     private async initializeComponents(): Promise<void> {
         // Initialize profile selector
-        const profileContainer = this.element?.querySelector('.profile-container') as HTMLElement;
-        if (profileContainer) {
+        const profileContainer = this.element?.querySelector('.profile-container');
+        if (profileContainer instanceof HTMLElement) {
             this.profileSelector = new ProfileSelector(profileContainer, this.settingsService);
-            this.profileSelector.onSelectionChange(async (event) => {
-                // Lock UI and disable auto-save during profile switch
-                this.disableAutoSave();
-                this.setUILocked(true);
-                
-                try {
-                    // Apply profile changes synchronously
-                    await this.applyProfileToUI(event.profile);
-                this.updateCurrentProfileDisplay(event.profileName);
+            this.profileSelector.onSelectionChange((event) => {
+                void (async () => {
+                    // Lock UI and disable auto-save during profile switch
+                    this.disableAutoSave();
+                    this.setUILocked(true);
                     
-                    // Emit events
-                this.emit('profileChanged', event.profileName);
-                
-                // Refresh the global profile selector to maintain consistency
-                this.refreshGlobalProfileSelector?.();
-                    
-                } finally {
-                    // Always re-enable UI and auto-save
-                    this.setUILocked(false);
-                    this.enableAutoSave();
-                }
+                    try {
+                        // Apply profile changes synchronously
+                        await this.applyProfileToUI(event.profile);
+                        this.updateCurrentProfileDisplay(event.profileName);
+                        
+                        // Refresh the global profile selector to maintain consistency
+                        this.refreshGlobalProfileSelector?.();
+                        
+                    } finally {
+                        // Always re-enable UI and auto-save
+                        this.setUILocked(false);
+                        this.enableAutoSave();
+                    }
+                })();
             });
 
-            this.profileSelector.onAction((_event) => {
+            this.profileSelector.onAction(() => {
                 this.refreshGlobalProfileSelector?.();
             });
         }
 
         // Initialize criteria editor
-        const criteriaContainer = this.element?.querySelector('.criteria-container') as HTMLElement;
-        if (criteriaContainer) {
+        const criteriaContainer = this.element?.querySelector('.criteria-container');
+        if (criteriaContainer instanceof HTMLElement) {
             this.criteriaEditor = new CriteriaEditor(criteriaContainer);
             this.criteriaEditor.onChange(() => {
                 this.autoSave();
@@ -627,8 +628,8 @@ export class SettingsModal extends BaseModal {
         }
 
         // Initialize model selector
-        const modelsContainer = this.element?.querySelector('#settings-models-container') as HTMLElement;
-        if (modelsContainer) {
+        const modelsContainer = this.element?.querySelector('#settings-models-container');
+        if (modelsContainer instanceof HTMLElement) {
             // Check if OpenRouterClient has active operations
             const openRouterClient = OpenRouterClient.getInstance();
             const activeOperationCount = openRouterClient.getActiveOperationCount();
@@ -668,8 +669,8 @@ export class SettingsModal extends BaseModal {
         }
 
         // Initialize task model editor
-        const taskModelContainer = this.element?.querySelector('#settings-task-models-container') as HTMLElement;
-        if (taskModelContainer) {
+        const taskModelContainer = this.element?.querySelector('#settings-task-models-container');
+        if (taskModelContainer instanceof HTMLElement) {
             this.taskModelEditor = new TaskModelEditor(
                 taskModelContainer,
                 this.settingsManager,
@@ -682,8 +683,8 @@ export class SettingsModal extends BaseModal {
         }
 
         // Initialize prompt management
-        const promptsContainer = this.element?.querySelector('#settings-prompts-container') as HTMLElement;
-        if (promptsContainer) {
+        const promptsContainer = this.element?.querySelector('#settings-prompts-container');
+        if (promptsContainer instanceof HTMLElement) {
             this.promptService.renderEditor(promptsContainer);
             this.promptService.onPromptChange(() => {
                 this.autoSave();
@@ -718,7 +719,7 @@ export class SettingsModal extends BaseModal {
     /**
      * Applies a profile to the UI components
      */
-    private async applyProfileToUI(profile: any): Promise<void> {
+    private async applyProfileToUI(profile: SettingsProfile | null): Promise<void> {
         if (!profile) return;
 
         // Clear pending auto-save to prevent race conditions
@@ -737,7 +738,7 @@ export class SettingsModal extends BaseModal {
 
         // Apply max iterations
         if (this.maxIterationsInput) {
-            this.maxIterationsInput.value = String(profile.maxIterations ?? DEFAULT_MAX_ITERATIONS);
+            this.maxIterationsInput.value = String(profile.maxIterations);
         }
 
         // Refresh task model editor
@@ -787,22 +788,24 @@ export class SettingsModal extends BaseModal {
             window.clearTimeout(this.saveTimeout);
         }
 
-        this.saveTimeout = window.setTimeout(async () => {
-            // Double-check auto-save is still enabled before executing
-            if (!this.autoSaveEnabled || this.isUILocked) {
-                return;
-            }
+        this.saveTimeout = window.setTimeout(() => {
+            void (async () => {
+                // Double-check auto-save is still enabled before executing
+                if (!this.autoSaveEnabled || this.isUILocked) {
+                    return;
+                }
 
-            console.log('🔄 Auto-saving settings and prompts...');
-            
-            // Save profile settings (criteria, models, etc.)
-            await this.saveCurrentSettingsToProfile();
-            
-            // CRITICAL FIX: Also save prompt changes during auto-save
-            await this.promptService.saveToStorage();
-            
-            console.log('✅ Auto-save completed');
-            this.updateUnsavedIndicator(false);
+                console.log('🔄 Auto-saving settings and prompts...');
+                
+                // Save profile settings (criteria, models, etc.)
+                await this.saveCurrentSettingsToProfile();
+                
+                // CRITICAL FIX: Also save prompt changes during auto-save
+                await this.promptService.saveToStorage();
+                
+                console.log('✅ Auto-save completed');
+                this.updateUnsavedIndicator(false);
+            })();
         }, 2000);
     }
 
@@ -887,11 +890,6 @@ export class SettingsModal extends BaseModal {
             criteria,
             maxIterations
         );
-
-        this.emit('settingsChanged', { 
-            type: 'saved', 
-            data: { profileName: activeProfileName, criteria, maxIterations } 
-        });
     }
 
     /**
@@ -917,7 +915,6 @@ export class SettingsModal extends BaseModal {
         console.log('🔍 Verification - Current prompts in SettingsManager:', Object.keys(savedPrompts));
         
         this.updateUnsavedIndicator(false);
-        this.emit('saved');
         void this.close();
     }
 
@@ -925,9 +922,9 @@ export class SettingsModal extends BaseModal {
      * DEBUG UTILITY: Global function to verify prompt changes are working
      * Users can call this from browser console: window.debugPrompts()
      */
-    public static setupDebugUtilities(): void {
-        (window as any).debugPrompts = () => {
-            const state = require('../../state');
+    public static async setupDebugUtilities(): Promise<void> {
+        const state = await import('../../state');
+        window.debugPrompts = () => {
             const activeProject = state.getActiveProject();
             if (!activeProject) {
                 console.log('❌ No active project found');
@@ -942,17 +939,15 @@ export class SettingsModal extends BaseModal {
             console.log('📋 Available prompts:', Object.keys(prompts));
             console.log('');
             console.log('🎯 Key prompts for content generation:');
-            console.log('- content_generation_user:', prompts.content_generation_user?.substring(0, 100) + '...');
-            console.log('- branch_content_generation_user:', prompts.branch_content_generation_user?.substring(0, 100) + '...');
-            console.log('- expand_text_user:', prompts.expand_text_user?.substring(0, 100) + '...');
+            console.log('- content_generation_user:', prompts.content_generation_user.substring(0, 100) + '...');
+            console.log('- branch_content_generation_user:', prompts.branch_content_generation_user.substring(0, 100) + '...');
+            console.log('- expand_text_user:', prompts.expand_text_user.substring(0, 100) + '...');
             console.log('');
             console.log('💡 If you just changed prompts, these should reflect your changes');
             console.log('💡 If they show old values, the prompt saving bug may still exist');
             
             return prompts;
         };
-        
-
     }
 
     /**
@@ -964,7 +959,6 @@ export class SettingsModal extends BaseModal {
             if (!confirmed) return;
         }
 
-        this.emit('cancelled');
         void this.close();
     }
 
@@ -983,19 +977,6 @@ export class SettingsModal extends BaseModal {
 
 
     /**
-     * Setup service event handlers
-     */
-    private setupServiceEventHandlers(): void {
-        this.settingsService.onChange((event) => {
-            this.emit('settingsChanged', { type: event.type, data: event.data });
-        });
-
-        this.promptService.onSave(() => {
-            this.emit('settingsChanged', { type: 'promptsSaved', data: {} });
-        });
-    }
-
-    /**
      * Cleanup when modal is destroyed
      */
     public override destroy(): void {
@@ -1005,7 +986,7 @@ export class SettingsModal extends BaseModal {
         
 
         
-        void super.destroy();
+        super.destroy();
     }
 
     /**

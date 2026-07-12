@@ -51,7 +51,7 @@ export class TreeService {
      * @param childIndex Optional child index for selective context copying (1-based, used when creating multiple children)
      * @returns The newly created DocumentNode.
      */
-    public addNode(title: string, parentId: string | null, rootNode: DocumentNode, creatorModel?: string, _childIndex?: number): DocumentNode {
+    public addNode(title: string, parentId: string | null, rootNode: DocumentNode, creatorModel?: string): DocumentNode {
         const parent = parentId ? this.findNodeById(parentId, rootNode) : rootNode;
         if (!parent) {
             throw new Error(`Parent node with ID "${parentId}" not found.`);

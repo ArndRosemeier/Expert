@@ -84,10 +84,10 @@ export class SettingsService {
             if (currentProfile?.criteria) {
                 // Deep copy all settings from the current profile to prevent contamination
                 newProfileSettings = {
-                    selectedModels: { ...(currentProfile.selectedModels || {}) },
+                    selectedModels: { ...currentProfile.selectedModels },
                     selectedProviders: { ...(currentProfile.selectedProviders ?? {}) },
                     webSearchEnabled: { ...(currentProfile.webSearchEnabled ?? {}) },
-                    criteria: [...(currentProfile.criteria || [])],
+                    criteria: [...currentProfile.criteria],
                     maxIterations: currentProfile.maxIterations || DEFAULT_MAX_ITERATIONS,
                     contextExtractionPrompt: currentProfile.contextExtractionPrompt || '',
                     version: currentProfile.version ?? ''
@@ -192,8 +192,8 @@ export class SettingsService {
         }
 
         try {
-            this.settingsManager.deleteProfile(profileName);
-            
+            await this.settingsManager.deleteProfile(profileName);
+
             this.emitChange({
                 type: 'profile',
                 data: { action: 'deleted', profileName }
@@ -414,7 +414,7 @@ export class SettingsService {
 
         return {
             criteriaCount: profile.criteria?.length ?? 0,
-            modelsCount: Object.keys(profile.selectedModels || {}).length || 0
+            modelsCount: Object.keys(profile.selectedModels).length
         };
     }
 

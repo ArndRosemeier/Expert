@@ -37,7 +37,7 @@ export abstract class SimpleModal implements IModal {
 
         try {
             // Create and show modal
-            await this.createModal();
+            this.createModal();
             
             // Call lifecycle hook AFTER DOM is ready
             await this.hooks.onOpen?.();
@@ -99,7 +99,7 @@ export abstract class SimpleModal implements IModal {
     /**
      * Handles modal actions
      */
-    protected async handleAction(action: string, data?: any): Promise<void> {
+    protected async handleAction(action: string, data?: unknown): Promise<void> {
         try {
             await this.hooks.onAction?.(action, data);
         } catch (error) {
@@ -110,7 +110,7 @@ export abstract class SimpleModal implements IModal {
     /**
      * Creates the modal overlay and content
      */
-    protected async createModal(): Promise<void> {
+    protected createModal(): void {
         if (this.element || this.isDestroyed) {
             return; // Already created or destroyed
         }
@@ -281,7 +281,7 @@ export abstract class SimpleModal implements IModal {
     }
 
     // Backward compatibility methods (no-op implementations)
-    public getState(): any {
+    public getState(): { isOpen: boolean; isOpening: boolean; isClosing: boolean } {
         return {
             isOpen: Boolean(this.element) && !this.isDestroyed,
             isOpening: false,

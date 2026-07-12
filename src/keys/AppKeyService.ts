@@ -1,4 +1,4 @@
-import { KeyManager } from './KeyManager.js';
+import { KeyManager, type KeyData } from './KeyManager.js';
 import { AppKeyStorage } from './AppKeyStorage.js';
 import { KeyValidationModal } from '../ui/modals/KeyValidationModal.js';
 
@@ -56,9 +56,9 @@ export class AppKeyService {
     /**
      * Validate a key manually
      */
-    public async validateKey(key: string): Promise<{ valid: boolean; reason?: string; data?: any }> {
+    public async validateKey(key: string): Promise<{ valid: boolean; reason?: string; data?: KeyData }> {
         try {
-            const result = await KeyManager.validateKey(key, AppKeyService.APP_PASSWORD);
+            const result = KeyManager.validateKey(key, AppKeyService.APP_PASSWORD);
             
             if (result.valid && result.data) {
                 // Store the valid key
@@ -106,16 +106,15 @@ export class AppKeyService {
         
         // Call the main startup function that was defined in main.ts
         // We need to access it from the global window object
-        if ((window as any).startApplication) {
-            await (window as any).startApplication();
+        if (window.startApplication) {
+            await window.startApplication();
         } else {
             console.error('❌ startApplication function not found on window object');
-            // Fallback to direct initialization
             const { initialize } = await import('../event-handlers.js');
             const { setupEventListeners } = await import('../ui/project-ui.js');
             
             await initialize();
-            setupEventListeners();
+            void setupEventListeners();
         }
     }
 } 

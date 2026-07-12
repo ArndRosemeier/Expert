@@ -66,9 +66,12 @@ export class PromptService {
         // explicit regeneration of a node that already has finished content; it is
         // never reached through the normal generation path.
         let draftOrFresh: string;
-        if (node.content && node.content.trim() !== '') {
+        if (node.content.trim() !== '') {
             const masterVersion = node.getMasterVersion();
-            if (masterVersion && masterVersion.tags.has('draft')) {
+            if (!masterVersion) {
+                throw new Error(`DocumentNode ${node.id}: no master version for content-bearing node`);
+            }
+            if (masterVersion.tags.has('draft')) {
                 draftOrFresh = `You have an initial draft to work with:
 ---
 ${node.content}

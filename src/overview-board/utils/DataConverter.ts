@@ -238,19 +238,9 @@ export class DataConverter {
    */
   private createConnections(data: OverviewData): OverviewConnection[] {
     const connections: OverviewConnection[] = [];
-    
-    // FAIL LOUDLY: Validate OverviewData structure
-    if (!data?.events || typeof data.events.values !== 'function') {
-      throw new Error(`❌ DATA STRUCTURE ERROR: Invalid events data in OverviewData. Type: ${typeof data?.events}, hasValues: ${Boolean(data?.events?.values)}`);
-    }
-    
+
     // Create connections from events to characters and places
     for (const event of data.events.values()) {
-      // FAIL LOUDLY: Validate event structure before using
-      if (!event) {
-        throw new Error(`❌ DATA STRUCTURE ERROR: Null event found in events data`);
-      }
-      
       if (!event.id || typeof event.id !== 'string') {
         throw new Error(`❌ DATA STRUCTURE ERROR: Event missing valid id. Got: ${typeof event.id} = ${event.id}`);
       }
@@ -262,16 +252,7 @@ export class DataConverter {
       if (!Array.isArray(event.connectedPlaces)) {
         throw new Error(`❌ DATA STRUCTURE ERROR: Event ${event.id} connectedPlaces is not an array. Type: ${typeof event.connectedPlaces}, Value: ${event.connectedPlaces}`);
       }
-      
-      // FAIL LOUDLY: Validate characters and places Maps before using
-      if (!data.characters || typeof data.characters.has !== 'function') {
-        throw new Error(`❌ DATA STRUCTURE ERROR: Invalid characters data in OverviewData. Type: ${typeof data.characters}, hasHas: ${Boolean(data.characters?.has)}`);
-      }
-      
-      if (!data.places || typeof data.places.has !== 'function') {
-        throw new Error(`❌ DATA STRUCTURE ERROR: Invalid places data in OverviewData. Type: ${typeof data.places}, hasHas: ${Boolean(data.places?.has)}`);
-      }
-      
+
       // Event to character connections
       for (const characterId of event.connectedCharacters) {
         // FAIL LOUDLY: Validate characterId type
@@ -369,7 +350,7 @@ export class DataConverter {
       return element.significance; // EventData or PlaceData
     } else {
       // CharacterData - determine from role
-      const characterData = element as CharacterData;
+      const characterData = element;
       return characterData.role === 'protagonist' || characterData.role === 'antagonist' ? 'major' : 'minor';
     }
   }

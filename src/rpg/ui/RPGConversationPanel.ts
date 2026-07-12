@@ -175,12 +175,12 @@ export class RPGConversationPanel {
             ${actionsHtml}
         `;
 
-        const retryBtn = messageDiv.querySelector('.rpg-retry-btn') as HTMLButtonElement | null;
+        const retryBtn = messageDiv.querySelector('.rpg-retry-btn');
         retryBtn?.addEventListener('click', () => {
             void this.retryLastTurn();
         });
 
-        const restoreBtn = messageDiv.querySelector('.rpg-checkpoint-btn') as HTMLButtonElement | null;
+        const restoreBtn = messageDiv.querySelector('.rpg-checkpoint-btn');
         restoreBtn?.addEventListener('click', () => {
             const snapshotId = restoreBtn.getAttribute('data-snapshot-id');
             if (!snapshotId) {
@@ -359,6 +359,10 @@ export class RPGConversationPanel {
             
             // Get the content div directly (not by ID, to avoid conflicts with previous messages)
             const streamingContent = assistantMessageDiv.querySelector('.rpg-message-content') as HTMLElement;
+            const messagesContainer = this.messagesContainer;
+            if (!messagesContainer) {
+                throw new Error('RPG conversation messages container is not initialized');
+            }
             let accumulatedResponse = '';
             
             // Get settings manager
@@ -376,10 +380,8 @@ export class RPGConversationPanel {
                 this.worldInspector.debugMode,
                 (chunk: string) => {
                     accumulatedResponse += chunk;
-                    if (streamingContent) {
-                        streamingContent.innerHTML = this.formatContent(accumulatedResponse);
-                    }
-                    this.messagesContainer!.scrollTop = this.messagesContainer!.scrollHeight;
+                    streamingContent.innerHTML = this.formatContent(accumulatedResponse);
+                    messagesContainer.scrollTop = messagesContainer.scrollHeight;
                 },
                 () => {
                     // Called when state analysis completes

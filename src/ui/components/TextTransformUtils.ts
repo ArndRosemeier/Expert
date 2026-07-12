@@ -23,7 +23,7 @@ export function openTextTransformModal(
   if (defaultFormatInstructions) config.defaultFormatInstructions = defaultFormatInstructions;
   if (defaultInstruction) config.defaultInstruction = defaultInstruction;
   
-  config.onTransformRequested = async (request: TextTransformRequest) => {
+  config.onTransformRequested = (request: TextTransformRequest) => {
     // For now, just show an alert with the request details
     const message = `
 Transform Request:
@@ -38,7 +38,7 @@ AI transformation would happen here!`;
   };
   
   const modal = new TextTransformModal(config);
-  modal.open();
+  void modal.open();
 }
 
 /**
@@ -81,7 +81,7 @@ export function openTextTransformModalWithCallback(
   const config: TextTransformModalConfig = {
     id: 'text-transform-modal-with-callback',
     defaultText: text,
-    onTransformRequested: async (request: TextTransformRequest) => {
+    onTransformRequested: (request: TextTransformRequest) => {
       // This is where you would implement AI transformation
       // For now, we'll simulate a transformation
       const simulatedResult = `[TRANSFORMED] ${request.textToChange} [END TRANSFORM]`;
@@ -92,5 +92,5 @@ export function openTextTransformModalWithCallback(
   };
   
   const modal = new TextTransformModal(config);
-  modal.open();
-} 
+  void modal.open();
+}

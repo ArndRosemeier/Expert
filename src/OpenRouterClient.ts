@@ -219,6 +219,35 @@ function readFirstHeader(headers: Headers, names: string[]): string | null {
   return null;
 }
 
+function extractOpenRouterErrorMessage(errorBody: unknown, fallback: string): string {
+  if (typeof errorBody !== 'object' || errorBody === null) {
+    return fallback;
+  }
+  const errorField = (errorBody as Record<string, unknown>)['error'];
+  if (typeof errorField !== 'object' || errorField === null) {
+    return fallback;
+  }
+  const message = (errorField as Record<string, unknown>)['message'];
+  return typeof message === 'string' ? message : fallback;
+}
+
+async function readHttpErrorBody(response: Response): Promise<{ errorBody: unknown; errorText: string }> {
+  let errorBody: unknown = null;
+  let errorText = '';
+  try {
+    const text = await response.text();
+    errorText = text;
+    try {
+      errorBody = JSON.parse(text) as unknown;
+    } catch {
+      // Not JSON, keep as text
+    }
+  } catch {
+    errorText = '[Failed to read error body]';
+  }
+  return { errorBody, errorText };
+}
+
 /**
  * Typed reason info extracted from an OpenRouter SSE error payload.
  * OpenRouter emits the real failure reason as a terminal `chat.completion.chunk`
@@ -454,7 +483,7 @@ export class OpenRouterClient {
    * Dynamically fetch the model for a purpose from the current ModelSelector.
    * This ensures we always use the latest model configuration.
    */
-  private async getModelForPurpose(purpose: string): Promise<string> {
+  private getModelForPurpose(purpose: string): string {
     try {
       const modelSelector = state.getModelSelector();
       if (!modelSelector) {
@@ -573,7 +602,7 @@ export class OpenRouterClient {
       const client = OpenRouterClient.getInstance();
       const endpoints = await client.fetchModelEndpoints(modelId);
       
-      if (!endpoints || endpoints.length === 0) {
+      if (endpoints.length === 0) {
         // Log helpful diagnostics for missing endpoints (console only)
         console.info(`[OpenRouterClient] No provider endpoints for ${modelId}. Supported params cannot be resolved per provider.`);
         return null;
@@ -854,25 +883,17 @@ export class OpenRouterClient {
     await this.ensureProfileConsistency();
 
     return new Promise<string>((resolve, reject) => {
-      let fullResponse = '';
-      
       const callbacks: StreamingCallbacks = {
         onStart: () => {
         },
-        onChunk: (chunk: string) => {
-          fullResponse += chunk;
+        onChunk: () => {
         },
-        onComplete: async (finalResponse: string) => {
-          try {
-            // NOTE: Logging is handled by streamingChat() method to avoid duplicates
-            // since chat() internally calls streamingChat()
-            resolve(finalResponse);
-          } catch (logError) {
-            console.error('Error in completion handler:', logError);
-            resolve(finalResponse); // Still resolve with the response even if logging fails
-          }
+        onComplete: (finalResponse: string) => {
+          // NOTE: Logging is handled by streamingChat() method to avoid duplicates
+          // since chat() internally calls streamingChat()
+          resolve(finalResponse);
         },
-        onError: async (error: Error) => {
+        onError: (error: Error) => {
           console.error(`❌ Chat failed for purpose: ${purpose}, operation: ${opId}`, {
             error: error.message,
             errorType: error.name,
@@ -884,7 +905,12 @@ export class OpenRouterClient {
           
           // Show detailed error modal
           const errorService = GenerationErrorService.getInstance();
-          const modelForError = await this.getModelForPurpose(purpose).catch(() => undefined);
+          let modelForError: string | undefined;
+          try {
+            modelForError = this.getModelForPurpose(purpose);
+          } catch {
+            modelForError = undefined;
+          }
           void errorService.showOpenRouterError(error, purpose, modelForError);
           
           reject(error);
@@ -920,20 +946,7 @@ export class OpenRouterClient {
 
 
       if (!response.ok) {
-        // Try to parse error body as JSON
-        let errorBody: unknown = null;
-        let errorText = '';
-        try {
-          const text = await response.text();
-          errorText = text;
-          try {
-            errorBody = JSON.parse(text);
-          } catch (jsonErr) {
-            // Not JSON, keep as text
-          }
-        } catch (bodyErr) {
-          errorText = '[Failed to read error body]';
-        }
+        const { errorBody, errorText } = await readHttpErrorBody(response);
         console.error(`🚨 HTTP error response:`, {
           status: response.status,
           statusText: response.statusText,
@@ -942,11 +955,7 @@ export class OpenRouterClient {
           errorBody,
           errorText
         });
-        // Handle structured error response
-        const errorMessage = (errorBody && typeof errorBody === 'object' && errorBody !== null && 'error' in errorBody && 
-                              typeof (errorBody as any).error === 'object' && (errorBody as any).error !== null &&
-                              'message' in (errorBody as any).error && typeof (errorBody as any).error.message === 'string') 
-                              ? (errorBody as any).error.message : errorText;
+        const errorMessage = extractOpenRouterErrorMessage(errorBody, errorText);
         throw new Error(`OpenRouter API error: ${response.status} ${response.statusText} - ${errorMessage}`);
       }
 
@@ -982,20 +991,7 @@ export class OpenRouterClient {
         },
       });
       if (!response.ok) {
-        // Try to parse error body as JSON
-        let errorBody: unknown = null;
-        let errorText = '';
-        try {
-          const text = await response.text();
-          errorText = text;
-          try {
-            errorBody = JSON.parse(text);
-          } catch (jsonErr) {
-            // Not JSON, keep as text
-          }
-        } catch (bodyErr) {
-          errorText = '[Failed to read error body]';
-        }
+        const { errorBody, errorText } = await readHttpErrorBody(response);
         console.error(`🚨 HTTP error response (fetchModels):`, {
           status: response.status,
           statusText: response.statusText,
@@ -1007,11 +1003,7 @@ export class OpenRouterClient {
         if (response.status === 401) {
           console.error('🚨 401 Unauthorized error from OpenRouter! This is NOT always an invalid key. See logs above for details.');
         }
-        // Handle structured error response
-        const errorMessage = (errorBody && typeof errorBody === 'object' && errorBody !== null && 'error' in errorBody && 
-                              typeof (errorBody as any).error === 'object' && (errorBody as any).error !== null &&
-                              'message' in (errorBody as any).error && typeof (errorBody as any).error.message === 'string') 
-                              ? (errorBody as any).error.message : errorText;
+        const errorMessage = extractOpenRouterErrorMessage(errorBody, errorText);
         throw new Error(`OpenRouter API error: ${response.status} ${response.statusText} - ${errorMessage}`);
       }
       const data: OpenRouterModelsResponse = await response.json();
@@ -1068,20 +1060,7 @@ export class OpenRouterClient {
       });
       
       if (!response.ok) {
-        // Try to parse error body as JSON
-        let errorBody: unknown = null;
-        let errorText = '';
-        try {
-          const text = await response.text();
-          errorText = text;
-          try {
-            errorBody = JSON.parse(text);
-          } catch (jsonErr) {
-            // Not JSON, keep as text
-          }
-        } catch (bodyErr) {
-          errorText = '[Failed to read error body]';
-        }
+        const { errorBody, errorText } = await readHttpErrorBody(response);
         console.error(`🚨 HTTP error response (fetchModelEndpoints):`, {
           status: response.status,
           statusText: response.statusText,
@@ -1091,16 +1070,12 @@ export class OpenRouterClient {
           errorBody,
           errorText
         });
-        // Handle structured error response
-        const errorMessage = (errorBody && typeof errorBody === 'object' && errorBody !== null && 'error' in errorBody && 
-                              typeof (errorBody as any).error === 'object' && (errorBody as any).error !== null &&
-                              'message' in (errorBody as any).error && typeof (errorBody as any).error.message === 'string') 
-                              ? (errorBody as any).error.message : errorText;
+        const errorMessage = extractOpenRouterErrorMessage(errorBody, errorText);
         throw new Error(`OpenRouter API error: ${response.status} ${response.statusText} - ${errorMessage}`);
       }
       
       const data: OpenRouterModelEndpointsResponse = await response.json();
-      return data.data.endpoints || [];
+      return data.data.endpoints;
     } catch (error: unknown) {
       console.error(`💥 fetchModelEndpoints failed for ${modelId}:`, {
         errorName: error instanceof Error ? error.name : 'Unknown',
@@ -1225,7 +1200,7 @@ export class OpenRouterClient {
       // Apply per-purpose model parameters if configured
       try {
         const modelSelector = state.getModelSelector();
-        const params = modelSelector?.getSelectedParams?.();
+        const params = modelSelector?.getSelectedParams();
         if (params?.[purpose]) {
           const p = params[purpose] as { temperature?: number; top_p?: number; max_output_tokens?: number; verbosity?: string | number; thinking?: { enabled?: boolean; budget_tokens?: number }, reasoning?: { effort?: 'low' | 'medium' | 'high'; budget_tokens?: number } };
           if (typeof p.temperature === 'number') {
@@ -1453,7 +1428,7 @@ export class OpenRouterClient {
         // many reads. We accumulate bytes here and only process complete lines.
         let sseLineBuffer = '';
 
-        while (true) {
+        for (;;) {
           const { done, value } = await reader.read();
           lastActivityAt = Date.now(); // any byte (including keepalives) resets the stall watchdog
 
@@ -1529,7 +1504,7 @@ export class OpenRouterClient {
                   receivedImages = true;
                   callbacks.onImages?.(urls);
                 }
-              } catch (parseError) {
+              } catch {
                 // Ignore JSON parse errors (malformed lines from the server)
                 continue;
               }
@@ -1662,12 +1637,17 @@ export class OpenRouterClient {
       // Log error to UI Logger
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
       void import('./utils/UILogger').then(({ uiLogger }) => {
-        // Get model for error logging (fallback if not available)
-        this.getModelForPurpose(purpose).then(modelName => {
+        let modelName: string | undefined;
+        try {
+          modelName = this.getModelForPurpose(purpose);
+        } catch {
+          modelName = undefined;
+        }
+        if (modelName) {
           uiLogger.error(`OpenRouter request failed`, `Purpose: ${purpose} | Model: ${modelName} | Error: ${errorMessage}`);
-        }).catch(() => {
+        } else {
           uiLogger.error(`OpenRouter request failed`, `Purpose: ${purpose} | Error: ${errorMessage}`);
-        });
+        }
       }).catch(() => {
         // UI logger not available, that's ok
       });
@@ -1690,12 +1670,18 @@ export class OpenRouterClient {
       if (settingsManager?.isAILoggingEnabled()) {
         try {
           const duration = Date.now();
+          let modelForLog: string;
+          try {
+            modelForLog = this.getModelForPurpose(purpose);
+          } catch {
+            modelForLog = 'unknown';
+          }
           await this.aiLogService.addLogEntry({
             timestamp: new Date(),
             purpose,
             prompt: messages.map(m => `${m.role}: ${m.content}`).join('\n'),
             response: `ERROR: ${error instanceof Error ? error.message : 'Unknown error'}`,
-            model: await this.getModelForPurpose(purpose).catch(() => 'unknown'),
+            model: modelForLog,
             requestDuration: duration
           });
         } catch (logError) {
@@ -1735,10 +1721,8 @@ export class OpenRouterClient {
       issues.push('AbortController not supported');
     }
 
-    // Check JSON support
-    if (typeof JSON === 'undefined' || !JSON.parse || !JSON.stringify) {
-      issues.push('JSON API not fully supported');
-    }
+    // Check JSON support — JSON is always present in supported runtimes; parse/stringify
+    // are verified indirectly by the rest of the client.
 
     // Check ReadableStream (for streaming)
     if (typeof ReadableStream === 'undefined') {
@@ -1756,7 +1740,7 @@ export class OpenRouterClient {
       if (!testResponse.body || typeof testResponse.body.getReader !== 'function') {
         issues.push('Response.body.getReader not supported (streaming may fail)');
       }
-    } catch (e) {
+    } catch {
       issues.push('Unable to test streaming capabilities');
     }
 

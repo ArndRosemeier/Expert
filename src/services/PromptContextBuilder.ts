@@ -81,7 +81,7 @@ export class PromptContextBuilder {
             editorAdvice?: string;
             originalPrompt?: string;
             response?: string;
-            ratings?: any;
+            ratings?: unknown;
             instruction?: string;
             originalText?: string;
             detail?: string;
@@ -151,14 +151,13 @@ export class PromptContextBuilder {
      * This helps with migration from scattered .replace() calls
      */
     static fromLegacyParams(
-        settingsManager: SettingsManager | { getLanguage(): string; getCriteria(): any[] },
+        settingsManager: SettingsManager | { getLanguage(): string; getCriteria(): QualityCriterion[] },
         params: Record<string, string>
     ): PlaceholderContext {
-        // Handle legacy mock objects that have getCriteria method
         const language = settingsManager.getLanguage();
-        const criteria = 'getCriteria' in settingsManager 
-            ? settingsManager.getCriteria() 
-            : this.getValidatedCriteria(settingsManager as SettingsManager);
+        const criteria = 'getCriteria' in settingsManager
+            ? settingsManager.getCriteria()
+            : this.getValidatedCriteria(settingsManager);
             
         return {
             project: {

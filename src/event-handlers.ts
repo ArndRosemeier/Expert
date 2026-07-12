@@ -3,7 +3,8 @@ import { closeNewProjectModal, closeTestModal } from './ui/modal-manager';
 import { openSettingsModal, openOnboardingWizard, createModalFactory, setDefaultModalFactory } from './ui/modals/ModalFactory';
 import * as state from './state';
 import { ProjectManager } from './ProjectManager';
-import { DocumentNode, GenerationSession, ContentVersion, ChildScope } from './DocumentNode';
+import { DocumentNode, GenerationSession, ChildScope } from './DocumentNode';
+import type { ImportedVersionJson } from './ui/types/ProjectUiTypes';
 import { ProjectTemplate } from './ProjectTemplate';
 import type { InferredTemplate } from './services/TemplateInferenceService';
 import { initializeProjectUI } from './ui/project-ui';
@@ -147,7 +148,7 @@ async function openIdeaBoard(): Promise<void> {
         const ideaBoard = new IdeaBoard(contentArea, boardName);
         
         // Store globally for access from other parts of the application
-        (window as any).currentIdeaBoard = ideaBoard;
+        window.currentIdeaBoard = ideaBoard;
         
         console.log('🗒️ Idea Board opened');
 
@@ -156,7 +157,7 @@ async function openIdeaBoard(): Promise<void> {
         closeBtn?.addEventListener('click', () => {
             ideaBoard.destroy();
             modalContainer.remove();
-            (window as any).currentIdeaBoard = null;
+            delete window.currentIdeaBoard;
             console.log('🗒️ Idea Board closed');
         });
 
@@ -165,7 +166,7 @@ async function openIdeaBoard(): Promise<void> {
             if (e.target === modalContainer) {
                 ideaBoard.destroy();
                 modalContainer.remove();
-                (window as any).currentIdeaBoard = null;
+                delete window.currentIdeaBoard;
                 console.log('🗒️ Idea Board closed');
             }
         });
@@ -175,7 +176,7 @@ async function openIdeaBoard(): Promise<void> {
             if (e.key === 'Escape') {
                 ideaBoard.destroy();
                 modalContainer.remove();
-                (window as any).currentIdeaBoard = null;
+                delete window.currentIdeaBoard;
                 document.removeEventListener('keydown', handleEscape);
                 console.log('🗒️ Idea Board closed');
             }
@@ -243,31 +244,30 @@ function showProgressModal(message: string): HTMLElement {
 }
 
 function progressSetMessage(modalElement: HTMLElement, message: string): void {
-    try {
-        const el = modalElement.querySelector('.progress-message');
-        if (el) el.textContent = message;
-    } catch {}
+    const el = modalElement.querySelector('.progress-message');
+    if (!el) {
+        throw new Error('Progress modal is missing .progress-message element');
+    }
+    el.textContent = message;
 }
 
 function progressLog(modalElement: HTMLElement, line: string): void {
-    try {
-        const log = modalElement.querySelector('.progress-log');
-        if (log) {
-            const entry = document.createElement('div');
-            entry.textContent = line;
-            log.appendChild(entry);
-            (log as HTMLElement).scrollTop = (log as HTMLElement).scrollHeight;
-        }
-    } catch {}
+    const log = modalElement.querySelector('.progress-log');
+    if (!log) {
+        throw new Error('Progress modal is missing .progress-log element');
+    }
+    const logElement = log as HTMLElement;
+    const entry = document.createElement('div');
+    entry.textContent = line;
+    logElement.appendChild(entry);
+    logElement.scrollTop = logElement.scrollHeight;
 }
 
 /**
  * Close the progress modal
  */
 function closeProgressModal(modalElement: HTMLElement): void {
-    if (modalElement && modalElement.parentNode) {
-        modalElement.parentNode.removeChild(modalElement);
-    }
+    modalElement.parentNode?.removeChild(modalElement);
 }
 
 async function onModelsSelected(models: Record<string, string>, webSearchEnabled?: Record<string, boolean>, selectedProviders?: Record<string, string>) {
@@ -326,8 +326,10 @@ interface AIGeneratedData {
     context?: string;
     description?: string;
     projectType?: string;
-    options?: any;
+    options?: Record<string, unknown>;
 }
+
+type ImportTemplateField = string[] | { name?: string; hierarchyLevels?: string[] };
 
 // Removed generateSimpleId - using centralized ContextIDGenerator instead
 // AI conditional context creation now lives in the shared applyConditionalContextItems
@@ -425,7 +427,7 @@ interface ImportNodeData {
     hierarchyTemplate?: string[]; // Node hierarchy template (different from project template)
     generationHistory?: LoopHistoryItem[];
     generationSessions?: GenerationSession[];
-    versions?: ContentVersion[];
+    versions?: ImportedVersionJson[];
     collapsed?: boolean;
     creatorModel?: string;
     // Conditional context (node-level)
@@ -437,7 +439,7 @@ interface ImportNodeData {
         leavesOnly?: boolean;
     }>;
     // Legacy fields for backward compatibility
-    template?: any; // Project template for text imports (different usage)
+    template?: ImportTemplateField;
 }
 
 function handleImportProject(title: string, template: ProjectTemplate, importData: ImportNodeData) {
@@ -576,26 +578,7 @@ function importChildNodeForProject(project: ProjectManager, parentId: string, ch
         // Now restore the version data and other properties
         newNode.id = `imported_${Date.now()}_${childData.id ?? 'unknown'}`; // New ID to avoid conflicts
         
-        // Clear the default master version and restore all versions from import
-        (newNode as any).versions = []; // Clear default versions
-        
-        if (childData.versions && Array.isArray(childData.versions)) {
-            // Restore all versions with proper tag handling
-            childData.versions.forEach((versionData: any) => {
-                const restoredVersion = {
-                    id: versionData.id,
-                    content: versionData.content,
-                    title: versionData.title,
-                    context: versionData.context,
-                    tags: new Set(Array.isArray(versionData.tags) ? versionData.tags : []),
-                    timestamp: new Date(versionData.timestamp),
-                    ratings: versionData.ratings ? [...versionData.ratings] : undefined,
-                    creatorModel: versionData.creatorModel,
-                    metadata: versionData.metadata ? { ...versionData.metadata } : {}
-                };
-                (newNode as any).versions.push(restoredVersion);
-            });
-        }
+        newNode.importVersionsFromExport(childData.versions);
         
         // Restore other properties
         if (childData.generationPrompt) {
@@ -725,8 +708,8 @@ export async function initialize() {
     const templateManager = new TemplateManager();
     state.setTemplateManager(templateManager);
     
-            const modelSelector = new ModelSelector(async (models, webSearch, providers) => {
-            await onModelsSelected(models, webSearch, providers);
+            const modelSelector = new ModelSelector((models, webSearch, providers) => {
+            void onModelsSelected(models, webSearch, providers);
         }, () => {
         // Settings modal now handles its own closing
         // This callback is kept for ModelSelector compatibility
@@ -758,9 +741,7 @@ export async function initialize() {
 
     // Create minimal services for loading projects
     const client = OpenRouterClient.getInstance();
-    if (settingsManager) {
-        client.setSettingsManager(settingsManager);
-    }
+    client.setSettingsManager(settingsManager);
     state.setOpenRouterClient(client);
     
     // Create a minimal orchestrator just for loading projects
@@ -798,23 +779,23 @@ export async function initialize() {
             if (!event.ctrlKey) return; // Must hold Ctrl
             
             // Store last escape press time
-            const lastEscape = (window as any)._lastEscapePress ?? 0;
+            const lastEscape = window._lastEscapePress ?? 0;
             if (now - lastEscape < 1000) { // Within 1 second
-                const escapeCount = ((window as any)._escapeCount ?? 0) + 1;
-                (window as any)._escapeCount = escapeCount;
+                const escapeCount = (window._escapeCount ?? 0) + 1;
+                window._escapeCount = escapeCount;
                 
                 if (escapeCount >= 3) {
                     console.log('🚨 Emergency escape activated - clearing all error modals');
                     const errorService = GenerationErrorService.getInstance();
                     errorService.clearAllErrorModals();
-                    (window as any)._escapeCount = 0;
+                    window._escapeCount = 0;
                     event.preventDefault();
                     event.stopPropagation();
                 }
             } else {
-                (window as any)._escapeCount = 1;
+                window._escapeCount = 1;
             }
-            (window as any)._lastEscapePress = now;
+            window._lastEscapePress = now;
         }
     });
     } catch (error) {
@@ -871,7 +852,7 @@ export async function initialize() {
             event.stopPropagation();
             
             // Create or get existing dropdown
-            let dropdown = document.getElementById('import-dropdown') as HTMLDivElement;
+            let dropdown = document.getElementById('import-dropdown') as HTMLDivElement | null;
             
             if (dropdown) {
                 // Toggle visibility; always reset to the top-level menu when showing
@@ -907,9 +888,9 @@ export async function initialize() {
                          // Position dropdown relative to button
              const button = getElementById('importProjectBtn');
              const buttonRect = button.getBoundingClientRect();
-             const headerContainer = button.closest('.header-buttons') as HTMLElement;
+             const headerContainer = button.closest('.header-buttons');
              
-             if (headerContainer) {
+             if (headerContainer instanceof HTMLElement) {
                  headerContainer.style.position = 'relative';
                  headerContainer.appendChild(dropdown);
              } else {
@@ -920,11 +901,11 @@ export async function initialize() {
              }
              
              // Handle dropdown clicks
-             dropdown.addEventListener('click', async (e) => {
+             const handleImportDropdownClick = (e: MouseEvent): void => {
                  const target = e.target as HTMLElement;
-                 const actionButton = target.closest('[data-action]') as HTMLElement;
+                 const actionButton = target.closest('[data-action]');
                  
-                 if (actionButton) {
+                 if (actionButton instanceof HTMLElement) {
                      // Keep this click from reaching the document-level outside-close
                      // handler. Rendering a submenu replaces the dropdown's innerHTML,
                      // which detaches the clicked node; the outside-close handler would
@@ -945,13 +926,13 @@ export async function initialize() {
                      try {
                          switch (action) {
                              case 'expert-project':
-                                 await handleExpertProjectImport();
+                                 handleExpertProjectImport();
                                  break;
                              case 'text-concepts':
-                                 await handleTextImport('concept');
+                                 handleTextImport('concept');
                                  break;
                              case 'text-fulltext':
-                                 await handleTextImport('fulltext');
+                                 handleTextImport('fulltext');
                                  break;
                          }
                      } catch (error) {
@@ -959,7 +940,8 @@ export async function initialize() {
                          alert('Import failed: ' + (error instanceof Error ? error.message : 'Unknown error'));
                      }
                  }
-             });
+             };
+             dropdown.addEventListener('click', handleImportDropdownClick);
             
             // Close dropdown when clicking outside
             const closeDropdown = (e: Event) => {
@@ -978,71 +960,74 @@ export async function initialize() {
     }
 
     // Handler functions for the import dropdown options
-    async function handleExpertProjectImport(): Promise<void> {
+    function handleExpertProjectImport(): void {
         const fileInput = document.createElement('input');
         fileInput.type = 'file';
         fileInput.accept = '.json';
         fileInput.style.display = 'none';
+
+        const processExpertProjectFile = (event: ProgressEvent<FileReader>): void => {
+            try {
+                const content = event.target!.result as string;
+                const importData = JSON.parse(content) as ImportNodeData;
+
+                let templateData: { name: string; hierarchyLevels: string[] } | undefined;
+                const rawTemplate = importData.template;
+                if (rawTemplate && !Array.isArray(rawTemplate) && rawTemplate.name && rawTemplate.hierarchyLevels) {
+                    templateData = {
+                        name: rawTemplate.name,
+                        hierarchyLevels: rawTemplate.hierarchyLevels,
+                    };
+                }
+
+                if (!templateData) {
+                    if (Array.isArray(importData.template)) {
+                        templateData = {
+                            name: `Imported Template (${importData.title ?? 'Unknown'})`,
+                            hierarchyLevels: importData.template,
+                        };
+                    } else if (importData.children && importData.children.length > 0) {
+                        let foundTemplate: string[] | null = null;
+                        for (const child of importData.children) {
+                            if (child.template && Array.isArray(child.template)) {
+                                foundTemplate = child.template;
+                                break;
+                            }
+                        }
+
+                        if (foundTemplate) {
+                            templateData = {
+                                name: `Imported Template (${importData.title ?? 'Unknown'})`,
+                                hierarchyLevels: foundTemplate,
+                            };
+                        } else {
+                            throw new Error('Invalid import file: Missing or incomplete template information');
+                        }
+                    } else {
+                        throw new Error('Invalid import file: Missing or incomplete template information');
+                    }
+                }
+
+                const bestTemplate = new ProjectTemplate(
+                    templateData.name,
+                    templateData.hierarchyLevels
+                );
+
+                handleImportProject(importData.title ?? 'Imported Project', bestTemplate, importData);
+            } catch (error) {
+                console.error('JSON import failed:', error);
+                alert('JSON import failed: ' + (error instanceof Error ? error.message : 'Unknown error'));
+            }
+        };
         
-        fileInput.addEventListener('change', async (e) => {
+        fileInput.addEventListener('change', (e) => {
             const target = e.target as HTMLInputElement;
             const file = target.files?.[0];
             if (!file) return;
             
             const reader = new FileReader();
-            reader.onload = async (event) => {
-                try {
-                    const content = event.target?.result as string;
-                    const importData = JSON.parse(content);
-                    
-                    // Extract template - first try from project level, then from root node, then from child nodes
-                    let templateData = importData.template;
-                    
-                    if (!templateData?.name || !templateData.hierarchyLevels) {
-                        // Check if root node has template as array (node export format)
-                        if (importData.template && Array.isArray(importData.template)) {
-                            templateData = {
-                                name: `Imported Template (${importData.title ?? 'Unknown'})`,
-                                hierarchyLevels: importData.template,
-                                
-                            };
-                        } else if (importData.children && importData.children.length > 0) {
-                            // Try to extract template from first child that has one
-                            let foundTemplate = null;
-                            for (const child of importData.children) {
-                                if (child.template && Array.isArray(child.template)) {
-                                    foundTemplate = child.template;
-                                    break;
-                                }
-                            }
-                            
-                            if (foundTemplate) {
-                                templateData = {
-                                    name: `Imported Template (${importData.title ?? 'Unknown'})`,
-                                    hierarchyLevels: foundTemplate,
-                                    
-                                };
-                            } else {
-                                throw new Error('Invalid import file: Missing or incomplete template information');
-                            }
-                        } else {
-                            throw new Error('Invalid import file: Missing or incomplete template information');
-                        }
-                    }
-                    
-                    // Create template from extracted data
-                    const bestTemplate = new ProjectTemplate(
-                        templateData.name,
-                        templateData.hierarchyLevels
-                    );
-                    
-                    // Import project data
-                    handleImportProject(importData.title ?? 'Imported Project', bestTemplate, importData);
-                    
-                } catch (error) {
-                    console.error('JSON import failed:', error);
-                    alert('JSON import failed: ' + (error instanceof Error ? error.message : 'Unknown error'));
-                }
+            reader.onload = (event) => {
+                processExpertProjectFile(event);
             };
             
             reader.onerror = () => {
@@ -1153,17 +1138,13 @@ export async function initialize() {
     // Unified text/PDF import: 'concept' reuses the AI creator pipeline,
     // 'fulltext' segments the source into a template hierarchy. Both produce
     // conditional context items and finalize through the shared path.
-    async function handleTextImport(mode: 'concept' | 'fulltext'): Promise<void> {
+    function handleTextImport(mode: 'concept' | 'fulltext'): void {
         const fileInput = document.createElement('input');
         fileInput.type = 'file';
         fileInput.accept = '.md,.txt,.pdf';
         fileInput.style.display = 'none';
 
-        fileInput.addEventListener('change', async (e) => {
-            const target = e.target as HTMLInputElement;
-            const file = target.files?.[0];
-            if (!file) return;
-
+        const processTextImportFile = async (file: File): Promise<void> => {
             const orchestrator = state.getOrchestrator();
             const settingsManager = state.getSettingsManager();
             const client = state.getOpenRouterClient();
@@ -1188,8 +1169,6 @@ export async function initialize() {
                     closeProgressModal(progressModal);
                     await finalizeImportedProject(project);
                 } else {
-                    // Full text: infer a fitting template from the document, let
-                    // the user review/edit it, then segment + build.
                     progressSetMessage(progressModal, 'Analyzing document structure...');
                     const { TemplateInferenceService } = await import('./services/TemplateInferenceService');
                     const inference = new TemplateInferenceService(client, settingsManager);
@@ -1220,6 +1199,13 @@ export async function initialize() {
                 console.error('Text import failed:', error);
                 alert('Text import failed: ' + (error instanceof Error ? error.message : 'Unknown error'));
             }
+        };
+
+        fileInput.addEventListener('change', (e) => {
+            const target = e.target as HTMLInputElement;
+            const file = target.files?.[0];
+            if (!file) return;
+            void processTextImportFile(file);
         });
 
         document.body.appendChild(fileInput);
@@ -1349,7 +1335,7 @@ export async function initialize() {
             const onCancel = () => { cleanup(); resolve(null); };
             const onUse = () => {
                 const cleaned = labels.map(l => l.trim());
-                const rootLabel = cleaned[0] && cleaned[0].length > 0 ? cleaned[0]! : 'Project';
+                const rootLabel = cleaned[0]?.length ? cleaned[0] : 'Project';
                 const childLevels = cleaned.slice(1).filter(l => l.length > 0);
                 if (childLevels.length === 0) {
                     childLevels.push('Chapter');
@@ -1381,28 +1367,29 @@ export async function initialize() {
         console.error('❌ Failed to attach manage templates button listener:', error);
     }
     
-    try {
-    getElementById('manualBtn').addEventListener('click', async () => {
+    const openManualModal = async (): Promise<void> => {
         try {
             const { ManualModal } = await import('./ui/modals/index');
             await ManualModal.open();
         } catch (error) {
             console.error('Failed to open manual modal:', error);
-            // Fallback to opening in new window
             window.open('./public/manual.html', '_blank', 'width=1200,height=800,scrollbars=yes,resizable=yes');
         }
+    };
+
+    try {
+    getElementById('manualBtn').addEventListener('click', () => {
+        void openManualModal();
     });
     } catch (error) {
         console.error('❌ Failed to attach manual button listener:', error);
     }
     
     // Global abort button handler - SIMPLIFIED VERSION
-    try {
-    getElementById('globalAbortBtn').addEventListener('click', async () => {
+    const handleGlobalAbortClick = async (): Promise<void> => {
         const { UnifiedGenerationService } = await import('./project/UnifiedGenerationService');
         const { cancelAutoRetryWait } = await import('./ui/project-ui');
 
-        // Also stop any in-progress long-run auto-retry countdown.
         const retryWaitCancelled = cancelAutoRetryWait();
         
         if (UnifiedGenerationService.hasActiveInstances()) {
@@ -1410,24 +1397,19 @@ export async function initialize() {
             console.log(`🛑 Aborting ${summary.activeCount} active generation${summary.activeCount !== 1 ? 's' : ''} - graceful service-level abort`);
             
             try {
-                // Gracefully abort all UnifiedGenerationService instances
                 UnifiedGenerationService.abortAllInstances();
                 
                 console.log('🛑 Graceful abort completed successfully');
                 
-                // Provide immediate feedback
-                const abortBtn = getElementById('globalAbortBtn') as HTMLButtonElement;
-                if (abortBtn) {
-                    const originalText = abortBtn.textContent;
-                    abortBtn.textContent = 'Aborting...';
-                    abortBtn.disabled = true;
-                    
-                    // Reset button after 2 seconds
-                    void setTimeout(() => {
-                        abortBtn.textContent = originalText;
-                        abortBtn.disabled = false;
-                    }, 2000);
-                }
+                const abortBtn = getElementById<HTMLButtonElement>('globalAbortBtn');
+                const originalText = abortBtn.textContent;
+                abortBtn.textContent = 'Aborting...';
+                abortBtn.disabled = true;
+                
+                void setTimeout(() => {
+                    abortBtn.textContent = originalText;
+                    abortBtn.disabled = false;
+                }, 2000);
             } catch (error) {
                 console.error('❌ Failed to abort generation:', error);
                 alert('Failed to abort generation. Please try again.');
@@ -1437,6 +1419,11 @@ export async function initialize() {
         } else {
             alert('No generation is currently in progress.');
         }
+    };
+
+    try {
+    getElementById('globalAbortBtn').addEventListener('click', () => {
+        void handleGlobalAbortClick();
     });
     } catch (error) {
         console.error('❌ Failed to attach global abort button listener:', error);

@@ -77,21 +77,23 @@ export class SimpleGenericModal extends SimpleModal {
                     }
                 });
 
-                button.addEventListener('click', async () => {
+                button.addEventListener('click', () => {
+                    void (async () => {
                     try {
                         await action.handler();
                         // Auto-close the modal after successful action
                         // Unless the action threw a special error to keep it open
                         void this.close();
-                    } catch (error: any) {
+                    } catch (error: unknown) {
                         // Special case: allow actions to prevent modal from closing
-                        if (error?.message === '__KEEP_MODAL_OPEN__') {
+                        if (error instanceof Error && error.message === '__KEEP_MODAL_OPEN__') {
                             return; // Don't close the modal
                         }
                         console.error('Error in modal action:', error);
                         // Still close the modal on errors (unless specifically prevented)
                         void this.close();
                     }
+                    })();
                 });
 
                 actionsContainer.appendChild(button);

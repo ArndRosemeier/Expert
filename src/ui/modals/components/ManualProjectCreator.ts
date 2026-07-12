@@ -66,29 +66,23 @@ export class ManualProjectCreator {
         const createBtn = container.querySelector('#manual-create-btn') as HTMLButtonElement;
         const cancelBtn = container.querySelector('#manual-cancel-btn') as HTMLButtonElement;
         
-        if (createBtn) {
-            const createHandler = () => { this.handleCreate(); };
-            createBtn.addEventListener('click', createHandler);
-            this.cleanupHandlers.push(() => { createBtn.removeEventListener('click', createHandler); });
-        }
+        const createHandler = () => { this.handleCreate(); };
+        createBtn.addEventListener('click', createHandler);
+        this.cleanupHandlers.push(() => { createBtn.removeEventListener('click', createHandler); });
         
-        if (cancelBtn) {
-            const cancelHandler = () => { this.handleCancel(); };
-            cancelBtn.addEventListener('click', cancelHandler);
-            this.cleanupHandlers.push(() => { cancelBtn.removeEventListener('click', cancelHandler); });
-        }
+        const cancelHandler = () => { this.handleCancel(); };
+        cancelBtn.addEventListener('click', cancelHandler);
+        this.cleanupHandlers.push(() => { cancelBtn.removeEventListener('click', cancelHandler); });
 
         // Enter key in title input
         const titleInput = container.querySelector('#manual-project-title-input') as HTMLInputElement;
-        if (titleInput) {
-            const enterHandler = (e: KeyboardEvent) => {
-                if (e.key === 'Enter') {
-                    this.handleCreate();
-                }
-            };
-            titleInput.addEventListener('keydown', enterHandler);
-            this.cleanupHandlers.push(() => { titleInput.removeEventListener('keydown', enterHandler); });
-        }
+        const enterHandler = (e: KeyboardEvent) => {
+            if (e.key === 'Enter') {
+                this.handleCreate();
+            }
+        };
+        titleInput.addEventListener('keydown', enterHandler);
+        this.cleanupHandlers.push(() => { titleInput.removeEventListener('keydown', enterHandler); });
     }
 
     private handleCreate(): void {
@@ -97,12 +91,12 @@ export class ManualProjectCreator {
         const titleInput = this.container.querySelector('#manual-project-title-input') as HTMLInputElement;
         const templateSelect = this.container.querySelector('#manual-project-template-select') as HTMLSelectElement;
         
-        const title = titleInput?.value?.trim() || '';
-        const templateName = templateSelect?.value || '';
+        const title = titleInput.value.trim();
+        const templateName = templateSelect.value;
         
         if (!title) {
             alert('Project title is required.');
-            titleInput?.focus();
+            titleInput.focus();
             return;
         }
         
@@ -111,7 +105,7 @@ export class ManualProjectCreator {
         
         if (!template) {
             alert('Please select a valid template.');
-            templateSelect?.focus();
+            templateSelect.focus();
             return;
         }
         
@@ -140,11 +134,11 @@ export class ManualProjectCreator {
         const titleInput = this.container.querySelector('#manual-project-title-input') as HTMLInputElement;
         const templateSelect = this.container.querySelector('#manual-project-template-select') as HTMLSelectElement;
         
-        if (!titleInput?.value?.trim()) {
+        if (!titleInput.value.trim()) {
             errors.push('Project title is required');
         }
         
-        if (!templateSelect?.value) {
+        if (!templateSelect.value) {
             errors.push('Project template must be selected');
         }
         

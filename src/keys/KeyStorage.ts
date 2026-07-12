@@ -285,7 +285,7 @@ export class KeyStorage {
             for (const importedKey of importedKeys) {
                 try {
                     // Validate key structure
-                    if (!importedKey.key || !importedKey.data || !importedKey.id) {
+                    if (!importedKey.key || !importedKey.id) {
                         errors.push(`Invalid key structure: ${importedKey.id || 'unknown'}`);
                         continue;
                     }

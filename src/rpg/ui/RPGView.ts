@@ -81,10 +81,10 @@ export class RPGView {
         
         if (sessions.length === 0) {
             // No sessions, show "New Session" dialog
-            await this.showNewSessionDialog();
+            this.showNewSessionDialog();
         } else {
             // Show session selector
-            await this.showSessionSelector(sessions);
+            this.showSessionSelector(sessions);
         }
     }
     
@@ -105,7 +105,7 @@ export class RPGView {
     /**
      * Show session selector dialog
      */
-    private async showSessionSelector(sessions: RPGGameSession[]): Promise<void> {
+    private showSessionSelector(sessions: RPGGameSession[]): void {
         const html = `
             <div class="rpg-session-selector">
                 <h2>RPG Sessions</h2>
@@ -144,18 +144,18 @@ export class RPGView {
         // Attach event listeners for delete buttons
         const deleteButtons = this.container.querySelectorAll('.session-delete-btn');
         deleteButtons.forEach(btn => {
-            btn.addEventListener('click', async (e) => {
-                e.stopPropagation(); // Prevent triggering session load
+            btn.addEventListener('click', (e) => {
+                e.stopPropagation();
                 const sessionId = btn.getAttribute('data-session-id');
                 if (sessionId) {
-                    await this.deleteSession(sessionId);
+                    void this.deleteSession(sessionId);
                 }
             });
         });
         
         const newSessionBtn = this.container.querySelector('#rpg-new-session-btn');
         newSessionBtn?.addEventListener('click', () => {
-            void this.showNewSessionDialog();
+            this.showNewSessionDialog();
         });
         
         const closeBtn = this.container.querySelector('#rpg-close-selector-btn');
@@ -167,7 +167,7 @@ export class RPGView {
     /**
      * Show new session creation dialog
      */
-    private async showNewSessionDialog(): Promise<void> {
+    private showNewSessionDialog(): void {
         const activeProject = getActiveProject();
         if (!activeProject) {
             alert('Please open a project first');
@@ -522,7 +522,7 @@ export class RPGView {
             const stateUpdate = this.stateParser.parseStateUpdate(response);
             
             // Apply state updates
-            await this.interactionService.applyStateUpdates(session, stateUpdate);
+            this.interactionService.applyStateUpdates(session, stateUpdate);
             
             console.log('✅ Setting parsed successfully');
             
@@ -568,7 +568,7 @@ export class RPGView {
             console.log('📄 State Parser response received (intro)');
             
             const stateUpdate = this.stateParser.parseStateUpdate(response);
-            await this.interactionService.applyStateUpdates(session, stateUpdate);
+            this.interactionService.applyStateUpdates(session, stateUpdate);
             
             console.log('✅ Initial GM intro parsed successfully');
         } catch (error) {
@@ -814,8 +814,8 @@ export class RPGView {
         );
         
         // Save/Restore buttons
-        const narratorSelect = this.container.querySelector('#rpg-header-narrator-purpose') as HTMLSelectElement | null;
-        narratorSelect?.addEventListener('change', () => {
+        const narratorSelect = this.container.querySelector('#rpg-header-narrator-purpose') as HTMLSelectElement;
+        narratorSelect.addEventListener('change', () => {
             if (!this.currentSession) return;
             this.currentSession.narratorPurpose = narratorSelect.value;
             this.currentSession.updatedAt = Date.now();
@@ -823,8 +823,8 @@ export class RPGView {
             console.log(`🎭 Narrator purpose set to: ${this.currentSession.narratorPurpose}`);
         });
 
-        const parserSelect = this.container.querySelector('#rpg-header-parser-purpose') as HTMLSelectElement | null;
-        parserSelect?.addEventListener('change', () => {
+        const parserSelect = this.container.querySelector('#rpg-header-parser-purpose') as HTMLSelectElement;
+        parserSelect.addEventListener('change', () => {
             if (!this.currentSession) return;
             this.currentSession.parserPurpose = parserSelect.value;
             this.currentSession.updatedAt = Date.now();
@@ -891,7 +891,7 @@ export class RPGView {
             if (e.target === overlay) close();
         });
 
-        const closeBtn = overlay.querySelector('.rpg-save-close-btn') as HTMLButtonElement | null;
+        const closeBtn = overlay.querySelector('.rpg-save-close-btn');
         closeBtn?.addEventListener('click', close);
 
         const restoreButtons = overlay.querySelectorAll('.rpg-save-restore-btn');
@@ -971,10 +971,10 @@ export class RPGView {
             const updatedSessions = await this.loadSessions();
             if (updatedSessions.length === 0) {
                 // No sessions left, show new session dialog
-                await this.showNewSessionDialog();
+                this.showNewSessionDialog();
             } else {
                 // Show updated session list
-                await this.showSessionSelector(updatedSessions);
+                this.showSessionSelector(updatedSessions);
             }
             
         } catch (error) {
@@ -1000,10 +1000,9 @@ export class RPGView {
  */
 export async function openRPGView(): Promise<void> {
     // Create modal container
-    let container = document.getElementById('rpg-view-container') as HTMLElement;
-    
-    if (!container) {
-        container = document.createElement('div');
+    const existingContainer = document.getElementById('rpg-view-container');
+    const container = existingContainer ?? document.createElement('div');
+    if (!existingContainer) {
         container.id = 'rpg-view-container';
         container.className = 'rpg-modal-container';
         document.body.appendChild(container);

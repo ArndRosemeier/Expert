@@ -105,7 +105,7 @@ export class TextSegmentationService {
 
     const sectionsRaw = await this.requestSectionsWithTitles(curated, reqArgs);
 
-    if (!sectionsRaw || sectionsRaw.length === 0) {
+    if (sectionsRaw.length === 0) {
       throw new Error('TextSegmentationService: Model returned no sections.');
     }
 
@@ -145,8 +145,8 @@ export class TextSegmentationService {
       // Detect double-newline paragraph breaks (robust to \r\n)
       const m = /(\r?\n){2,}/g.exec(text.slice(cursor));
       if (!m) break;
-      const breakIndex = cursor + m.index!;
-      const breakLength = m[0]!.length;
+      const breakIndex = cursor + m.index;
+      const breakLength = m[0].length;
       // Paragraph from paragraphStart to breakIndex
       pushParagraph(paragraphStart, breakIndex);
       // Skip the break
@@ -243,9 +243,14 @@ export class TextSegmentationService {
   }
 
   private buildSplitScope(granularity: SegmentationGranularity, targetCount?: number, customScope?: string): string {
-    const core = customScope && customScope.length > 0
-      ? customScope
-      : (granularity === 'custom' ? 'parts' : granularity);
+    let core: string;
+    if (customScope && customScope.length > 0) {
+      core = customScope;
+    } else if (granularity === 'custom') {
+      core = 'parts';
+    } else {
+      core = granularity;
+    }
     if (targetCount && targetCount > 0) {
       return `${core} (aim for about ${targetCount} boundaries)`;
     }
@@ -359,15 +364,10 @@ export class TextSegmentationService {
     }
     const out: LlmSectionRaw[] = [];
     for (const item of parsed) {
-      if (!item || typeof item !== 'object') {
-        throw new Error('Model output array contains non-object item');
-      }
-      const start = (item as any).start;
-      const title = (item as any).title;
-      if (typeof start !== 'string' || typeof title !== 'string') {
+      if (!this.isLlmSectionRaw(item)) {
         throw new Error('Model output items must have string start and title');
       }
-      out.push({ start, title });
+      out.push(item);
     }
     if (out.length === 0) {
       throw new Error('Model output array is empty');
@@ -376,6 +376,15 @@ export class TextSegmentationService {
       throw new Error('First section must start at "p1"');
     }
     return out;
+  }
+
+  private isLlmSectionRaw(item: unknown): item is LlmSectionRaw {
+    return typeof item === 'object'
+      && item !== null
+      && 'start' in item
+      && 'title' in item
+      && typeof item.start === 'string'
+      && typeof item.title === 'string';
   }
 }
 

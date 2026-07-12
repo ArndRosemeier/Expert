@@ -41,13 +41,15 @@ export class AIInteractionsService {
      */
     private setupCheckboxListener(): void {
         const checkbox = document.getElementById('ai-interactions-checkbox') as HTMLInputElement;
-        if (checkbox) {
-            checkbox.checked = this.isEnabled;
-            checkbox.addEventListener('change', async (e) => {
-                this.isEnabled = (e.target as HTMLInputElement).checked;
-                await this.saveSettings();
-            });
-        }
+        checkbox.checked = this.isEnabled;
+        checkbox.addEventListener('change', (e) => {
+            void this.handleCheckboxChange(e);
+        });
+    }
+
+    private async handleCheckboxChange(e: Event): Promise<void> {
+        this.isEnabled = (e.target as HTMLInputElement).checked;
+        await this.saveSettings();
     }
 
     /**
@@ -133,7 +135,7 @@ export class AIInteractionsService {
 
         // Add a completion indicator
         setTimeout(() => {
-            if (this.responseContent && this.responseContent.textContent) {
+            if (this.responseContent?.textContent) {
                 this.responseContent.textContent += '\n\n--- Response Complete ---';
                 this.responseContent.scrollTop = this.responseContent.scrollHeight;
             }

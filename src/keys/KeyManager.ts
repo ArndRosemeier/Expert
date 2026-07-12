@@ -22,7 +22,7 @@ export interface KeyCreationResult {
  * Key management utilities for creating and validating keys
  */
 export class KeyManager {
-    static async createKey(expirationDate: Date, customString: string, password: string): Promise<KeyCreationResult> {
+    static createKey(expirationDate: Date, customString: string, password: string): KeyCreationResult {
         const data: KeyData = {
             customString,
             expirationDate,
@@ -30,20 +30,31 @@ export class KeyManager {
             version: 2
         };
         
-        const encryptedData = await KeyCrypto.encryptData(data, password);
+        const encryptedData = KeyCrypto.encryptData(data, password);
         const key = `EXPERT_KEY_V2_${encryptedData}`;
         
         return { key, data };
     }
     
-    static async validateKey(key: string, password: string): Promise<KeyValidationResult> {
+    static validateKey(key: string, password: string): KeyValidationResult {
         try {
             if (!key.startsWith('EXPERT_KEY_V2_')) {
                 return { valid: false, reason: 'Invalid key format' };
             }
             
             const encryptedData = key.replace('EXPERT_KEY_V2_', '');
-            const data = await KeyCrypto.decryptData(encryptedData, password);
+            const decrypted = KeyCrypto.decryptData(encryptedData, password);
+            if (
+                typeof decrypted !== 'object' ||
+                decrypted === null ||
+                !('expirationDate' in decrypted) ||
+                !('createdAt' in decrypted) ||
+                !('customString' in decrypted) ||
+                !('version' in decrypted)
+            ) {
+                return { valid: false, reason: 'Decrypted key data is invalid' };
+            }
+            const data = decrypted as KeyData;
             
             // Convert date strings back to Date objects
             data.expirationDate = new Date(data.expirationDate);

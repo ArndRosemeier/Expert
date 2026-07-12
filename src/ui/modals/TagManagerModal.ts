@@ -22,7 +22,7 @@ interface TagNodeMapping {
 export class TagManagerModal extends BaseModal {
     private rootNode: DocumentNode;
     private options: TagManagerModalOptions;
-    private tree: SelectableNodeTree;
+    private tree: SelectableNodeTree | null;
     private leftPanel: HTMLElement;
     private rightPanel: HTMLElement;
     private tagListContainer: HTMLElement;
@@ -38,7 +38,7 @@ export class TagManagerModal extends BaseModal {
             closable: true,
             backdrop: true
         }, options?.onClose ? {
-            onClose: async () => { options.onClose!(); }
+            onClose: () => { options.onClose!(); }
         } : {});
         this.rootNode = rootNode;
         this.options = options ?? {};
@@ -96,8 +96,12 @@ export class TagManagerModal extends BaseModal {
 
         // Tree content
         this.setupTree();
-        this.tree.render();
-        const treeContainer = this.tree['container'];
+        const tree = this.tree;
+        if (!tree) {
+            throw new Error('Tag manager tree not initialized');
+        }
+        tree.render();
+        const treeContainer = tree['container'];
         treeContainer.style.flex = '1 1 0%';
         treeContainer.style.overflowY = 'auto';
         treeContainer.style.background = '#fff';
@@ -369,8 +373,11 @@ export class TagManagerModal extends BaseModal {
         const nodesWithTag = this.tagToNodesMap[tag] ?? [];
         
         // First, uncheck all checkboxes and remove highlights
-        const allCheckboxes = document.querySelectorAll('.selectable-node-tree input[type="checkbox"]') as NodeListOf<HTMLInputElement>;
+        const allCheckboxes = document.querySelectorAll('.selectable-node-tree input[type="checkbox"]');
         allCheckboxes.forEach(checkbox => {
+            if (!(checkbox instanceof HTMLInputElement)) {
+                return;
+            }
             checkbox.checked = false;
             // Remove highlight from parent row
             const row = checkbox.closest('.selectable-tree-item');
@@ -381,8 +388,8 @@ export class TagManagerModal extends BaseModal {
         
         // Check checkboxes and add highlights for nodes with selected tag
         nodesWithTag.forEach(node => {
-            const checkbox = document.querySelector(`input[type="checkbox"][data-node-id="${node.id}"]`) as HTMLInputElement;
-            if (checkbox) {
+            const checkbox = document.querySelector(`input[type="checkbox"][data-node-id="${node.id}"]`);
+            if (checkbox instanceof HTMLInputElement) {
                 checkbox.checked = true;
                 // Add highlight to parent row
                 const row = checkbox.closest('.selectable-tree-item');
@@ -622,7 +629,7 @@ export class TagManagerModal extends BaseModal {
             nodeVersionCounts.set(versionInfo.node, count + 1);
         });
 
-        const nonUniqueNodes = Array.from(nodeVersionCounts.entries()).filter(([_node, count]) => count > 1);
+        const nonUniqueNodes = Array.from(nodeVersionCounts.entries()).filter(([, count]) => count > 1);
         
         if (nonUniqueNodes.length > 0) {
             const nodeNames = nonUniqueNodes.map(([node, count]) => `"${node.title}" (${count} versions)`).join(', ');
@@ -660,7 +667,7 @@ export class TagManagerModal extends BaseModal {
             nodeVersionCounts.set(versionInfo.node, count + 1);
         });
 
-        const nonUniqueNodes = Array.from(nodeVersionCounts.entries()).filter(([_node, count]) => count > 1);
+        const nonUniqueNodes = Array.from(nodeVersionCounts.entries()).filter(([, count]) => count > 1);
         
         if (nonUniqueNodes.length > 0) {
             const nodeNames = nonUniqueNodes.map(([node, count]) => `"${node.title}" (${count} versions)`).join(', ');
@@ -759,7 +766,7 @@ export class TagManagerModal extends BaseModal {
                 await projectManager.saveToStorage();
                 const { renderMultiProjectTree, renderNodeDetails } = await import('../project-ui');
                 renderMultiProjectTree();
-                renderNodeDetails();
+                void renderNodeDetails();
             }
         } catch (error) {
             console.error('Failed to persist tag changes:', error);
@@ -772,9 +779,9 @@ export class TagManagerModal extends BaseModal {
 
     public override destroy(): void {
         // Clean up event listeners and references
-        this.tree = null as any;
+        this.tree = null;
         this.tagToNodesMap = {};
         this.tagToVersionsMap = {};
-        void super.destroy();
+        super.destroy();
     }
 } 

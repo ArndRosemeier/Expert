@@ -1,4 +1,4 @@
-import { EventEmitter } from '../EventEmitter';
+import type { ProgressUIData } from '../ui/types/ProjectUiTypes';
 
 // Button labels - centralized for consistency (shared with project-ui.ts)
 const BUTTON_LABELS = {
@@ -26,8 +26,7 @@ export class GenerationCoordinator {
     // auto-retry loop so unattended retries are not blocked by a native alert().
     private suppressFailureAlert = false;
 
-    constructor(_eventEmitter: EventEmitter<any>) {
-        // eventEmitter parameter accepted but not stored as it's not currently used
+    constructor() {
     }
 
     /** Suppress/restore the blocking failure alert (used during long-run auto-retry). */
@@ -70,7 +69,7 @@ export class GenerationCoordinator {
     /**
      * Mark an operation as complete and handle cleanup.
      */
-    public completeOperation(operationId: string, success: boolean, error?: any): void {
+    public completeOperation(operationId: string, success: boolean, error?: unknown): void {
         const operation = this.operations.get(operationId);
         if (!operation) return;
 
@@ -144,21 +143,22 @@ export class GenerationCoordinator {
         // Add a small delay to ensure UI has been re-rendered after renderNodeDetails() call
         setTimeout(() => {
             // Get fresh references to buttons after potential UI re-render
-            const generateBtn = document.getElementById('node-generate-btn') as HTMLButtonElement;
-            
-            console.log('🔘 Generation UI update - Generate button exists:', Boolean(generateBtn));
-        
-            if (generateBtn) {
-                generateBtn.disabled = true;
-                if (operation.type === 'single-content') {
-                    // Use safe button update to prevent listener loss
-                    void import('../ui/event-manager').then(({ eventManager }) => {
-                        eventManager.updateButtonContent('node-generate-btn', 
-                            '<span class="spinner" style="width: 12px; height: 12px; border-width: 2px; margin-right: 8px;"></span>...',
-                            { disabled: true, className: 'button button-primary' }
-                        );
-                    }).catch(console.error);
-                }
+            const generateBtn = document.getElementById('node-generate-btn');
+            if (!(generateBtn instanceof HTMLButtonElement)) {
+                console.log('🔘 Generation UI update - Generate button not found');
+                return;
+            }
+
+            console.log('🔘 Generation UI update - Generate button exists: true');
+            generateBtn.disabled = true;
+            if (operation.type === 'single-content') {
+                // Use safe button update to prevent listener loss
+                void import('../ui/event-manager').then(({ eventManager }) => {
+                    eventManager.updateButtonContent('node-generate-btn', 
+                        '<span class="spinner" style="width: 12px; height: 12px; border-width: 2px; margin-right: 8px;"></span>...',
+                        { disabled: true, className: 'button button-primary' }
+                    );
+                }).catch(console.error);
             }
         }, 50); // Small delay to ensure DOM has been updated
 
@@ -172,7 +172,7 @@ export class GenerationCoordinator {
             this.updateProgressUI({
                 operations: { message: 'Preparing to generate children...', current: 0, total: 1 }
             });
-        } else if (operation.type === 'child-content') {
+        } else {
             // For child content, only update iteration/stage progress
             // Don't override operations progress if there's a bulk operation running
             const hasBulkOperation = Array.from(this.operations.values()).some(op => op.type === 'bulk-children');
@@ -201,29 +201,30 @@ export class GenerationCoordinator {
     /**
      * Update UI when operation completes.
      */
-    private updateUIForOperationComplete(_operation: GenerationOperation, success: boolean, error?: any): void {
+    private updateUIForOperationComplete(_operation: GenerationOperation, success: boolean, error?: unknown): void {
         // Only clean up UI if no other operations are running
         if (!this.hasActiveOperations()) {
             // Add a small delay to ensure UI has been re-rendered if renderNodeDetails() was called
             setTimeout(() => {
                 // Get fresh references to buttons after potential UI re-render
-                const generateBtn = document.getElementById('node-generate-btn') as HTMLButtonElement;
-                
-                console.log('✅ Generation complete - Generate button exists:', Boolean(generateBtn));
-            
-                if (generateBtn) {
-                    generateBtn.disabled = false;
-                    // Restore the depth-aware idle label set by renderNodeDetails (e.g.
-                    // "Generate down to Scene"); fall back to the plain label if unset.
-                    const idleLabel = generateBtn.dataset['idleLabel'] ?? BUTTON_LABELS.GENERATE;
-                    // Use safe button update to prevent listener loss
-                    void import('../ui/event-manager').then(({ eventManager }) => {
-                        eventManager.updateButtonContent('node-generate-btn', 
-                            idleLabel,
-                            { disabled: false, className: 'button button-primary' }
-                        );
-                    }).catch(console.error);
+                const generateBtn = document.getElementById('node-generate-btn');
+                if (!(generateBtn instanceof HTMLButtonElement)) {
+                    console.log('✅ Generation complete - Generate button not found');
+                    return;
                 }
+
+                console.log('✅ Generation complete - Generate button exists: true');
+                generateBtn.disabled = false;
+                // Restore the depth-aware idle label set by renderNodeDetails (e.g.
+                // "Generate down to Scene"); fall back to the plain label if unset.
+                const idleLabel = generateBtn.dataset['idleLabel'] ?? BUTTON_LABELS.GENERATE;
+                // Use safe button update to prevent listener loss
+                void import('../ui/event-manager').then(({ eventManager }) => {
+                    eventManager.updateButtonContent('node-generate-btn', 
+                        idleLabel,
+                        { disabled: false, className: 'button button-primary' }
+                    );
+                }).catch(console.error);
             }, 50); // Small delay to ensure DOM has been updated
 
             // Clear progress and overlays
@@ -235,7 +236,8 @@ export class GenerationCoordinator {
                 console.error('Generation operation failed:', error);
                 console.error('Full error details:', error);
                 if (!this.suppressFailureAlert) {
-                    alert(`Generation failed: ${error.message ?? error}`);
+                    const message = error instanceof Error ? error.message : String(error);
+                    alert(`Generation failed: ${message}`);
                 }
             }
         }
@@ -244,28 +246,20 @@ export class GenerationCoordinator {
     /**
      * Helper methods for UI updates - these call existing functions
      */
-    private updateProgressUI(data: any): void {
-        if (typeof (window as any).updateProgressUI === 'function') {
-            (window as any).updateProgressUI(data);
-        }
+    private updateProgressUI(data: ProgressUIData): void {
+        window.updateProgressUI!(data);
     }
 
     private clearProgressUI(): void {
-        if (typeof (window as any).clearProgressUI === 'function') {
-            (window as any).clearProgressUI();
-        }
+        window.clearProgressUI!();
     }
 
     private showGenerationOverlay(): void {
-        if (typeof (window as any).showGenerationOverlay === 'function') {
-            (window as any).showGenerationOverlay();
-        }
+        window.showGenerationOverlay!();
     }
 
     private hideGenerationOverlay(): void {
-        if (typeof (window as any).hideGenerationOverlay === 'function') {
-            (window as any).hideGenerationOverlay();
-        }
+        window.hideGenerationOverlay!();
     }
 
     // Global abort button is now always visible - no show/hide methods needed

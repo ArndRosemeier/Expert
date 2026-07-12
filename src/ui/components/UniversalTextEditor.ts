@@ -322,24 +322,22 @@ export class UniversalTextEditor {
         
         // Add to container first
         this.container.appendChild(editorContainer);
-        (this.container.style as any).display = 'flex';
+        this.container.style.display = 'flex';
         // Ensure search bar (inserted before) appears above the editor, not as a side column
-        (this.container.style as any).flexDirection = 'column';
-        (this.container.style as any).flex = '1 1 auto';
-        (this.container.style as any).minHeight = '0';
+        this.container.style.flexDirection = 'column';
+        this.container.style.flex = '1 1 auto';
+        this.container.style.minHeight = '0';
         
         // Apply styling to match textarea
-        const editorDiv = editorContainer.querySelector('.text-editor-with-highlighting') as HTMLElement;
+        const editorDiv = this.enhancedEditor.getElement();
         if (this.options.className) {
             editorDiv.className += ' ' + this.options.className;
         }
-        if (editorDiv) {
-            editorDiv.style.width = '100%';
-            editorDiv.style.height = '100%';
-            editorDiv.style.flex = '1 1 auto';
-            editorDiv.style.minHeight = '0';
-            editorDiv.style.boxSizing = 'border-box';
-        }
+        editorDiv.style.width = '100%';
+        editorDiv.style.height = '100%';
+        editorDiv.style.flex = '1 1 auto';
+        editorDiv.style.minHeight = '0';
+        editorDiv.style.boxSizing = 'border-box';
         
         // Set up event listeners AFTER DOM is assembled
         this.setupEnhancedEditorEvents();
@@ -398,7 +396,7 @@ export class UniversalTextEditor {
             
             // Handle F3 for find next, but only if our search is active
             if (event.key === 'F3') {
-                if (this.isSearchVisible && this.searchInput && this.searchInput.value.trim()) {
+                if (this.isSearchVisible && this.searchInput?.value.trim()) {
                     event.preventDefault();
                     this.findNext();
                 }
@@ -433,9 +431,8 @@ export class UniversalTextEditor {
         });
         
         // Add undo functionality (Ctrl+Z) and prevent browser find (Ctrl+F) in enhanced editor
-        const editorDiv = this.container.querySelector('.text-editor-with-highlighting') as HTMLElement;
-        if (editorDiv) {
-            editorDiv.addEventListener('keydown', (event) => {
+        const editorDiv = this.enhancedEditor.getElement();
+        editorDiv.addEventListener('keydown', (event) => {
                 // Explicitly allow common browser shortcuts to work normally
                 if (event.ctrlKey || event.metaKey) {
                     if (['c', 'v', 'x', 'a', 's', 'y'].includes(event.key.toLowerCase())) {
@@ -456,14 +453,13 @@ export class UniversalTextEditor {
                 
                 // Handle F3 for find next, but only if our search is active
                 if (event.key === 'F3') {
-                    if (this.isSearchVisible && this.searchInput && this.searchInput.value.trim()) {
+                    if (this.isSearchVisible && this.searchInput?.value.trim()) {
                         event.preventDefault();
                         this.findNext();
                     }
                     // If search not active or no search term, let browser handle F3 normally
                 }
             });
-        }
     }
     
     /**
@@ -519,9 +515,9 @@ export class UniversalTextEditor {
         
         this.documentClickHandler = (e: Event) => {
             const target = e.target as Node;
-            const editorDiv = this.container.querySelector('.text-editor-with-highlighting') as HTMLElement;
+            const editorDiv = this.enhancedEditor.getElement();
             // Hide overlay if clicking outside editor and overlay
-            if (editorDiv && !editorDiv.contains(target) && !this.selectionOverlay?.contains(target)) {
+            if (!editorDiv.contains(target) && !this.selectionOverlay?.contains(target)) {
                 this.hideSelectionOverlay();
             }
         };
@@ -536,12 +532,8 @@ export class UniversalTextEditor {
      */
     private cleanupSelectionOverlay(): void {
         // Remove event listeners
-        if (this.selectionChangeHandler) {
-            document.removeEventListener('selectionchange', this.selectionChangeHandler);
-        }
-        if (this.documentClickHandler) {
-            document.removeEventListener('click', this.documentClickHandler);
-        }
+        document.removeEventListener('selectionchange', this.selectionChangeHandler);
+        document.removeEventListener('click', this.documentClickHandler);
         
         // Remove overlay
         this.hideSelectionOverlay();
@@ -560,10 +552,10 @@ export class UniversalTextEditor {
         }
 
         const range = selection.getRangeAt(0);
-        const editorDiv = this.container.querySelector('.text-editor-with-highlighting') as HTMLElement;
+        const editorDiv = this.enhancedEditor.getElement();
         
         // Check if selection is within our editor
-        if (!editorDiv?.contains(range.commonAncestorContainer)) {
+        if (!editorDiv.contains(range.commonAncestorContainer)) {
             this.hideSelectionOverlay();
             return;
         }
@@ -613,8 +605,8 @@ export class UniversalTextEditor {
         const rect = range.getBoundingClientRect();
         
         // Find the modal container to position relative to it
-        const modalOverlay = this.container.closest('.modal-overlay') as HTMLElement;
-        if (modalOverlay) {
+        const modalOverlay = this.container.closest('.modal-overlay');
+        if (modalOverlay instanceof HTMLElement) {
             // Position relative to modal overlay
             const modalRect = modalOverlay.getBoundingClientRect();
             this.selectionOverlay.style.cssText = `
@@ -741,10 +733,7 @@ export class UniversalTextEditor {
         this.spinnerOverlay.appendChild(spinner);
 
         // Calculate position based on first highlight region
-        const editorDiv = this.container.querySelector('.text-editor-with-highlighting') as HTMLElement;
-        if (!editorDiv) {
-            return;
-        }
+        const editorDiv = this.enhancedEditor.getElement();
         
         // Create a temporary range to get bounding rect of highlighted text
         const range = document.createRange();
@@ -772,14 +761,14 @@ export class UniversalTextEditor {
             currentPos += nodeLength;
         }
         
-        if (targetNode && targetNode.textContent) {
+        if (targetNode?.textContent) {
             const textLength = targetNode.textContent.length;
             range.setStart(targetNode, Math.min(targetOffset, textLength));
             range.setEnd(targetNode, Math.min(targetOffset + 1, textLength));
             const rect = range.getBoundingClientRect();
             // Position spinner relative to modal or viewport
-            const modalOverlay = this.container.closest('.modal-overlay') as HTMLElement;
-            if (modalOverlay) {
+            const modalOverlay = this.container.closest('.modal-overlay');
+            if (modalOverlay instanceof HTMLElement) {
                 // Position relative to modal overlay with high z-index
                 const modalRect = modalOverlay.getBoundingClientRect();
                 this.spinnerOverlay.style.cssText = `
@@ -877,7 +866,7 @@ export class UniversalTextEditor {
      */
     private highlightSelectionWithMode(mode: 'sentences' | 'paragraphs'): void {
         const selection = this.getSelection();
-        if (!selection?.text.trim()) {
+        if (!selection.text.trim()) {
             this.hideSelectionOverlay();
             return;
         }
@@ -928,7 +917,7 @@ export class UniversalTextEditor {
         const highlights = new Array(textLength).fill(false);
         
         // Get current highlights from the enhanced editor
-        const currentHighlights = (this.enhancedEditor as any).highlights as Map<string, {startPos: number, endPos: number, className: string}>;
+        const currentHighlights = this.enhancedEditor.getHighlights();
         
         for (const [, highlight] of currentHighlights) {
             for (let i = highlight.startPos; i < highlight.endPos; i++) {
@@ -1016,20 +1005,22 @@ export class UniversalTextEditor {
             id: 'universal-text-editor-transform',
             defaultText: highlightedText,
             defaultContext: fullText,
-            onTransformRequested: async (request: TextTransformRequest) => {
-                transformationRequested = true; // Mark as requested immediately
-                try {
-                    // Show spinner overlay while AI is processing
-                    this.showSpinnerOverlay(regions);
-                    
-                    const transformedText = await this.performAITransformation(request);
-                    this.handleTransformResult(transformedText, regions, highlightIds, fullText);
-                } catch (error) {
-                    // Hide spinner on error
-                    this.hideSpinnerOverlay();
-                    console.error('Failed to transform text:', error);
-                    alert('Failed to transform text. Please try again.');
-                }
+            onTransformRequested: (request: TextTransformRequest) => {
+                transformationRequested = true;
+                void (async () => {
+                    try {
+                        // Show spinner overlay while AI is processing
+                        this.showSpinnerOverlay(regions);
+                        
+                        const transformedText = await this.performAITransformation(request);
+                        this.handleTransformResult(transformedText, regions, highlightIds, fullText);
+                    } catch (error) {
+                        // Hide spinner on error
+                        this.hideSpinnerOverlay();
+                        console.error('Failed to transform text:', error);
+                        alert('Failed to transform text. Please try again.');
+                    }
+                })();
             }
         }, {
             onClose: () => {
@@ -1043,7 +1034,7 @@ export class UniversalTextEditor {
             }
         });
         
-        modal.open();
+        void modal.open();
     }
 
     /**
@@ -1143,7 +1134,6 @@ export class UniversalTextEditor {
         // Replace text in all regions (start from the end to maintain positions)
         const sortedRegions = [...originalRegions].sort((a, b) => b.start - a.start);
         let newText = originalFullText;
-        let totalOffset = 0; // Track cumulative change in text length
 
         // Split transformed text back into parts if there were multiple regions
         const transformedParts = originalRegions.length > 1 
@@ -1158,10 +1148,6 @@ export class UniversalTextEditor {
             const before = newText.substring(0, region.start);
             const after = newText.substring(region.end);
             newText = before + transformedPart + after;
-            
-            // Calculate the change in length for this replacement
-            const lengthChange = transformedPart.length - (region.end - region.start);
-            totalOffset += lengthChange;
         });
 
         // Update the editor with new text
@@ -1247,14 +1233,6 @@ export class UniversalTextEditor {
             this.enhancedEditor.setText(text);
         }
     }
-    
-    /**
-     * Set text content and update initial value (for when loading completely new content)
-     * 
-     * Use this when:
-     * - Loading a new document/node content
-     * - Switching to a different text entirely
-
     
     /**
      * AI Undo functionality (Ctrl+Z)
@@ -1465,7 +1443,7 @@ export class UniversalTextEditor {
         if (this.currentMode === 'simple') {
             return this.simpleEditor;
         } else {
-            return this.container.querySelector('.text-editor-with-highlighting') as HTMLElement;
+            return this.enhancedEditor.getElement();
         }
     }
     
@@ -1554,7 +1532,7 @@ export class UniversalTextEditor {
     public addEventListener(
         type: TextareaEventType, 
         listener: EventListenerFunction, 
-        _options?: boolean | AddEventListenerOptions
+        options?: boolean | AddEventListenerOptions
     ): void {
         if (!this.domEventListeners.has(type)) {
             this.domEventListeners.set(type, new Set());
@@ -1562,7 +1540,7 @@ export class UniversalTextEditor {
         this.domEventListeners.get(type)!.add(listener);
         
         // Forward to actual textarea/editor element
-        this.addEventListenerToActiveEditor(type, listener);
+        this.addEventListenerToActiveEditor(type, listener, options);
     }
     
     /**
@@ -1574,7 +1552,7 @@ export class UniversalTextEditor {
     public removeEventListener(
         type: TextareaEventType, 
         listener: EventListenerFunction, 
-        _options?: boolean | EventListenerOptions
+        options?: boolean | EventListenerOptions
     ): void {
         const listeners = this.domEventListeners.get(type);
         if (listeners) {
@@ -1585,7 +1563,7 @@ export class UniversalTextEditor {
         }
         
         // Remove from actual textarea/editor element
-        this.removeEventListenerFromActiveEditor(type, listener);
+        this.removeEventListenerFromActiveEditor(type, listener, options);
     }
     
     /**
@@ -1601,24 +1579,29 @@ export class UniversalTextEditor {
     // PRIVATE DOM EVENT HELPERS
     // ============================================================================
     
-    private addEventListenerToActiveEditor(type: TextareaEventType, listener: EventListenerFunction): void {
+    private addEventListenerToActiveEditor(
+        type: TextareaEventType,
+        listener: EventListenerFunction,
+        options?: boolean | AddEventListenerOptions
+    ): void {
         const activeElement = this.getActiveEditorElement();
-        activeElement.addEventListener(type, listener);
+        activeElement.addEventListener(type, listener, options);
     }
     
-    private removeEventListenerFromActiveEditor(type: TextareaEventType, listener: EventListenerFunction): void {
+    private removeEventListenerFromActiveEditor(
+        type: TextareaEventType,
+        listener: EventListenerFunction,
+        options?: boolean | EventListenerOptions
+    ): void {
         const activeElement = this.getActiveEditorElement();
-        activeElement.removeEventListener(type, listener);
+        activeElement.removeEventListener(type, listener, options);
     }
     
     private getActiveEditorElement(): HTMLElement {
         if (this.currentMode === 'simple') {
             return this.simpleEditor;
-        } else {
-            // For enhanced mode, use the container's editable div
-            const editableDiv = this.container.querySelector('.text-editor-with-highlighting') as HTMLElement;
-            return editableDiv || this.container;
         }
+        return this.enhancedEditor.getElement();
     }
     
     /**
@@ -1642,11 +1625,12 @@ export class UniversalTextEditor {
             for (const mutation of mutations) {
                 if (mutation.type === 'childList') {
                     for (let i = 0; i < mutation.removedNodes.length; i++) {
-                        const removedNode = mutation.removedNodes[i];
-                        if (removedNode && 
-                            removedNode.nodeType === Node.ELEMENT_NODE && 
-                            (removedNode as Element).contains && 
-                            (removedNode as Element).contains(this.container)) {
+                        const removedNode = mutation.removedNodes.item(i);
+                        if (removedNode === null) {
+                            throw new Error(`mutation.removedNodes.item(${i}) returned null`);
+                        }
+                        if (removedNode.nodeType === Node.ELEMENT_NODE &&
+                            removedNode.contains(this.container)) {
                             // Container was removed from DOM, clean up
                             this.destroy();
                             return;
@@ -2047,7 +2031,7 @@ export class UniversalTextEditor {
         }
         
         // For enhanced mode, ensure we're working with clean text (no existing highlights)
-        if (this.currentMode === 'enhanced' && this.enhancedEditor) {
+        if (this.currentMode === 'enhanced') {
             // Clear all existing highlights to ensure clean text for accurate position calculation
             this.enhancedEditor.clearAllHighlights();
             // Update current value to reflect the clean text
@@ -2084,7 +2068,7 @@ export class UniversalTextEditor {
      * Highlight search results in the editor
      */
     private highlightSearchResults(): void {
-        if (this.currentMode === 'enhanced' && this.enhancedEditor) {
+        if (this.currentMode === 'enhanced') {
             // Preserve search input focus during DOM manipulation
             const wasSearchInputFocused = document.activeElement === this.searchInput;
             const wasReplaceInputFocused = document.activeElement === this.replaceInput;
@@ -2127,7 +2111,7 @@ export class UniversalTextEditor {
      * Clear all search highlights
      */
     private clearSearchHighlights(): void {
-        if (this.currentMode === 'enhanced' && this.enhancedEditor) {
+        if (this.currentMode === 'enhanced') {
             // Preserve search input focus during DOM manipulation
             const wasSearchInputFocused = document.activeElement === this.searchInput;
             const wasReplaceInputFocused = document.activeElement === this.replaceInput;
@@ -2211,7 +2195,7 @@ export class UniversalTextEditor {
         if (!result) return;
         
         try {
-            if (this.currentMode === 'enhanced' && this.enhancedEditor) {
+            if (this.currentMode === 'enhanced') {
                 // For enhanced mode, use the editor's replace method directly
                 this.enhancedEditor.clearAllHighlights();
                 this.enhancedEditor.replaceRange(result.start, result.end, replacement);
@@ -2243,7 +2227,7 @@ export class UniversalTextEditor {
         const searchTerm = this.searchInput?.value ?? '';
         
         try {
-            if (this.currentMode === 'enhanced' && this.enhancedEditor) {
+            if (this.currentMode === 'enhanced') {
                 // For enhanced mode, work directly with the editor
                 this.enhancedEditor.clearAllHighlights();
                 const currentText = this.enhancedEditor.getText();
@@ -2292,7 +2276,7 @@ export class UniversalTextEditor {
      */
     private refreshSearchIfActive(): void {
         // Only refresh if we have an active search
-        if (this.searchInput && this.searchInput.value.trim() && this.searchResults.length > 0) {
+        if (this.searchInput?.value.trim() && this.searchResults.length > 0) {
             // Store current index position for restoration
             const wasAtEnd = this.currentSearchIndex >= this.searchResults.length - 1;
             
@@ -2314,8 +2298,8 @@ export class UniversalTextEditor {
                 this.selectSearchResult(this.currentSearchIndex, false);
                 
                 // Update results count if search bar is visible
-                const resultsCount = this.container.querySelector('.search-results-count') as HTMLElement;
-                if (resultsCount) {
+                const resultsCount = this.container.querySelector('.search-results-count');
+                if (resultsCount instanceof HTMLElement) {
                     this.updateResultsCount(resultsCount);
                 }
             }
@@ -2327,7 +2311,7 @@ export class UniversalTextEditor {
      */
     private cleanupSearch(): void {
         this.clearSearchHighlights();
-        if (this.searchBar && this.searchBar.parentNode) {
+        if (this.searchBar?.parentNode) {
             this.searchBar.parentNode.removeChild(this.searchBar);
         }
         this.searchBar = null;

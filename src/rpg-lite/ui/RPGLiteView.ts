@@ -66,6 +66,33 @@ function escapeHtmlText(text: string): string {
     .replace(/'/g, '&#39;');
 }
 
+function queryHTMLElement(root: ParentNode, selector: string): HTMLElement | null {
+  const el = root.querySelector(selector);
+  return el instanceof HTMLElement ? el : null;
+}
+
+function queryHTMLButtonElement(root: ParentNode, selector: string): HTMLButtonElement | null {
+  const el = root.querySelector(selector);
+  return el instanceof HTMLButtonElement ? el : null;
+}
+
+function queryHTMLTextAreaElement(root: ParentNode, selector: string): HTMLTextAreaElement | null {
+  const el = root.querySelector(selector);
+  return el instanceof HTMLTextAreaElement ? el : null;
+}
+
+function requireHTMLElement(root: ParentNode, selector: string): HTMLElement {
+  const el = queryHTMLElement(root, selector);
+  if (!el) throw new Error(`Required element not found: ${selector}`);
+  return el;
+}
+
+function requireHTMLTextAreaElement(root: ParentNode, selector: string): HTMLTextAreaElement {
+  const el = queryHTMLTextAreaElement(root, selector);
+  if (!el) throw new Error(`Required textarea not found: ${selector}`);
+  return el;
+}
+
 /**
  * Select the most recent milestone whose summary is still valid for the current
  * conversation length. A milestone is valid when it covers no more messages than
@@ -320,7 +347,7 @@ export class RPGLiteView {
       opts.temperature = session.temperature;
     }
     // Check if the selected model for this purpose supports image output
-    const modelId = state.getModelSelector()?.getSelectedModels()?.[session.narratorPurpose];
+    const modelId = state.getModelSelector()?.getSelectedModels()[session.narratorPurpose];
     if (modelId) {
       const supportsImages = await this.openRouterClient.modelSupportsImageOutput(modelId);
       if (supportsImages) {
@@ -335,7 +362,7 @@ export class RPGLiteView {
    * Creates the container on first call, subsequent calls append to it.
    */
   private appendImagesToMessageEl(msgEl: HTMLElement, imageUrls: string[]): void {
-    let imagesContainer = msgEl.querySelector('[data-role="images"]') as HTMLElement | null;
+    let imagesContainer = queryHTMLElement(msgEl, '[data-role="images"]');
     if (!imagesContainer) {
       imagesContainer = document.createElement('div');
       imagesContainer.dataset['role'] = 'images';
@@ -350,14 +377,14 @@ export class RPGLiteView {
       imagesContainer.appendChild(img);
     }
     // Scroll to make the new images visible
-    const messagesEl = this.container.querySelector('#rpg-lite-messages') as HTMLElement | null;
+    const messagesEl = queryHTMLElement(this.container, '#rpg-lite-messages');
     if (messagesEl) messagesEl.scrollTop = messagesEl.scrollHeight;
   }
 
   private updateRetriesDisplay(): void {
     if (!this.currentSession) return;
     const session = this.currentSession;
-    const remainingEl = this.container.querySelector('#rpg-lite-retries-remaining') as HTMLElement | null;
+    const remainingEl = queryHTMLElement(this.container, '#rpg-lite-retries-remaining');
     if (!remainingEl) return;
     const used = session.retriesUsed ?? 0;
     // null OR undefined (not yet initialized) both mean unlimited — the default.
@@ -496,12 +523,12 @@ export class RPGLiteView {
 
     const newScratchBtn = this.container.querySelector('#rpg-lite-new-session-scratch') as HTMLButtonElement;
     newScratchBtn.addEventListener('click', () => {
-      void this.renderNewSessionDialog(false);
+      this.renderNewSessionDialog(false);
     });
 
     const newTemplateBtn = this.container.querySelector('#rpg-lite-new-template') as HTMLButtonElement;
     newTemplateBtn.addEventListener('click', () => {
-      void this.renderNewSessionDialog(true);
+      this.renderNewSessionDialog(true);
     });
 
     this.renderSessionList();
@@ -510,7 +537,7 @@ export class RPGLiteView {
   }
 
   private renderSessionList(): void {
-    const list = this.container.querySelector('#rpg-lite-session-list') as HTMLElement | null;
+    const list = queryHTMLElement(this.container, '#rpg-lite-session-list');
     if (!list) return;
 
     if (this.sessions.length === 0) {
@@ -568,7 +595,7 @@ export class RPGLiteView {
   }
 
   private renderActionButtons(): void {
-    const list = this.container.querySelector('#rpg-lite-action-buttons-list') as HTMLElement | null;
+    const list = queryHTMLElement(this.container, '#rpg-lite-action-buttons-list');
     if (!list) return;
 
     if (this.actionButtons.length === 0) {
@@ -635,7 +662,7 @@ export class RPGLiteView {
     const button = this.actionButtons.find((b) => b.id === buttonId);
     if (!button) throw new Error(`Action button not found: ${buttonId}`);
 
-    const inputEl = this.container.querySelector('#rpg-lite-input') as HTMLTextAreaElement | null;
+    const inputEl = queryHTMLTextAreaElement(this.container, '#rpg-lite-input');
     if (!inputEl) return;
 
     inputEl.value = button.text;
@@ -646,12 +673,12 @@ export class RPGLiteView {
   }
 
   private async showCreateActionButtonDialog(): Promise<void> {
-    const inputEl = this.container.querySelector('#rpg-lite-input') as HTMLTextAreaElement | null;
+    const inputEl = queryHTMLTextAreaElement(this.container, '#rpg-lite-input');
     const currentText = inputEl?.value.trim() ?? '';
 
     const result = await this.showActionButtonEditorModal({
       title: 'Create Action Button',
-      labelValue: currentText.substring(0, 20) || 'Action',
+      labelValue: currentText.length > 0 ? currentText.substring(0, 20) : 'Action',
       textValue: currentText,
       confirmText: 'Create'
     });
@@ -695,7 +722,7 @@ export class RPGLiteView {
     this.renderActionButtons();
   }
 
-  private showActionButtonEditorModal(options: {
+  private async showActionButtonEditorModal(options: {
     title: string;
     labelValue: string;
     textValue: string;
@@ -880,7 +907,7 @@ export class RPGLiteView {
   }
 
   private renderPresetList(): void {
-    const list = this.container.querySelector('#rpg-lite-preset-list') as HTMLElement | null;
+    const list = queryHTMLElement(this.container, '#rpg-lite-preset-list');
     if (!list) return;
 
     if (this.presets.length === 0) {
@@ -1081,8 +1108,8 @@ export class RPGLiteView {
     const preset = this.presets.find((p) => p.id === this.editingPresetId);
     if (!preset) return;
 
-    const cancelBtn = this.container.querySelector('#rpg-lite-preset-editor-cancel') as HTMLButtonElement | null;
-    const saveBtn = this.container.querySelector('#rpg-lite-preset-editor-save') as HTMLButtonElement | null;
+    const cancelBtn = queryHTMLButtonElement(this.container, '#rpg-lite-preset-editor-cancel');
+    const saveBtn = queryHTMLButtonElement(this.container, '#rpg-lite-preset-editor-save');
     if (!cancelBtn || !saveBtn) return;
 
     cancelBtn.addEventListener('click', () => {
@@ -1107,9 +1134,9 @@ export class RPGLiteView {
     });
 
     // Prefix context refinement buttons
-    const moreDetailsBtn = this.container.querySelector('#rpg-lite-prefix-more-details') as HTMLButtonElement | null;
-    const variationBtn = this.container.querySelector('#rpg-lite-prefix-variation') as HTMLButtonElement | null;
-    const backBtn = this.container.querySelector('#rpg-lite-prefix-back') as HTMLButtonElement | null;
+    const moreDetailsBtn = queryHTMLButtonElement(this.container, '#rpg-lite-prefix-more-details');
+    const variationBtn = queryHTMLButtonElement(this.container, '#rpg-lite-prefix-variation');
+    const backBtn = queryHTMLButtonElement(this.container, '#rpg-lite-prefix-back');
 
     if (moreDetailsBtn && variationBtn && backBtn) {
       moreDetailsBtn.addEventListener('click', () => {
@@ -1121,7 +1148,7 @@ export class RPGLiteView {
       });
 
       backBtn.addEventListener('click', () => {
-        const prefixEl = this.container.querySelector('#rpg-lite-preset-editor-prefix') as HTMLTextAreaElement | null;
+        const prefixEl = queryHTMLTextAreaElement(this.container, '#rpg-lite-preset-editor-prefix');
         if (!prefixEl) return;
         
         if (this.prefixContextHistory.length > 0) {
@@ -1229,7 +1256,7 @@ export class RPGLiteView {
     await this.generateOpeningMessage();
   }
 
-  private async renderNewSessionDialog(isTemplate: boolean): Promise<void> {
+  private renderNewSessionDialog(isTemplate: boolean): void {
     this.ensureModal();
     this.currentSession = null;
 
@@ -1328,11 +1355,11 @@ export class RPGLiteView {
   }
 
   private async refinePrefixContext(mode: 'more-details' | 'variation'): Promise<void> {
-    const prefixEl = this.container.querySelector('#rpg-lite-preset-editor-prefix') as HTMLTextAreaElement | null;
-    const statusEl = this.container.querySelector('#rpg-lite-prefix-status') as HTMLElement | null;
-    const moreDetailsBtn = this.container.querySelector('#rpg-lite-prefix-more-details') as HTMLButtonElement | null;
-    const variationBtn = this.container.querySelector('#rpg-lite-prefix-variation') as HTMLButtonElement | null;
-    const backBtn = this.container.querySelector('#rpg-lite-prefix-back') as HTMLButtonElement | null;
+    const prefixEl = queryHTMLTextAreaElement(this.container, '#rpg-lite-preset-editor-prefix');
+    const statusEl = queryHTMLElement(this.container, '#rpg-lite-prefix-status');
+    const moreDetailsBtn = queryHTMLButtonElement(this.container, '#rpg-lite-prefix-more-details');
+    const variationBtn = queryHTMLButtonElement(this.container, '#rpg-lite-prefix-variation');
+    const backBtn = queryHTMLButtonElement(this.container, '#rpg-lite-prefix-back');
 
     if (!prefixEl || !statusEl || !moreDetailsBtn || !variationBtn || !backBtn) return;
 
@@ -1682,14 +1709,14 @@ export class RPGLiteView {
     systemEl.value = session.systemPrompt;
     systemEl.addEventListener('input', () => {
       session.systemPrompt = systemEl.value;
-      void this.saveSession().then(() => this.updateContextStats());
+      void this.saveSession().then(async () => this.updateContextStats());
     });
 
     const prefixEl = this.container.querySelector('#rpg-lite-prefix') as HTMLTextAreaElement;
     prefixEl.value = session.prefixContext;
     prefixEl.addEventListener('input', () => {
       session.prefixContext = prefixEl.value;
-      void this.saveSession().then(() => this.updateContextStats());
+      void this.saveSession().then(async () => this.updateContextStats());
     });
 
     const clipboardEl = this.container.querySelector('#rpg-lite-clipboard') as HTMLTextAreaElement;
@@ -1856,7 +1883,7 @@ export class RPGLiteView {
   }
 
   private renderPresetListInSession(): void {
-    const list = this.container.querySelector('#rpg-lite-preset-list-session') as HTMLElement | null;
+    const list = queryHTMLElement(this.container, '#rpg-lite-preset-list-session');
     if (!list) return;
 
     if (this.presets.length === 0) {
@@ -1873,7 +1900,7 @@ export class RPGLiteView {
 
   private async updateContextStats(): Promise<void> {
     if (!this.currentSession) throw new Error('No current session.');
-    const statsEl = this.container.querySelector('#rpg-lite-context-stats-topbar') as HTMLElement | null;
+    const statsEl = queryHTMLElement(this.container, '#rpg-lite-context-stats-topbar');
     if (!statsEl) return;
 
     // "msgs" reflects the conversation's content messages (the same count that
@@ -2543,28 +2570,28 @@ export class RPGLiteView {
       this.startEditMessage(msg.id);
     });
     
-    const retryBtn = el.querySelector('[data-action="retry"]') as HTMLButtonElement | null;
+    const retryBtn = queryHTMLButtonElement(el, '[data-action="retry"]');
     if (retryBtn) {
       retryBtn.addEventListener('click', () => {
         void this.retryFromAssistant(msg.id);
       });
     }
     
-    const addToClipboardBtn = el.querySelector('[data-action="add-to-clipboard"]') as HTMLButtonElement | null;
+    const addToClipboardBtn = queryHTMLButtonElement(el, '[data-action="add-to-clipboard"]');
     if (addToClipboardBtn) {
       addToClipboardBtn.addEventListener('click', () => {
         this.addToClipboard(msg.content);
       });
     }
     
-    const prevVersionBtn = el.querySelector('[data-action="prev-version"]') as HTMLButtonElement | null;
+    const prevVersionBtn = queryHTMLButtonElement(el, '[data-action="prev-version"]');
     if (prevVersionBtn) {
       prevVersionBtn.addEventListener('click', () => {
         void this.switchToVersion(msg.id, -1);
       });
     }
     
-    const nextVersionBtn = el.querySelector('[data-action="next-version"]') as HTMLButtonElement | null;
+    const nextVersionBtn = queryHTMLButtonElement(el, '[data-action="next-version"]');
     if (nextVersionBtn) {
       nextVersionBtn.addEventListener('click', () => {
         void this.switchToVersion(msg.id, 1);
@@ -2579,10 +2606,10 @@ export class RPGLiteView {
     toggles.forEach(toggle => {
       toggle.addEventListener('click', (e) => {
         e.stopPropagation();
-        const foldId = (toggle as HTMLElement).dataset['toggleId'];
+        const foldId = toggle instanceof HTMLElement ? toggle.dataset['toggleId'] : undefined;
         if (!foldId) return;
         
-        const foldable = container.querySelector(`[data-fold-id="${foldId}"]`) as HTMLElement;
+        const foldable = queryHTMLElement(container, `[data-fold-id="${foldId}"]`);
         const icon = toggle.querySelector('.rpg-lite-xml-fold-icon');
         
         if (foldable && icon) {
@@ -2597,7 +2624,7 @@ export class RPGLiteView {
   private addToClipboard(content: string): void {
     if (!this.currentSession) throw new Error('No current session.');
     
-    const clipboardEl = this.container.querySelector('#rpg-lite-clipboard') as HTMLTextAreaElement | null;
+    const clipboardEl = queryHTMLTextAreaElement(this.container, '#rpg-lite-clipboard');
     if (!clipboardEl) return;
     
     // Append to clipboard with a separator if there's already content
@@ -2671,7 +2698,7 @@ export class RPGLiteView {
           if (msg.versions && msg.versions.length > 0) {
             const activeIndex = msg.activeVersionIndex ?? 0;
             if (msg.versions[activeIndex]) {
-              msg.versions[activeIndex]!.content = textarea.value;
+              msg.versions[activeIndex].content = textarea.value;
             }
           }
 
@@ -2710,7 +2737,7 @@ export class RPGLiteView {
           if (msg.versions && msg.versions.length > 0) {
             const activeIndex = msg.activeVersionIndex ?? 0;
             if (msg.versions[activeIndex]) {
-              msg.versions[activeIndex]!.content = textarea.value;
+              msg.versions[activeIndex].content = textarea.value;
             }
           }
 
@@ -2998,8 +3025,8 @@ export class RPGLiteView {
     
     // OPTIMIZATION: Don't re-render the whole conversation (expensive in old sessions)
     // Just append the new message element directly.
-    const messagesEl = this.container.querySelector('#rpg-lite-messages') as HTMLElement;
-    if (messagesEl && !existingMessage) {
+    const messagesEl = requireHTMLElement(this.container, '#rpg-lite-messages');
+    if (!existingMessage) {
       messagesEl.appendChild(this.renderMessage(assistantMsg));
       // Scroll to the new message ONCE before streaming starts
       // This ensures it's visible so the browser will paint incremental updates
@@ -3022,7 +3049,7 @@ export class RPGLiteView {
     let openingInstruction = getOpeningInstruction();
     let meta: RPGLiteMessageGenerationMeta | null = null;
 
-    const msgEl = messagesEl.querySelector(`[data-message-id="${assistantMsg.id}"]`) as HTMLElement;
+    const msgEl = requireHTMLElement(messagesEl, `[data-message-id="${assistantMsg.id}"]`);
     msgEl.classList.add('rpg-lite-message-streaming');
     this.addWaitingIndicator(msgEl);
 
@@ -3071,13 +3098,13 @@ export class RPGLiteView {
       if (this.streamingMessageId !== assistantMsg.id) return;
       
       // IMPORTANT: Re-query the live DOM node each update.
-      const liveMessagesEl = this.container.querySelector('#rpg-lite-messages') as HTMLElement | null;
+      const liveMessagesEl = queryHTMLElement(this.container, '#rpg-lite-messages');
       if (!liveMessagesEl) throw new Error('RPG Lite streaming: messages container not found.');
 
-      const liveMsgEl = liveMessagesEl.querySelector(`[data-message-id="${assistantMsg.id}"]`) as HTMLElement | null;
+      const liveMsgEl = queryHTMLElement(liveMessagesEl, `[data-message-id="${assistantMsg.id}"]`);
       if (!liveMsgEl) throw new Error(`RPG Lite streaming: message element not found: ${assistantMsg.id}`);
 
-      const liveContentEl = liveMsgEl.querySelector('[data-role="content"]') as HTMLElement | null;
+      const liveContentEl = queryHTMLElement(liveMsgEl, '[data-role="content"]');
       if (!liveContentEl) throw new Error(`RPG Lite streaming: message content element missing: ${assistantMsg.id}`);
 
       liveContentEl.textContent = assistantMsg.content;
@@ -3127,7 +3154,8 @@ export class RPGLiteView {
       onMeta: (m) => {
         meta = mapCompletionMetaToGenerationMeta(session.narratorPurpose, m);
       },
-      onComplete: async () => {
+      onComplete: () => {
+        void (async () => {
         if (rafHandle !== null) {
           cancelAnimationFrame(rafHandle);
           rafHandle = null;
@@ -3163,9 +3191,9 @@ export class RPGLiteView {
         if (DEBUG_RPG_LITE_STREAMING) console.log('🎨 [RPG Lite Opening] Re-rendering with highlighting');
         // Re-render with highlighting now that streaming is complete
         this.renderConversation();
-        const inputEl = this.container.querySelector('#rpg-lite-input') as HTMLTextAreaElement;
-        inputEl.focus();
+        requireHTMLTextAreaElement(this.container, '#rpg-lite-input').focus();
         await this.maybeCreateMilestone(session);
+        })();
       },
       onError: (error: Error) => {
         console.error('❌ [RPG Lite Opening] Streaming error:', error);
@@ -3217,8 +3245,8 @@ export class RPGLiteView {
     
     // OPTIMIZATION: Don't re-render the whole conversation (expensive in old sessions)
     // Just append the new message element directly.
-    const messagesEl = this.container.querySelector('#rpg-lite-messages') as HTMLElement;
-    if (messagesEl && !existingMessage) {
+    const messagesEl = requireHTMLElement(this.container, '#rpg-lite-messages');
+    if (!existingMessage) {
       messagesEl.appendChild(this.renderMessage(assistantMsg));
       // Scroll to the new message ONCE before streaming starts
       // This ensures it's visible so the browser will paint incremental updates
@@ -3239,7 +3267,7 @@ export class RPGLiteView {
     let meta: RPGLiteMessageGenerationMeta | null = null;
     const openRouterMessages = await buildContextMessages(session);
     void this.updateContextStats();
-    const msgEl = messagesEl.querySelector(`[data-message-id="${assistantMsg.id}"]`) as HTMLElement;
+    const msgEl = requireHTMLElement(messagesEl, `[data-message-id="${assistantMsg.id}"]`);
     msgEl.classList.add('rpg-lite-message-streaming');
     this.addWaitingIndicator(msgEl);
 
@@ -3261,13 +3289,13 @@ export class RPGLiteView {
       if (this.streamingMessageId !== assistantMsg.id) return;
       
       // IMPORTANT: Re-query the live DOM node each update.
-      const liveMessagesEl = this.container.querySelector('#rpg-lite-messages') as HTMLElement | null;
+      const liveMessagesEl = queryHTMLElement(this.container, '#rpg-lite-messages');
       if (!liveMessagesEl) throw new Error('RPG Lite streaming: messages container not found.');
 
-      const liveMsgEl = liveMessagesEl.querySelector(`[data-message-id="${assistantMsg.id}"]`) as HTMLElement | null;
+      const liveMsgEl = queryHTMLElement(liveMessagesEl, `[data-message-id="${assistantMsg.id}"]`);
       if (!liveMsgEl) throw new Error(`RPG Lite streaming: message element not found: ${assistantMsg.id}`);
 
-      const liveContentEl = liveMsgEl.querySelector('[data-role="content"]') as HTMLElement | null;
+      const liveContentEl = queryHTMLElement(liveMsgEl, '[data-role="content"]');
       if (!liveContentEl) throw new Error(`RPG Lite streaming: message content element missing: ${assistantMsg.id}`);
 
       liveContentEl.textContent = assistantMsg.content;
@@ -3317,7 +3345,8 @@ export class RPGLiteView {
       onMeta: (m) => {
         meta = mapCompletionMetaToGenerationMeta(session.narratorPurpose, m);
       },
-      onComplete: async () => {
+      onComplete: () => {
+        void (async () => {
         if (rafHandle !== null) {
           cancelAnimationFrame(rafHandle);
           rafHandle = null;
@@ -3353,9 +3382,9 @@ export class RPGLiteView {
         if (DEBUG_RPG_LITE_STREAMING) console.log('🎨 [RPG Lite Reply] Re-rendering with highlighting');
         // Re-render with highlighting now that streaming is complete
         this.renderConversation();
-        const inputEl = this.container.querySelector('#rpg-lite-input') as HTMLTextAreaElement;
-        inputEl.focus();
+        requireHTMLTextAreaElement(this.container, '#rpg-lite-input').focus();
         await this.maybeCreateMilestone(session);
+        })();
       },
       onError: (error: Error) => {
         console.error('❌ [RPG Lite Reply] Streaming error:', error);

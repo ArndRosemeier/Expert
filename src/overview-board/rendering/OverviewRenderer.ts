@@ -478,7 +478,8 @@ export class OverviewRenderer {
     this.needsRedraw = true;
   }
   
-  private handleMouseMove(point: Point, _event: MouseEvent): void {
+  private handleMouseMove(point: Point, event: MouseEvent): void {
+    void event;
     const worldPos = this.viewport.screenToWorld(point.x, point.y);
     
     // Handle panning
@@ -517,7 +518,9 @@ export class OverviewRenderer {
     this.needsRedraw = true;
   }
   
-  private handleMouseUp(_point: Point, _event: MouseEvent): void {
+  private handleMouseUp(point: Point, event: MouseEvent): void {
+    void point;
+    void event;
     // Handle panning end
     if (this.interactionState.isPanning) {
       this.interactionState.isPanning = false;
@@ -535,7 +538,8 @@ export class OverviewRenderer {
     this.needsRedraw = true;
   }
   
-  private handleDoubleClick(point: Point, _event: MouseEvent): void {
+  private handleDoubleClick(point: Point, event: MouseEvent): void {
+    void event;
     const worldPos = this.viewport.screenToWorld(point.x, point.y);
     const hitElement = this.findElementAt(worldPos);
     
@@ -545,7 +549,8 @@ export class OverviewRenderer {
     }
   }
   
-  private handleWheel(delta: number, point: Point, _event: WheelEvent): void {
+  private handleWheel(delta: number, point: Point, event: WheelEvent): void {
+    void event;
     const zoomFactor = delta > 0 ? 1.1 : 0.9;
     this.viewport.zoomAt(zoomFactor, point.x, point.y);
     this.needsRedraw = true;

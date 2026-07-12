@@ -471,7 +471,7 @@ export class UnifiedGenerationService {
                     if (DEBUG_STATELESS_GENERATION) {
                         console.log(`✅ STATELESS DEBUG: Performing context pruning on "${node.title}"`);
                     }
-                    await this.handleContextPruning(node.id, levels);
+                    this.handleContextPruning(node.id);
                     workDone = true;
                     break; // Exit immediately - fresh assessment next iteration
                 }
@@ -821,7 +821,7 @@ export class UnifiedGenerationService {
         
         // Check if all siblings have reached their target state
         // IMPORTANT: Check actual state vs target, not work capability
-        const siblingStates: Array<{name: string, isReady: boolean, workNeeded: any}> = [];
+        const siblingStates: Array<{name: string, isReady: boolean, workNeeded: WorkNeeded}> = [];
         const allSiblingsReady = siblings.every(sibling => {
             const siblingCurrentState = this.getNodeCurrentState(sibling);
             const siblingWorkNeeded = this.getWorkNeeded(sibling, targetState);
@@ -946,7 +946,7 @@ export class UnifiedGenerationService {
     /**
      * Handle context pruning for a node
      */
-    private async handleContextPruning(nodeId: string, _levels: GenerationLevels): Promise<void> {
+    private handleContextPruning(nodeId: string): void {
         // Check for abort at start of operation
         if (this.abortRequested) {
             console.log(`🛑 Context pruning aborted for node: ${nodeId}`);
@@ -1129,17 +1129,15 @@ export class UnifiedGenerationService {
 
             // Get the creator model name for tracking
             const currentProfile = this.deps.settingsManager.getLastUsedProfile();
-            const creatorModel = currentProfile?.selectedModels?.['creator'];
+            const creatorModel = currentProfile?.selectedModels['creator'];
             const childIds: string[] = [];
 
-            nodeItems.forEach((item, index) => {
-                // Child index is 1-based
-                const childIndex = index + 1;
-                const newNode = this.deps.treeService.addNode(item.title, nodeId, this.deps.rootNode, creatorModel, childIndex);
+            nodeItems.forEach((item) => {
+                const newNode = this.deps.treeService.addNode(item.title, nodeId, this.deps.rootNode, creatorModel);
                 childIds.push(newNode.id);
                 
                 // Set the content description as initial content if provided
-                if (item.description && item.description.trim()) {
+                if (item.description.trim()) {
                     // Fix metadata type
                     const metadata: { [key: string]: unknown } = {};
                     if (creatorModel) {
@@ -1262,9 +1260,6 @@ export class UnifiedGenerationService {
                     break; // success
                 } catch (error) {
                     lastError = error;
-                    if (this.abortRequested) {
-                        throw error;
-                    }
                     const msg = error instanceof Error ? error.message : String(error);
                     const isCongestion = error instanceof Error && error.name === 'ProviderCongestionError';
                     const isRetryable = isCongestion || /malformed|Failed to parse analysis results|Empty response|Provider error from/i.test(msg);
@@ -1531,6 +1526,7 @@ export class UnifiedGenerationService {
                 console.warn(`⚠️ No master version found for child node "${childNode.title}"`);
             }
         }
+        console.log(`✅ Tagged ${taggedCount} children as consistent to parent "${parentNode.title}"`);
         await this.saveProjectAfterBatchTagging();
     }
 
@@ -1574,7 +1570,7 @@ export class UnifiedGenerationService {
         if (node) {
                 const profile = this.deps.settingsManager.getLastUsedProfile();
                 const modelKey = node.isLeaf ? 'prose' : 'creator';
-                const modelName = profile?.selectedModels?.[modelKey];
+                const modelName = profile?.selectedModels[modelKey];
                 if (modelName) {
                     return this.formatModelName(modelName);
                 }
@@ -1585,9 +1581,6 @@ export class UnifiedGenerationService {
         const profile = this.deps.settingsManager.getLastUsedProfile();
         if (!profile) {
             throw new Error('No profile available - settings not properly configured');
-        }
-        if (!profile.selectedModels) {
-            throw new Error('Profile has no selected models - model configuration corrupted');
         }
         if (!profile.selectedModels['creator']) {
             throw new Error('No creator model selected - model configuration incomplete');
@@ -1761,7 +1754,7 @@ export class UnifiedGenerationService {
                 const profile = this.deps.settingsManager.getLastUsedProfile();
                 // Select appropriate model based on node type - leaf nodes use 'prose', non-leaf use 'creator'
                 const modelKey = node.isLeaf ? 'prose' : 'creator';
-                const modelName = profile?.selectedModels?.[modelKey];
+                const modelName = profile?.selectedModels[modelKey];
                 
                 // End the generation session with the final result
                 node.endGenerationSession(result.success, result.finalResponse);
@@ -1859,7 +1852,7 @@ export class UnifiedGenerationService {
             
             // End the generation session with failure if it's still active
             if (node.currentGenerationSession) {
-                node.endGenerationSession(false, currentIterationContent ?? '');
+                node.endGenerationSession(false, '');
             }
             
             // Note: Individual content generation does not emit completion events
@@ -2116,7 +2109,7 @@ export class UnifiedGenerationService {
         let includeParentContent = false;
         if (node.parentId) {
             const parentNode = this.deps.treeService.findNodeById(node.parentId, this.deps.rootNode);
-            if (parentNode && parentNode.content) {
+            if (parentNode?.content.trim()) {
                 const parentSections = this.parseContentSections(parentNode.content);
                 const parentHasSections = parentSections.length > 0;
                 includeParentContent = !parentHasSections;
@@ -2213,8 +2206,8 @@ export class UnifiedGenerationService {
 
             const childIds: string[] = [];
 
-            sections.forEach((section, index) => {
-                const created = this.createChildFromSection(nodeId, section.title, section.content, index + 1);
+            sections.forEach((section) => {
+                const created = this.createChildFromSection(nodeId, section.title, section.content);
                 childIds.push(created.id);
             });
 
@@ -2289,7 +2282,7 @@ export class UnifiedGenerationService {
         try {
             for (const sectionIndex of missingIndices) {
                 const section = sections[sectionIndex]!;
-                const created = this.createChildFromSection(nodeId, section.title, section.content, sectionIndex + 1);
+                const created = this.createChildFromSection(nodeId, section.title, section.content);
                 createdChildIds.push(created.id);
 
                 const currentIdx = node.children.findIndex(c => c.id === created.id);
@@ -2324,13 +2317,13 @@ export class UnifiedGenerationService {
     /**
      * Create a single child node from a section using the same logic as bulk creation
      */
-    private createChildFromSection(parentId: string, title: string, content: string, sectionIndex: number) {
+    private createChildFromSection(parentId: string, title: string, content: string) {
         const currentProfile = this.deps.settingsManager.getLastUsedProfile();
-        const creatorModel = currentProfile?.selectedModels?.['creator'];
+        const creatorModel = currentProfile?.selectedModels['creator'];
 
-        const newNode = this.deps.treeService.addNode(title, parentId, this.deps.rootNode, creatorModel, sectionIndex);
+        const newNode = this.deps.treeService.addNode(title, parentId, this.deps.rootNode, creatorModel);
 
-        if (content && content.trim()) {
+        if (content.trim()) {
             const metadata: { [key: string]: unknown } = {};
             if (creatorModel) {
                 metadata['creatorModel'] = creatorModel;

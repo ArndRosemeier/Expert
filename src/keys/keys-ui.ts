@@ -20,10 +20,10 @@ export class KeysUI {
     }
 
     private async init(): Promise<void> {
-        void this.render();
+        this.render();
         this.attachEventListeners();
         await this.loadStoredKeys();
-        await this.updateKeysList();
+        this.updateKeysList();
         await this.updateStorageStats();
     }
 
@@ -150,7 +150,7 @@ export class KeysUI {
     private attachEventListeners(): void {
         // Form submission
         const form = document.getElementById('create-key-form') as HTMLFormElement;
-        form.addEventListener('submit', async (e) => this.handleCreateKey(e));
+        form.addEventListener('submit', (e) => { void this.handleCreateKey(e); });
 
         // Random string button
         const randomBtn = document.getElementById('random-string-btn') as HTMLButtonElement;
@@ -162,11 +162,11 @@ export class KeysUI {
 
         // Validation button
         const validateBtn = document.getElementById('validate-btn') as HTMLButtonElement;
-        validateBtn.addEventListener('click', async () => this.validateKey());
+        validateBtn.addEventListener('click', () => { this.validateKey(); });
 
         // Auto-validate on input
         const validateInput = document.getElementById('validate-key') as HTMLTextAreaElement;
-        validateInput.addEventListener('input', () => void this.validateKey());
+        validateInput.addEventListener('input', () => { this.validateKey(); });
 
         // Storage management buttons
         const cleanupBtn = document.getElementById('cleanup-btn') as HTMLButtonElement;
@@ -187,10 +187,11 @@ export class KeysUI {
 
         const nickname = (document.getElementById('nickname') as HTMLInputElement).value.trim();
         const customString = (document.getElementById('custom-string') as HTMLInputElement).value;
-        const expirationDate = new Date((document.getElementById('expiration-date') as HTMLInputElement).value);
+        const expirationInput = (document.getElementById('expiration-date') as HTMLInputElement).value;
+        const expirationDate = new Date(expirationInput);
         const password = (document.getElementById('password') as HTMLInputElement).value;
 
-        if (!customString || !expirationDate || !password) {
+        if (!customString || !expirationInput || !password) {
             this.showError('Please fill in all fields');
             return;
         }
@@ -201,15 +202,15 @@ export class KeysUI {
         }
 
         try {
-            const result = await KeyManager.createKey(expirationDate, customString, password);
+            const result = KeyManager.createKey(expirationDate, customString, password);
             
             // Store the key
             await KeyStorage.saveKey(result.key, result.data, nickname);
             
             // Refresh UI
             await this.loadStoredKeys();
-            await this.updateKeysList();
-            await this.updateStorageStats();
+        this.updateKeysList();
+        await this.updateStorageStats();
             
             // Clear form
             (document.getElementById('nickname') as HTMLInputElement).value = '';
@@ -235,7 +236,7 @@ export class KeysUI {
         (document.getElementById('expiration-date') as HTMLInputElement).value = isoString;
     }
 
-    private async validateKey(): Promise<void> {
+    private validateKey(): void {
         const keyInput = document.getElementById('validate-key') as HTMLTextAreaElement;
         const passwordInput = document.getElementById('validate-password') as HTMLInputElement;
         const resultDiv = document.getElementById('validation-result') as HTMLDivElement;
@@ -249,7 +250,7 @@ export class KeysUI {
         }
 
         try {
-            const result = await KeyManager.validateKey(key, password);
+            const result = KeyManager.validateKey(key, password);
 
             if (result.valid && result.data) {
                 const timeRemaining = this.getTimeRemaining(result.data.expirationDate);
@@ -285,7 +286,7 @@ export class KeysUI {
         }
     }
 
-    private async updateKeysList(): Promise<void> {
+    private updateKeysList(): void {
         const keysList = document.getElementById('keys-list') as HTMLDivElement;
         const keysCount = document.getElementById('keys-count') as HTMLSpanElement;
         
@@ -296,7 +297,7 @@ export class KeysUI {
             return;
         }
 
-        const keyItemsHTML = await Promise.all(this.storedKeys.map(async (item: StoredKey) => {
+        const keyItemsHTML = this.storedKeys.map((item: StoredKey) => {
             const now = new Date();
             const isExpired = item.data.expirationDate <= now;
             const statusClass = isExpired ? 'expired' : 'valid';
@@ -325,7 +326,7 @@ export class KeysUI {
                     </div>
                 </div>
             `;
-        }));
+        });
 
         keysList.innerHTML = keyItemsHTML.join('');
         this.attachKeyListEventHandlers();
@@ -337,51 +338,48 @@ export class KeysUI {
         const newKeysList = keysList.cloneNode(true) as HTMLDivElement;
         keysList.parentNode?.replaceChild(newKeysList, keysList);
         
-        newKeysList.addEventListener('click', async (e) => {
-            const target = e.target as HTMLElement;
-            
-            if (target.classList.contains('copy-btn')) {
-                e.preventDefault();
-                const key = target.dataset['key'];
-                if (key) {
-                    try {
-                        const textArea = document.createElement('textarea');
-                        textArea.value = key;
-                        textArea.style.position = 'fixed';
-                        textArea.style.left = '-999999px';
-                        textArea.style.top = '-999999px';
-                        document.body.appendChild(textArea);
-                        textArea.focus();
-                        textArea.select();
-                        document.execCommand('copy');
-                        document.body.removeChild(textArea);
-                        
-                        target.textContent = '✅ Copied!';
-                        void void setTimeout(() => {
-                            target.textContent = '📋 Copy';
-                        }, 2000);
-                    } catch (error) {
-                        console.error('Copy failed:', error);
-                        this.showError('Failed to copy key');
-                    }
+        newKeysList.addEventListener('click', (e) => { void this.handleKeyListClick(e); });
+    }
+
+    private async handleKeyListClick(e: Event): Promise<void> {
+        const target = e.target as HTMLElement;
+        
+        if (target.classList.contains('copy-btn')) {
+            e.preventDefault();
+            const key = target.dataset['key'];
+            if (key) {
+                const textArea = document.createElement('textarea');
+                textArea.value = key;
+                textArea.style.position = 'fixed';
+                textArea.style.left = '-999999px';
+                textArea.style.top = '-999999px';
+                document.body.appendChild(textArea);
+                textArea.focus();
+                textArea.select();
+                document.execCommand('copy');
+                document.body.removeChild(textArea);
+                
+                target.textContent = '✅ Copied!';
+                setTimeout(() => {
+                    target.textContent = '📋 Copy';
+                }, 2000);
+            }
+        }
+        
+        if (target.classList.contains('delete-btn')) {
+            e.preventDefault();
+            const keyId = target.dataset['id'];
+            if (keyId && confirm('Are you sure you want to delete this key?')) {
+                if (await KeyStorage.deleteKey(keyId)) {
+                    await this.loadStoredKeys();
+        this.updateKeysList();
+        await this.updateStorageStats();
+                    this.showSuccess('Key deleted successfully');
+                } else {
+                    this.showError('Failed to delete key');
                 }
             }
-            
-            if (target.classList.contains('delete-btn')) {
-                e.preventDefault();
-                const keyId = target.dataset['id'];
-                if (keyId && confirm('Are you sure you want to delete this key?')) {
-                    if (await KeyStorage.deleteKey(keyId)) {
-                        await this.loadStoredKeys();
-                        await this.updateKeysList();
-                        await this.updateStorageStats();
-                        this.showSuccess('Key deleted successfully');
-                    } else {
-                        this.showError('Failed to delete key');
-                    }
-                }
-            }
-        });
+        }
     }
 
     private getTimeRemaining(expirationDate: Date): string {
@@ -420,13 +418,13 @@ export class KeysUI {
         
         document.body.appendChild(toast);
         
-        void void setTimeout(() => {
+        setTimeout(() => {
             toast.classList.add('show');
         }, 100);
         
-        void void setTimeout(() => {
+        setTimeout(() => {
             toast.classList.remove('show');
-            void void setTimeout(() => {
+            setTimeout(() => {
                 document.body.removeChild(toast);
             }, 300);
         }, 3000);
@@ -436,8 +434,8 @@ export class KeysUI {
         const removedCount = await KeyStorage.cleanupExpiredKeys();
         if (removedCount > 0) {
             await this.loadStoredKeys();
-            await this.updateKeysList();
-            await this.updateStorageStats();
+        this.updateKeysList();
+        await this.updateStorageStats();
             this.showSuccess(`Removed ${removedCount} expired key${removedCount > 1 ? 's' : ''}`);
         } else {
             this.showSuccess('No expired keys to remove');
@@ -476,38 +474,36 @@ export class KeysUI {
         input.type = 'file';
         input.accept = '.json';
         
-        input.addEventListener('change', async (e) => {
-            const file = (e.target as HTMLInputElement).files?.[0];
-            if (!file) return;
-            
-            try {
-                const text = await file.text();
-                const result = await KeyStorage.importKeys(text);
-                
-                if (result.success) {
-                    await this.loadStoredKeys();
-                    await this.updateKeysList();
-                    await this.updateStorageStats();
-                    
-                    let message = `Imported ${result.imported} key${result.imported > 1 ? 's' : ''}`;
-                    if (result.errors.length > 0) {
-                        message += ` (${result.errors.length} error${result.errors.length > 1 ? 's' : ''})`;
-                    }
-                    this.showSuccess(message);
-                } else {
-                    this.showError('Import failed: ' + result.errors.join(', '));
-                }
-            } catch (error) {
-                this.showError('Failed to read file: ' + (error as Error).message);
-            }
-        });
+        input.addEventListener('change', (e) => { void this.handleImportFile(e); });
         
         input.click();
     }
 
+    private async handleImportFile(e: Event): Promise<void> {
+        const file = (e.target as HTMLInputElement).files?.[0];
+        if (!file) return;
+        
+        const text = await file.text();
+        const result = await KeyStorage.importKeys(text);
+        
+        if (result.success) {
+            await this.loadStoredKeys();
+        this.updateKeysList();
+        await this.updateStorageStats();
+            
+            let message = `Imported ${result.imported} key${result.imported > 1 ? 's' : ''}`;
+            if (result.errors.length > 0) {
+                message += ` (${result.errors.length} error${result.errors.length > 1 ? 's' : ''})`;
+            }
+            this.showSuccess(message);
+        } else {
+            this.showError('Import failed: ' + result.errors.join(', '));
+        }
+    }
+
     private async updateStorageStats(): Promise<void> {
         const statsContainer = document.getElementById('storage-stats');
-        if (!statsContainer) return;
+        if (statsContainer === null) return;
         
         const stats = await KeyStorage.getStorageStats();
         

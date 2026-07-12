@@ -39,7 +39,7 @@ export interface IStorageService {
   isIndexedDB(): boolean;
   
   // Advanced operations for exports
-  getIndexedDBService?(): IndexedDBService;
+  getIndexedDBService(): IndexedDBService;
   
   // RPG-specific operations
   saveRPGSession<T>(session: T): Promise<void>;
@@ -688,9 +688,7 @@ export class StorageService {
    * Check if IndexedDB is supported in the current browser
    */
   private static isIndexedDBSupported(): boolean {
-    return typeof window !== 'undefined' && 
-           'indexedDB' in window && 
-           window.indexedDB !== null;
+    return typeof window !== 'undefined' && 'indexedDB' in window;
   }
 
   /**
@@ -706,11 +704,6 @@ export class StorageService {
    */
   private static async deleteDatabase(name: string): Promise<void> {
     return new Promise((resolve, reject) => {
-      if (!window.indexedDB) {
-        resolve(); // No IndexedDB support, nothing to delete
-        return;
-      }
-
       const deleteRequest = indexedDB.deleteDatabase(name);
       
       deleteRequest.onsuccess = () => {
@@ -750,7 +743,7 @@ export class StorageService {
           quota: usage.quota,
           usage: usage.usage
         };
-      } catch (error) {
+      } catch {
         return {
           type: 'indexedDB',
           available: false

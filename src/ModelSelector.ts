@@ -14,6 +14,24 @@ const PURPOSES = [
   { key: 'prose', label: 'Prose' },
 ];
 
+interface ModelPurposeParams {
+  temperature?: number;
+  top_p?: number;
+  max_output_tokens?: number;
+  verbosity?: string | number;
+  thinking?: { enabled?: boolean; budget_tokens?: number };
+  reasoning?: { effort?: 'low' | 'medium' | 'high'; budget_tokens?: number };
+}
+
+type ModelPurposeParamsMap = Record<string, ModelPurposeParams>;
+
+interface ReasoningSupport {
+  supported: boolean;
+  supportsEffort: boolean;
+  supportsTokens: boolean;
+  description: string;
+}
+
 function formatPromptCompletionPricing(pricing: Record<string, string>) {
   const result: string[] = [];
   if (pricing['prompt']) {
@@ -51,7 +69,7 @@ export class ModelSelector {
   private fetched: boolean = false;
   private selectedModels: Record<string, string> = {};
   private selectedProviders: Record<string, string> = {}; // Track provider selections per purpose
-  private selectedParams: Record<string, { temperature?: number; top_p?: number; max_output_tokens?: number; verbosity?: string | number; thinking?: { enabled?: boolean; budget_tokens?: number }; reasoning?: { effort?: 'low' | 'medium' | 'high'; budget_tokens?: number } }> = {};
+  private selectedParams: ModelPurposeParamsMap = {};
   private modelEndpoints: Record<string, OpenRouterModel['endpoints']> = {}; // Cache endpoint data
   private webSearchEnabled: Record<string, boolean> = {}; // Track web search preferences per purpose
   private root: HTMLElement | null = null;
@@ -92,11 +110,15 @@ export class ModelSelector {
         for (const purpose of PURPOSES) {
           const selectedModel = this.selectedModels[purpose.key];
           if (selectedModel && this.modelEndpoints[selectedModel]) {
-            try { await this.logModelParameterSupport(selectedModel); } catch {}
+            try {
+              this.logModelParameterSupport(selectedModel);
+            } catch (logError: unknown) {
+              console.error(`Failed to log parameter support for ${selectedModel}:`, logError);
+            }
           }
         }
-      } catch (error) {
-        // Failed to auto-fetch models during initialization
+      } catch (initError: unknown) {
+        console.error('Failed to auto-fetch models during initialization:', initError);
       }
     }
   }
@@ -109,37 +131,39 @@ export class ModelSelector {
   /**
    * Centralized method to save API key with debouncing and error handling
    */
-  private async debouncedSaveApiKey(): Promise<void> {
+  private debouncedSaveApiKey(): void {
     // Clear existing timeout
     if (this.saveTimeoutId !== null) {
       clearTimeout(this.saveTimeoutId);
     }
     
     // Set new timeout for debounced save
-    this.saveTimeoutId = window.setTimeout(async () => {
-      try {
-        const storage = await this.storageService;
-        await storage.set(STORAGE_KEY_API_KEY, this.apiKey);
-        
-        // Update button states after successful save
-        this.updateButtonStates();
+    this.saveTimeoutId = window.setTimeout(() => {
+      void (async () => {
+        try {
+          const storage = await this.storageService;
+          await storage.set(STORAGE_KEY_API_KEY, this.apiKey);
+          
+          // Update button states after successful save
+          this.updateButtonStates();
 
-        // Automatically (re)load the catalog whenever a well-formed key is entered,
-        // so the manual "Fetch Models" step is no longer required.
-        if (isApiKeyFormatValid(this.apiKey)) {
-          try {
-            await this.fetchModels();
-          } catch {
-            // fetchModels already surfaces the failure in the UI via update()
+          // Automatically (re)load the catalog whenever a well-formed key is entered,
+          // so the manual "Fetch Models" step is no longer required.
+          if (isApiKeyFormatValid(this.apiKey)) {
+            try {
+              await this.fetchModels();
+            } catch {
+              // fetchModels already surfaces the failure in the UI via update()
+            }
           }
+        } catch (error) {
+          console.error('❌ CRITICAL: Failed to save OpenRouter API key:', error);
+          // Show user-visible error
+          this.showStorageError('Failed to save API key. Please try again.');
+        } finally {
+          this.saveTimeoutId = null;
         }
-      } catch (error) {
-        console.error('❌ CRITICAL: Failed to save OpenRouter API key:', error);
-        // Show user-visible error
-        this.showStorageError('Failed to save API key. Please try again.');
-      } finally {
-        this.saveTimeoutId = null;
-      }
+      })();
     }, this.SAVE_DEBOUNCE_MS);
   }
 
@@ -177,8 +201,11 @@ export class ModelSelector {
     const container = this.root?.querySelector('.model-selector-container');
     if (!container) return;
     
-    let errorDiv = container.querySelector('.storage-error') as HTMLElement;
-    if (!errorDiv) {
+    let errorDiv: HTMLElement;
+    const existingErrorDiv = container.querySelector('.storage-error');
+    if (existingErrorDiv instanceof HTMLElement) {
+      errorDiv = existingErrorDiv;
+    } else {
       errorDiv = document.createElement('div');
       errorDiv.className = 'storage-error';
       errorDiv.style.cssText = `
@@ -197,9 +224,7 @@ export class ModelSelector {
     
     // Auto-hide after 5 seconds
     setTimeout(() => {
-      if (errorDiv && errorDiv.parentNode) {
-        errorDiv.parentNode.removeChild(errorDiv);
-      }
+      errorDiv.parentNode?.removeChild(errorDiv);
     }, 5000);
   }
 
@@ -226,7 +251,7 @@ export class ModelSelector {
       this.updateButtonStates();
       
       // Debounced save to storage
-      void this.debouncedSaveApiKey();
+      this.debouncedSaveApiKey();
     });
 
     // Focus/blur events for visual feedback
@@ -254,7 +279,7 @@ export class ModelSelector {
         if (input) {
           this.apiKey = input.value;
           this.updateButtonStates();
-          void this.debouncedSaveApiKey();
+          this.debouncedSaveApiKey();
         }
       }, 50);
     });
@@ -465,7 +490,7 @@ export class ModelSelector {
     this.setupApiKeyInputEvents();
 
     // Show/hide format warning based on key
-    if ((this.apiKey as string) && !isApiKeyFormatValid(this.apiKey as string)) {
+    if (this.apiKey && !isApiKeyFormatValid(this.apiKey)) {
       formatWarning.style.display = 'block';
     } else {
       formatWarning.style.display = 'none';
@@ -624,14 +649,16 @@ export class ModelSelector {
           margin: 0;
         `;
 
-        webSearchCheckbox.addEventListener('change', async () => {
-          this.webSearchEnabled[purpose.key] = webSearchCheckbox.checked;
-          
-          // Save to current profile only (no global storage)
-          await this.saveWebSearchToCurrentProfile();
-          
-          // Re-render to update pricing display
-          this.update();
+        webSearchCheckbox.addEventListener('change', () => {
+          void (async () => {
+            this.webSearchEnabled[purpose.key] = webSearchCheckbox.checked;
+            
+            // Save to current profile only (no global storage)
+            await this.saveWebSearchToCurrentProfile();
+            
+            // Re-render to update pricing display
+            this.update();
+          })();
         });
 
         webSearchCheckboxContainer.appendChild(webSearchCheckbox);
@@ -654,8 +681,8 @@ export class ModelSelector {
         }
 
         if (pricingToShow) {
-          pricingUl = document.createElement('ul');
-          pricingUl.style.cssText = `
+          const pricingList = document.createElement('ul');
+          pricingList.style.cssText = `
             list-style: disc inside;
             margin-left: 1.5rem;
             margin-top: 0.5rem;
@@ -669,7 +696,7 @@ export class ModelSelector {
               font-size: 0.9rem;
               color: #2563eb;
             `;
-            pricingUl?.appendChild(li);
+            pricingList.appendChild(li);
           });
           
           // Web search pricing (only show when checkbox is enabled)
@@ -681,38 +708,41 @@ export class ModelSelector {
               color: #d97706;
               font-weight: 500;
             `;
-            pricingUl?.appendChild(li);
+            pricingList.appendChild(li);
           }
           
-          section.appendChild(pricingUl);
+          pricingUl = pricingList;
+          section.appendChild(pricingList);
         }
       } else {
         desc.textContent = '';
         section.appendChild(desc);
       }
 
-      select.addEventListener('change', async (e) => {
-        const modelId = (e.target as HTMLSelectElement).value;
-        this.selectedModels[purpose.key] = modelId;
-        
-              // Reset provider selection to automatic when model changes
-      this.selectedProviders[purpose.key] = 'automatic';
-        
-        // Save to storage immediately when model or provider changes
-        await this.saveToStorage();
-        
-        if (modelId) {
-          // Fetch endpoint information for the selected model
-          await this.fetchModelEndpoints(modelId);
-          // Log supported parameters for quick diagnostics
-          await this.logModelParameterSupport(modelId);
-        }
-        
-        const model = this.models.find(m => m.id === this.selectedModels[purpose.key]);
-        desc.textContent = model ? (model.description || '') : '';
-        
-        // Update pricing - full re-render is simpler and more reliable
-        this.update(); // Re-render to update all model information including web search capabilities
+      select.addEventListener('change', (e) => {
+        void (async () => {
+          const modelId = (e.target as HTMLSelectElement).value;
+          this.selectedModels[purpose.key] = modelId;
+          
+                // Reset provider selection to automatic when model changes
+          this.selectedProviders[purpose.key] = 'automatic';
+            
+          // Save to storage immediately when model or provider changes
+          await this.saveToStorage();
+          
+          if (modelId) {
+            // Fetch endpoint information for the selected model
+            await this.fetchModelEndpoints(modelId);
+            // Log supported parameters for quick diagnostics
+            this.logModelParameterSupport(modelId);
+          }
+          
+          const model = this.models.find(m => m.id === this.selectedModels[purpose.key]);
+          desc.textContent = model ? (model.description || '') : '';
+          
+          // Update pricing - full re-render is simpler and more reliable
+          this.update(); // Re-render to update all model information including web search capabilities
+        })();
       });
       
       section.appendChild(select);
@@ -762,7 +792,7 @@ export class ModelSelector {
             let uniqueValue: string;
             
             // If this is the first occurrence of this provider, use the base slug for backwards compatibility
-            const existingValues = Array.from(providerSelect.querySelectorAll('option')).map(o => (o as HTMLOptionElement).value);
+            const existingValues = Array.from(providerSelect.options).map(o => o.value);
             if (!existingValues.includes(baseSlug)) {
               uniqueValue = baseSlug;
             } else {
@@ -774,7 +804,7 @@ export class ModelSelector {
             
             // Show provider display name with pricing if available
             let displayText = providerDisplayName;
-            if (endpoint.pricing?.prompt) {
+            if (endpoint.pricing.prompt) {
               const promptPrice = parseFloat(endpoint.pricing.prompt) * 1_000_000;
               displayText += ` ($${promptPrice.toFixed(2)}/M tokens)`;
             }
@@ -786,12 +816,14 @@ export class ModelSelector {
         // Set current selection (crash if missing - no defensive fallbacks!)
         providerSelect.value = this.selectedProviders[purpose.key]!
 
-        providerSelect.addEventListener('change', async (e) => {
-          this.selectedProviders[purpose.key] = (e.target as HTMLSelectElement).value;
-          // Save to storage immediately when provider changes
-          await this.saveToStorage();
-          // Re-render to update pricing display for selected provider
-          this.update();
+        providerSelect.addEventListener('change', (e) => {
+          void (async () => {
+            this.selectedProviders[purpose.key] = (e.target as HTMLSelectElement).value;
+            // Save to storage immediately when provider changes
+            await this.saveToStorage();
+            // Re-render to update pricing display for selected provider
+            this.update();
+          })();
         });
 
         section.appendChild(providerSelect);
@@ -865,11 +897,13 @@ export class ModelSelector {
           `;
           input.addEventListener('focus', () => { if (enabled) input.style.borderColor = '#3b82f6'; });
           input.addEventListener('blur', () => { input.style.borderColor = '#d1d5db'; });
-          input.addEventListener('change', async () => {
-            const raw = input.value.trim();
-            const num = raw === '' ? undefined : Number(raw);
-            onChange(num);
-            await this.setSelectedParams(purpose.key, params);
+          input.addEventListener('change', () => {
+            void (async () => {
+              const raw = input.value.trim();
+              const num = raw === '' ? undefined : Number(raw);
+              onChange(num);
+              await this.setSelectedParams(purpose.key, params);
+            })();
           });
           wrap.appendChild(lab);
           wrap.appendChild(input);
@@ -965,20 +999,22 @@ export class ModelSelector {
             const o = document.createElement('option');
             o.value = String(opt.value);
             o.textContent = opt.label;
-            const currentVerbosity = (params.verbosity ?? '') as string | number;
+            const currentVerbosity = params.verbosity ?? '';
             if (String(opt.value) === String(currentVerbosity)) o.selected = true;
             select.appendChild(o);
           });
           select.addEventListener('focus', () => { select.style.borderColor = '#3b82f6'; });
           select.addEventListener('blur', () => { select.style.borderColor = '#d1d5db'; });
-          select.addEventListener('change', async () => {
-            const v = (select.value || '') as '' | 'low' | 'medium' | 'high';
-            if (v === '') {
-              delete params.verbosity;
-            } else {
-              params.verbosity = v;
-            }
-            await this.setSelectedParams(purpose.key, params);
+          select.addEventListener('change', () => {
+            void (async () => {
+              const v = (select.value || '') as '' | 'low' | 'medium' | 'high';
+              if (v === '') {
+                delete params.verbosity;
+              } else {
+                params.verbosity = v;
+              }
+              await this.setSelectedParams(purpose.key, params);
+            })();
           });
           wrap.appendChild(lab);
           wrap.appendChild(select);
@@ -986,7 +1022,7 @@ export class ModelSelector {
         }
 
         // Unified reasoning/thinking controls (model-agnostic and future-proof)
-        const reasoningSupport = this.getReasoningSupport(validModel.id, this.selectedProviders[purpose.key]);
+        const reasoningSupport = this.getReasoningSupport(validModel.id);
         if (reasoningSupport.supported) {
           addHeadingIfNeeded();
           const reasoningWrap = document.createElement('div');
@@ -1019,7 +1055,7 @@ export class ModelSelector {
           controlsWrap.style.cssText = 'display: grid; grid-template-columns: 1fr; gap: 0.75rem; margin-top: 0.5rem;';
           
           // Create appropriate controls based on model support
-          this.createReasoningControls(controlsWrap, reasoningSupport, params, purpose.key, enableCheck);
+          this.createReasoningControls(controlsWrap, reasoningSupport, params, purpose.key);
           
           reasoningWrap.appendChild(controlsWrap);
           
@@ -1032,26 +1068,28 @@ export class ModelSelector {
             });
           };
           
-          enableCheck.addEventListener('change', async () => {
-            if (!enableCheck.checked) {
-              // Clear all reasoning-related params
-              delete params.thinking;
-              delete params.reasoning;
-            } else {
-              // Initialize based on model support
-              const useEffortApproach = reasoningSupport.supportsEffort && (!reasoningSupport.supportsTokens || 
-                reasoningSupport.description.includes('effort-based'));
-              
-              if (useEffortApproach) {
-                params.reasoning = { effort: 'medium' };
+          enableCheck.addEventListener('change', () => {
+            void (async () => {
+              if (!enableCheck.checked) {
+                // Clear all reasoning-related params
                 delete params.thinking;
-              } else {
-                params.thinking = { enabled: true, budget_tokens: 2048 };
                 delete params.reasoning;
+              } else {
+                // Initialize based on model support
+                const useEffortApproach = reasoningSupport.supportsEffort && (!reasoningSupport.supportsTokens || 
+                  reasoningSupport.description.includes('effort-based'));
+                
+                if (useEffortApproach) {
+                  params.reasoning = { effort: 'medium' };
+                  delete params.thinking;
+                } else {
+                  params.thinking = { enabled: true, budget_tokens: 2048 };
+                  delete params.reasoning;
+                }
               }
-            }
-            updateControlsVisibility();
-            await this.setSelectedParams(purpose.key, params);
+              updateControlsVisibility();
+              await this.setSelectedParams(purpose.key, params);
+            })();
           });
           
           updateControlsVisibility(); // Initial state
@@ -1059,7 +1097,7 @@ export class ModelSelector {
         }
 
         // Only add the params container to the section if it has controls
-        if (hasAnyControls) {
+        if (paramsContainer.childElementCount > 0) {
           section.appendChild(paramsContainer);
         }
       }
@@ -1098,11 +1136,13 @@ export class ModelSelector {
     const allSelected = this.areAllModelsSelected();
     saveBtn.textContent = 'Save and Close';
     saveBtn.disabled = !allSelected;
-    saveBtn.addEventListener('click', async () => {
-      if (this.areAllModelsSelected()) {
-        await this.saveToStorage();
-        this.onSelect(this.selectedModels, this.webSearchEnabled, this.selectedProviders);
-      }
+    saveBtn.addEventListener('click', () => {
+      void (async () => {
+        if (this.areAllModelsSelected()) {
+          await this.saveToStorage();
+          this.onSelect(this.selectedModels, this.webSearchEnabled, this.selectedProviders);
+        }
+      })();
     });
     buttonContainer.appendChild(saveBtn);
 
@@ -1231,7 +1271,8 @@ export class ModelSelector {
           } else {
             message += `\n✅ Good account balance.`;
           }
-        } catch (e) {
+        } catch (creditsParseError: unknown) {
+          console.error('Failed to parse credits balance:', creditsParseError);
           message += `💳 Total Credits: ${creditsData.data.total_credits} (raw)\n`;
           message += `📊 Total Usage: ${creditsData.data.total_usage} (raw)\n`;
         }
@@ -1247,7 +1288,8 @@ export class ModelSelector {
       if (keyData.data.usage !== undefined && keyData.data.usage !== null) {
         try {
           message += `📈 Key Usage: $${Number(keyData.data.usage).toFixed(4)}\n`;
-        } catch (e) {
+        } catch (usageParseError: unknown) {
+          console.error('Failed to parse key usage:', usageParseError);
           message += `📈 Key Usage: ${keyData.data.usage} (raw value)\n`;
         }
       }
@@ -1259,7 +1301,8 @@ export class ModelSelector {
           } else {
             message += `🎯 Key Limit: Unlimited\n`;
           }
-        } catch (e) {
+        } catch (limitParseError: unknown) {
+          console.error('Failed to parse key limit:', limitParseError);
           message += `🎯 Key Limit: ${keyData.data.limit} (raw value)\n`;
         }
       } else if (keyData.data.limit === null) {
@@ -1351,8 +1394,8 @@ export class ModelSelector {
           await Promise.all(fetchPromises);
           // Pre-fetched endpoint information for selected models
           this.update(); // Re-render to show provider options if available
-        } catch (error) {
-          // Some endpoint fetches failed during initialization
+        } catch (endpointFetchError: unknown) {
+          console.error('Some endpoint fetches failed during initialization:', endpointFetchError);
           this.update(); // Still render even if some fetches failed
         }
       } else {
@@ -1526,11 +1569,11 @@ export class ModelSelector {
     return this.selectedProviders;
   }
 
-  public getSelectedParams(): Record<string, { temperature?: number; top_p?: number; max_output_tokens?: number; verbosity?: string | number; thinking?: { enabled?: boolean; budget_tokens?: number }; reasoning?: { effort?: 'low' | 'medium' | 'high'; budget_tokens?: number } }> {
+  public getSelectedParams(): ModelPurposeParamsMap {
     return this.selectedParams;
   }
 
-  public async setSelectedParams(purpose: string, params: { temperature?: number; top_p?: number; max_output_tokens?: number; verbosity?: string | number; thinking?: { enabled?: boolean; budget_tokens?: number }; reasoning?: { effort?: 'low' | 'medium' | 'high'; budget_tokens?: number } }): Promise<void> {
+  public async setSelectedParams(purpose: string, params: ModelPurposeParams): Promise<void> {
     this.selectedParams[purpose] = { ...params };
     await this.saveToStorage();
     this.update();
@@ -1596,7 +1639,7 @@ export class ModelSelector {
   /**
    * Set web search preferences (called when loading from profile)
    */
-  public async setWebSearchEnabled(webSearchEnabled: Record<string, boolean>): Promise<void> {
+  public setWebSearchEnabled(webSearchEnabled: Record<string, boolean>): void {
     this.webSearchEnabled = webSearchEnabled;
     // No global storage - web search settings are profile-only now
   }
@@ -1621,11 +1664,7 @@ export class ModelSelector {
       
       if (activeProfile) {
         // Load models
-        if (activeProfile.selectedModels) {
-          this.selectedModels = { ...activeProfile.selectedModels };
-        } else {
-          this.selectedModels = {};
-        }
+        this.selectedModels = { ...activeProfile.selectedModels };
         
         // Load web search settings
         if (activeProfile.webSearchEnabled) {
@@ -1649,7 +1688,7 @@ export class ModelSelector {
         // Load per-model params (global for now)
         try {
           const storage = await this.storageService;
-          const savedParams = await storage.get<Record<string, any>>('openrouter_model_params');
+          const savedParams = await storage.get<ModelPurposeParamsMap>('openrouter_model_params');
           this.selectedParams = savedParams ?? {};
         } catch {
           this.selectedParams = {};
@@ -1755,8 +1794,10 @@ export class ModelSelector {
       this.modelEndpoints[modelId] = endpoints;
       // Log parameters immediately after endpoints are fetched
       try {
-        await this.logModelParameterSupport(modelId);
-      } catch {}
+        this.logModelParameterSupport(modelId);
+      } catch (logError: unknown) {
+        console.error(`Failed to log parameter support for ${modelId}:`, logError);
+      }
 
     } catch (error) {
       console.error(`❌ CRITICAL: Failed to fetch endpoints for model ${modelId}:`, error);
@@ -1790,14 +1831,14 @@ export class ModelSelector {
   
 
   // Log model and endpoint supported parameters to help diagnose missing controls like verbosity
-  private async logModelParameterSupport(modelId: string): Promise<void> {
+  private logModelParameterSupport(modelId: string): void {
     const model = this.models.find(m => m.id === modelId)!;
     const endpoints = this.modelEndpoints[modelId]!;
     const modelParams = (model.supported_parameters ?? []).join(', ') || '(none)';
     const lines: string[] = [];
     lines.push(`Model: ${model.name} (${model.id})`);
     lines.push(`Supported parameters (model-level): ${modelParams}`);
-    if (endpoints && endpoints.length > 0) {
+    if (endpoints.length > 0) {
       lines.push(`Provider endpoints: ${endpoints.length}`);
       endpoints.forEach((ep, idx) => {
         const epParams = (ep.supported_parameters ?? []).join(', ') || '(none)';
@@ -1813,12 +1854,7 @@ export class ModelSelector {
 
 
   // Get comprehensive reasoning support information for a model
-  private getReasoningSupport(modelId: string, _selectedProviderSlug?: string): {
-    supported: boolean;
-    supportsEffort: boolean;
-    supportsTokens: boolean;
-    description: string;
-  } {
+  private getReasoningSupport(modelId: string): ReasoningSupport {
     const model = this.models.find(m => m.id === modelId);
     if (!model) {
       return { supported: false, supportsEffort: false, supportsTokens: false, description: 'Model not found' };
@@ -1886,7 +1922,7 @@ export class ModelSelector {
   }
 
   // Create appropriate reasoning controls based on what the model supports
-  private createReasoningControls(container: HTMLElement, support: ReturnType<typeof this.getReasoningSupport>, params: any, purposeKey: string, _enableCheck: HTMLInputElement): void {
+  private createReasoningControls(container: HTMLElement, support: ReasoningSupport, params: ModelPurposeParams, purposeKey: string): void {
     // Clear existing controls
     container.innerHTML = '';
     
@@ -1923,13 +1959,19 @@ export class ModelSelector {
         effortSelect.appendChild(option);
       });
       
-      effortSelect.addEventListener('change', async () => {
-        // Clear any token-based params when using effort
-        delete params.thinking;
-        params.reasoning ??= {};
-        params.reasoning.effort = effortSelect.value === '' ? undefined : effortSelect.value as 'low' | 'medium' | 'high';
-        if (params.reasoning.budget_tokens) delete params.reasoning.budget_tokens;
-        await this.setSelectedParams(purposeKey, params);
+      effortSelect.addEventListener('change', () => {
+        void (async () => {
+          // Clear any token-based params when using effort
+          delete params.thinking;
+          params.reasoning ??= {};
+          if (effortSelect.value === '') {
+            delete params.reasoning.effort;
+          } else {
+            params.reasoning.effort = effortSelect.value as 'low' | 'medium' | 'high';
+          }
+          if (params.reasoning.budget_tokens) delete params.reasoning.budget_tokens;
+          await this.setSelectedParams(purposeKey, params);
+        })();
       });
       
       effortWrap.appendChild(effortLabel);
@@ -1956,22 +1998,24 @@ export class ModelSelector {
       
       tokenInput.addEventListener('focus', () => { tokenInput.style.borderColor = '#3b82f6'; });
       tokenInput.addEventListener('blur', () => { tokenInput.style.borderColor = '#d1d5db'; });
-      tokenInput.addEventListener('change', async () => {
-        const val = tokenInput.value.trim();
-        const numVal = val === '' ? undefined : Math.max(256, Number(val));
-        
-        // Clear any effort-based params when using tokens
-        if (params.reasoning?.effort) delete params.reasoning.effort;
-        
-        // Use thinking object for token-only models
-        params.thinking = params.thinking ?? {};
-        if (numVal === undefined) {
-          delete params.thinking.budget_tokens;
-        } else {
-          params.thinking.budget_tokens = numVal;
-        }
-        
-        await this.setSelectedParams(purposeKey, params);
+      tokenInput.addEventListener('change', () => {
+        void (async () => {
+          const val = tokenInput.value.trim();
+          const numVal = val === '' ? undefined : Math.max(256, Number(val));
+          
+          // Clear any effort-based params when using tokens
+          if (params.reasoning?.effort) delete params.reasoning.effort;
+          
+          // Use thinking object for token-only models
+          params.thinking = params.thinking ?? {};
+          if (numVal === undefined) {
+            delete params.thinking.budget_tokens;
+          } else {
+            params.thinking.budget_tokens = numVal;
+          }
+          
+          await this.setSelectedParams(purposeKey, params);
+        })();
       });
       
       tokenWrap.appendChild(tokenLabel);

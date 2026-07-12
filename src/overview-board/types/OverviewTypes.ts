@@ -44,6 +44,16 @@ export interface OverviewData {
   lastUpdated: Date;
 }
 
+/** Map-based overview data converted to JSON-safe entry arrays for persistence. */
+export interface SerializedOverviewData {
+  events: [string, EventData][];
+  characters: [string, CharacterData][];
+  places: [string, PlaceData][];
+  layerName: string;
+  sourceNodes: string[];
+  lastUpdated: Date;
+}
+
 // Cached analysis for persistence in DocumentNode
 export interface CachedOverviewAnalysis {
   layerName: string;

@@ -22,7 +22,7 @@ export class ConditionalContextModal extends SimpleModal {
     }
 
     public override async close(): Promise<void> {
-        try { this.editor?.destroy(); } catch {}
+        this.editor.destroy();
         await super.close();
     }
 

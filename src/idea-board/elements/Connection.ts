@@ -1,12 +1,14 @@
 import type { Point, Viewport } from '../types/BoardTypes';
 import type { PostItNote } from './PostItNote';
 
+export type ConnectionSide = 'top' | 'right' | 'bottom' | 'left';
+
 export interface ConnectionData {
   id: string;
   fromPostItId: string;
-  fromSide: 'top' | 'right' | 'bottom' | 'left';
+  fromSide: ConnectionSide;
   toPostItId: string;
-  toSide: 'top' | 'right' | 'bottom' | 'left';
+  toSide: ConnectionSide;
   style: {
     color: string;
     thickness: number;
@@ -17,9 +19,9 @@ export interface ConnectionData {
 export class Connection {
   public id: string;
   public fromPostItId: string;
-  public fromSide: 'top' | 'right' | 'bottom' | 'left';
+  public fromSide: ConnectionSide;
   public toPostItId: string;
-  public toSide: 'top' | 'right' | 'bottom' | 'left';
+  public toSide: ConnectionSide;
   public style: {
     color: string;
     thickness: number;
@@ -33,9 +35,9 @@ export class Connection {
 
   constructor(
     fromPostItId: string,
-    fromSide: 'top' | 'right' | 'bottom' | 'left',
+    fromSide: ConnectionSide,
     toPostItId: string,
-    toSide: 'top' | 'right' | 'bottom' | 'left'
+    toSide: ConnectionSide
   ) {
     this.id = `connection_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
     this.fromPostItId = fromPostItId;
@@ -46,6 +48,40 @@ export class Connection {
       color: '#666666',
       thickness: 2,
       lineType: 'straight'
+    };
+  }
+
+  private getHorizontalOffset(side: ConnectionSide): number {
+    if (side === 'right') {
+      return 1;
+    }
+    if (side === 'left') {
+      return -1;
+    }
+    return 0;
+  }
+
+  private getVerticalOffset(side: ConnectionSide): number {
+    if (side === 'bottom') {
+      return 1;
+    }
+    if (side === 'top') {
+      return -1;
+    }
+    return 0;
+  }
+
+  private getControlPoint(from: Point, to: Point): { cp1x: number; cp1y: number; cp2x: number; cp2y: number } {
+    const dx = to.x - from.x;
+    const dy = to.y - from.y;
+    const distance = Math.sqrt(dx * dx + dy * dy);
+    const controlOffset = Math.min(distance * 0.4, 50);
+
+    return {
+      cp1x: from.x + this.getHorizontalOffset(this.fromSide) * controlOffset,
+      cp1y: from.y + this.getVerticalOffset(this.fromSide) * controlOffset,
+      cp2x: to.x + this.getHorizontalOffset(this.toSide) * controlOffset,
+      cp2y: to.y + this.getVerticalOffset(this.toSide) * controlOffset
     };
   }
 
@@ -133,16 +169,7 @@ export class Connection {
    * Render a segmented curved line connection with multiple arrows
    */
   private renderSegmentedCurvedLine(context: CanvasRenderingContext2D, from: Point, to: Point, numSegments: number, zoom: number): void {
-    const dx = to.x - from.x;
-    const dy = to.y - from.y;
-    const distance = Math.sqrt(dx * dx + dy * dy);
-    
-    // Create control points for bezier curve
-    const controlOffset = Math.min(distance * 0.4, 50);
-    const cp1x = from.x + (this.fromSide === 'right' ? controlOffset : this.fromSide === 'left' ? -controlOffset : 0);
-    const cp1y = from.y + (this.fromSide === 'bottom' ? controlOffset : this.fromSide === 'top' ? -controlOffset : 0);
-    const cp2x = to.x + (this.toSide === 'right' ? controlOffset : this.toSide === 'left' ? -controlOffset : 0);
-    const cp2y = to.y + (this.toSide === 'bottom' ? controlOffset : this.toSide === 'top' ? -controlOffset : 0);
+    const { cp1x, cp1y, cp2x, cp2y } = this.getControlPoint(from, to);
 
     const segmentLength = 1 / numSegments;
     
@@ -200,23 +227,13 @@ export class Connection {
     const numFlowingArrows = 3;
     const arrowSpacing = 1 / numFlowingArrows;
     
-    // Calculate distance and control points for curves
-    const dx = to.x - from.x;
-    const dy = to.y - from.y;
-    const distance = Math.sqrt(dx * dx + dy * dy);
-    
+    // Calculate control points for curves
     let controlPoints: { cp1: Point; cp2: Point } | null = null;
     if (this.style.lineType === 'curved') {
-      const controlOffset = Math.min(distance * 0.4, 50);
+      const { cp1x, cp1y, cp2x, cp2y } = this.getControlPoint(from, to);
       controlPoints = {
-        cp1: {
-          x: from.x + (this.fromSide === 'right' ? controlOffset : this.fromSide === 'left' ? -controlOffset : 0),
-          y: from.y + (this.fromSide === 'bottom' ? controlOffset : this.fromSide === 'top' ? -controlOffset : 0)
-        },
-        cp2: {
-          x: to.x + (this.toSide === 'right' ? controlOffset : this.toSide === 'left' ? -controlOffset : 0),
-          y: to.y + (this.toSide === 'bottom' ? controlOffset : this.toSide === 'top' ? -controlOffset : 0)
-        }
+        cp1: { x: cp1x, y: cp1y },
+        cp2: { x: cp2x, y: cp2y }
       };
     }
     
@@ -304,16 +321,7 @@ export class Connection {
    * Render a curved line connection (legacy method kept for compatibility)
    */
   private renderCurvedLine(context: CanvasRenderingContext2D, from: Point, to: Point): void {
-    const dx = to.x - from.x;
-    const dy = to.y - from.y;
-    const distance = Math.sqrt(dx * dx + dy * dy);
-    
-    // Create control points for bezier curve
-    const controlOffset = Math.min(distance * 0.4, 50);
-    const cp1x = from.x + (this.fromSide === 'right' ? controlOffset : this.fromSide === 'left' ? -controlOffset : 0);
-    const cp1y = from.y + (this.fromSide === 'bottom' ? controlOffset : this.fromSide === 'top' ? -controlOffset : 0);
-    const cp2x = to.x + (this.toSide === 'right' ? controlOffset : this.toSide === 'left' ? -controlOffset : 0);
-    const cp2y = to.y + (this.toSide === 'bottom' ? controlOffset : this.toSide === 'top' ? -controlOffset : 0);
+    const { cp1x, cp1y, cp2x, cp2y } = this.getControlPoint(from, to);
 
     context.beginPath();
     context.moveTo(from.x, from.y);

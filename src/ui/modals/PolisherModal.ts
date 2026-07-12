@@ -8,6 +8,7 @@ import { createPromptExpansionService } from '../../services/PromptExpansionServ
 import { PromptContextBuilder } from '../../services/PromptContextBuilder';
 import { formatContentForPreWrap } from '../../utils/TextFormattingUtils';
 import * as state from '../../state';
+import { QualityCriterion } from '../../types';
 
 export interface PolishingButton {
     id: string;
@@ -499,7 +500,7 @@ export class PolisherModal extends BaseModal {
     /**
      * Get filtered criteria based on node type
      */
-    private getFilteredCriteria(): any[] {
+    private getFilteredCriteria(): QualityCriterion[] {
         const currentProfile = this.settingsManager.getLastUsedProfile();
         if (!currentProfile || !this.node) return [];
         
@@ -510,7 +511,7 @@ export class PolisherModal extends BaseModal {
     /**
      * Filter criteria based on node type (leaf vs outline/branch)
      */
-    private filterCriteriaForNodeType(criteria: any[], isLeafNode: boolean): any[] {
+    private filterCriteriaForNodeType(criteria: QualityCriterion[], isLeafNode: boolean): QualityCriterion[] {
         return criteria.filter(criterion => {
             // If both outline and leaf are undefined or both are true, include the criterion
             if (criterion.outline === undefined && criterion.leaf === undefined) {
@@ -542,25 +543,14 @@ export class PolisherModal extends BaseModal {
         // Close button
         const closeBtn = document.getElementById('close-polisher-btn');
         if (closeBtn) {
-            closeBtn.addEventListener('click', async () => this.close());
+            closeBtn.addEventListener('click', () => { void this.close(); });
         }
 
         // Polishing style buttons
         const styleButtons = document.querySelectorAll('.polishing-style-btn');
         styleButtons.forEach(btn => {
-            btn.addEventListener('click', async (e) => {
-                const button = e.target as HTMLButtonElement;
-                const detail = button.dataset['detail'] ?? '';
-                
-                // Process {{input}} placeholders using centralized system
-                const processedDetail = await this.processInputPlaceholders(detail);
-                
-                // Check if action was canceled
-                if (processedDetail === '__CANCELED__') {
-                    return;
-                }
-                
-                await this.generatePolishedContentWithDetail(processedDetail);
+            btn.addEventListener('click', (e) => {
+                void this.handleStyleButtonClick(e);
             });
         });
 
@@ -575,6 +565,19 @@ export class PolisherModal extends BaseModal {
 
         // ESC key handler
         document.addEventListener('keydown', this.handleEscKey.bind(this));
+    }
+
+    private async handleStyleButtonClick(e: Event): Promise<void> {
+        const button = e.target;
+        if (!(button instanceof HTMLButtonElement)) {
+            return;
+        }
+        const detail = button.dataset['detail'] ?? '';
+        const processedDetail = await this.processInputPlaceholders(detail);
+        if (processedDetail === '__CANCELED__') {
+            return;
+        }
+        await this.generatePolishedContentWithDetail(processedDetail);
     }
 
     /**
@@ -611,8 +614,8 @@ export class PolisherModal extends BaseModal {
      */
     private setupCustomPolishingListeners(): void {
         // Polishing instructions textarea
-        const instructionsTextarea = document.getElementById('polishing-instructions') as HTMLTextAreaElement;
-        if (instructionsTextarea) {
+        const instructionsTextarea = document.getElementById('polishing-instructions');
+        if (instructionsTextarea instanceof HTMLTextAreaElement) {
             instructionsTextarea.addEventListener('input', () => {
                 this.polishingInstructions = instructionsTextarea.value;
                 this.updateExecuteButtonState();
@@ -640,8 +643,8 @@ export class PolisherModal extends BaseModal {
      * Update the execute button state based on instructions content
      */
     private updateExecuteButtonState(): void {
-        const executeBtn = document.getElementById('execute-polishing-btn') as HTMLButtonElement;
-        if (executeBtn) {
+        const executeBtn = document.getElementById('execute-polishing-btn');
+        if (executeBtn instanceof HTMLButtonElement) {
             const hasInstructions = this.polishingInstructions.trim().length > 0;
             executeBtn.disabled = this.isGenerating || !hasInstructions;
         }
@@ -665,7 +668,7 @@ export class PolisherModal extends BaseModal {
         });
 
         // Refresh UI
-        void this.refresh();
+        this.refresh();
         
         // Show confirmation
         console.log('Content restored to original state');
@@ -677,7 +680,7 @@ export class PolisherModal extends BaseModal {
     private async generatePolishedContentWithDetail(detail: string): Promise<void> {
         try {
             this.isGenerating = true;
-            void this.refresh();
+            this.refresh();
             
             const criteria = this.formatCriteriaAsText();
             
@@ -708,12 +711,12 @@ export class PolisherModal extends BaseModal {
             }
             
             this.isGenerating = false;
-            void this.refresh();
+            this.refresh();
             
         } catch (error) {
             console.error('Error generating polished content:', error);
             this.isGenerating = false;
-            void this.refresh();
+            this.refresh();
         }
     }
 
@@ -873,10 +876,11 @@ ${content}`;
                 const target = e.target as HTMLInputElement;
                 const index = parseInt(target.dataset['index'] ?? '0');
                 const field = target.dataset['field'] as 'label' | 'detail';
-                
-                if (this.polishingButtons[index] && field) {
-                    this.polishingButtons[index][field] = target.value;
+                const buttonEntry = this.polishingButtons[index];
+                if (!buttonEntry) {
+                    throw new Error(`Polishing button not found at index ${index}`);
                 }
+                buttonEntry[field] = target.value;
             });
         });
 
@@ -917,13 +921,14 @@ ${content}`;
         // Save changes
         const saveBtn = overlay.querySelector('#save-polishing-buttons');
         if (saveBtn) {
-            saveBtn.addEventListener('click', async () => {
-                // Save to IndexedDB
-                await this.savePolishingButtons();
-                document.body.removeChild(overlay);
-                this.refresh(); // Refresh main modal
-            });
+            saveBtn.addEventListener('click', () => { void this.saveButtonEditorChanges(overlay); });
         }
+    }
+
+    private async saveButtonEditorChanges(overlay: HTMLElement): Promise<void> {
+        await this.savePolishingButtons();
+        document.body.removeChild(overlay);
+        this.refresh();
     }
 
     /**
@@ -958,10 +963,10 @@ ${content}`;
         try {
             const { StorageService } = await import('../../StorageService');
             const storage = await StorageService.getInstance();
-            const saved = await storage.get('polisher_buttons') as PolishingButton[] | undefined;
+            const saved = await storage.get('polisher_buttons');
             
-            if (saved) {
-                this.polishingButtons = saved;
+            if (Array.isArray(saved)) {
+                this.polishingButtons = saved as PolishingButton[];
                 console.log('✅ Loaded polisher buttons from IndexedDB');
             } else {
                 this.polishingButtons = [...this.defaultButtons];
@@ -1003,8 +1008,8 @@ ${content}`;
         // Refresh the main UI to show the updated content
         try {
             const { renderMultiProjectTree, renderNodeDetails } = await import('../project-ui');
-            renderMultiProjectTree(); // Updates tree titles and structure
-            renderNodeDetails();      // Updates details panel content
+            renderMultiProjectTree();
+            void renderNodeDetails();
             console.log('✅ Main UI refreshed after polishing');
         } catch (refreshError) {
             console.warn('⚠️ Failed to refresh main UI after polishing:', refreshError);

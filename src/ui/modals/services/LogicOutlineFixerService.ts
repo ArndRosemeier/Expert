@@ -62,10 +62,10 @@ export class LogicOutlineFixerService extends BaseLogicFixerService {
         const pathParts: string[] = [];
         
         while (currentNode?.parentId) {
-            const parent = this.findParentNode(currentNode);
+            const parent = this.findParentNode();
             if (parent) {
                 pathParts.unshift(parent.title);
-                if (parent.content && parent.content.trim()) {
+                if (parent.content.trim()) {
                     contextParts.unshift(`${parent.title}: ${parent.content.substring(0, 200)}${parent.content.length > 200 ? '...' : ''}`);
                 }
             }
@@ -78,7 +78,7 @@ export class LogicOutlineFixerService extends BaseLogicFixerService {
         return `${pathContext}\n\n${contentContext}`;
     }
 
-    private findParentNode(_node: DocumentNode): DocumentNode | undefined {
+    private findParentNode(): DocumentNode | undefined {
         // This is a simplified implementation - in a real app we'd need access to the tree structure
         // For now, we'll return undefined and rely on the content being self-contained
         return undefined;

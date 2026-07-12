@@ -6,6 +6,7 @@ import { BaseModal } from './core/BaseModal';
 import { ModalConfig, ModalHooks } from './types/ModalTypes';
 import { createElement, truncateText as truncateTextGlobal } from './core/modal-utils';
 import { AILogService } from '../../AILogService';
+import { AILogEntry } from '../../types';
 
 export interface AILogModalConfig extends ModalConfig {
     // No additional config needed for now
@@ -120,17 +121,7 @@ export class AILogModal extends BaseModal {
             }
         });
 
-        clearButton.addEventListener('click', async () => {
-            if (confirm('Are you sure you want to clear all AI logs? This action cannot be undone.')) {
-                try {
-                    await this.aiLogService.clearAllLogs();
-                    await this.loadLogs(); // Reload logs after clearing
-                } catch (error) {
-                    console.error('Failed to clear AI logs:', error);
-                    alert('Failed to clear logs. Please try again.');
-                }
-            }
-        });
+        clearButton.addEventListener('click', () => { void this.handleClearLogs(); });
 
         clearButton.addEventListener('mouseenter', () => {
             clearButton.style.backgroundColor = '#dc2626';
@@ -235,10 +226,17 @@ export class AILogModal extends BaseModal {
         }
     }
 
+    private async handleClearLogs(): Promise<void> {
+        if (confirm('Are you sure you want to clear all AI logs? This action cannot be undone.')) {
+            await this.aiLogService.clearAllLogs();
+            await this.loadLogs();
+        }
+    }
+
     /**
      * Renders the logs table
      */
-    private renderLogsTable(container: HTMLElement, logs: any[]): void {
+    private renderLogsTable(container: HTMLElement, logs: AILogEntry[]): void {
         const tableHTML = `
             <table class="ai-log-table" style="
                 width: 100%;

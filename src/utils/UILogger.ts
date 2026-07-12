@@ -31,8 +31,8 @@ export class UILogger {
             return;
         }
 
-        this.logTextArea = this.logContainer.querySelector('.ui-log-content') as HTMLTextAreaElement;
-        if (!this.logTextArea) {
+        this.logTextArea = this.logContainer.querySelector('.ui-log-content');
+        if (!(this.logTextArea instanceof HTMLTextAreaElement)) {
             console.error('UILogger: Log textarea not found in container');
             return;
         }
@@ -93,7 +93,7 @@ export class UILogger {
         
         // Force a re-render by triggering a layout recalculation
         this.logTextArea.style.display = 'none';
-        this.logTextArea.offsetHeight; // Force reflow
+        void this.logTextArea.offsetHeight;
         this.logTextArea.style.display = '';
         
         // Auto-scroll to bottom
@@ -174,12 +174,10 @@ export class UILogger {
         
         this.isExpanded = true;
         this.logContainer.classList.remove('collapsed');
-        const header = this.logContainer.querySelector('.ui-log-header') as HTMLElement;
-        if (header) {
-            const toggleIcon = header.querySelector('.toggle-icon') as HTMLElement;
-            if (toggleIcon) {
-                toggleIcon.textContent = '▼';
-            }
+        const header = this.logContainer.querySelector('.ui-log-header');
+        const toggleIcon = header?.querySelector('.toggle-icon');
+        if (toggleIcon) {
+            toggleIcon.textContent = '▼';
         }
     }
 
@@ -188,12 +186,10 @@ export class UILogger {
         
         this.isExpanded = false;
         this.logContainer.classList.add('collapsed');
-        const header = this.logContainer.querySelector('.ui-log-header') as HTMLElement;
-        if (header) {
-            const toggleIcon = header.querySelector('.toggle-icon') as HTMLElement;
-            if (toggleIcon) {
-                toggleIcon.textContent = '▶';
-            }
+        const header = this.logContainer.querySelector('.ui-log-header');
+        const toggleIcon = header?.querySelector('.toggle-icon');
+        if (toggleIcon) {
+            toggleIcon.textContent = '▶';
         }
     }
 

@@ -264,12 +264,13 @@ export class GenerationLevelsHelpModal extends BaseModal {
         
         // Close button - use setTimeout to ensure DOM is ready
         setTimeout(() => {
-            const closeBtn = document.getElementById('close-help-modal-btn') as HTMLButtonElement;
-            if (closeBtn) {
-                closeBtn.addEventListener('click', () => {
-                    void this.close();
-                });
+            const closeBtn = document.getElementById('close-help-modal-btn');
+            if (!(closeBtn instanceof HTMLButtonElement)) {
+                throw new Error('Close help modal button not found');
             }
+            closeBtn.addEventListener('click', () => {
+                void this.close();
+            });
         }, 0);
     }
 } 

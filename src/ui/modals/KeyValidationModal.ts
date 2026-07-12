@@ -1,15 +1,15 @@
 import { BaseModal } from './core/BaseModal.js';
-import { KeyManager, KeyValidationResult } from '../../keys/KeyManager.js';
+import { KeyManager, KeyValidationResult, KeyData } from '../../keys/KeyManager.js';
 import { AppKeyStorage } from '../../keys/AppKeyStorage.js';
 import { ModalConfig } from './types/ModalTypes.js';
 import { ComprehensiveImportService } from './services/ComprehensiveImportService.js';
 
 export class KeyValidationModal extends BaseModal {
     private static readonly APP_PASSWORD = 'ExperT';
-    private keyInput: HTMLInputElement | null = null;
+    private keyInput: HTMLTextAreaElement | null = null;
     private statusDiv: HTMLDivElement | null = null;
     private submitButton: HTMLButtonElement | null = null;
-    private onValidKeyCallback: ((keyData: any) => void) | null = null;
+    private onValidKeyCallback: ((keyData: KeyData) => void) | null = null;
 
     constructor() {
         const config: ModalConfig = {
@@ -223,31 +223,42 @@ export class KeyValidationModal extends BaseModal {
     }
 
     private attachEventListeners(): void {
-        this.keyInput = this.element?.querySelector('#key-input') as HTMLInputElement;
-        this.statusDiv = this.element?.querySelector('#key-status') as HTMLDivElement;
-        this.submitButton = this.element?.querySelector('#validate-key-btn') as HTMLButtonElement;
-        
-        if (this.keyInput) {
-            this.keyInput.addEventListener('input', () => { this.onKeyInput(); });
-            this.keyInput.addEventListener('paste', () => {
-                // Delay to allow paste to complete
-                setTimeout(() => { this.onKeyInput(); }, 100);
-            });
+        const keyInput = this.element?.querySelector('#key-input');
+        const statusDiv = this.element?.querySelector('#key-status');
+        const submitButton = this.element?.querySelector('#validate-key-btn');
+
+        if (!(keyInput instanceof HTMLTextAreaElement)) {
+            throw new Error('Key input not found');
         }
-        
-        if (this.submitButton) {
-            this.submitButton.addEventListener('click', () => void this.validateKey());
+        if (!(statusDiv instanceof HTMLDivElement)) {
+            throw new Error('Key status element not found');
         }
-        
-        const clearButton = this.element?.querySelector('#clear-stored-key-btn') as HTMLButtonElement;
-        if (clearButton) {
-            clearButton.addEventListener('click', () => void this.clearStoredKey());
+        if (!(submitButton instanceof HTMLButtonElement)) {
+            throw new Error('Validate key button not found');
         }
-        
-        const loadBackupButton = this.element?.querySelector('#load-backup-btn') as HTMLButtonElement;
-        if (loadBackupButton) {
-            loadBackupButton.addEventListener('click', () => void this.handleLoadBackup());
+
+        this.keyInput = keyInput;
+        this.statusDiv = statusDiv;
+        this.submitButton = submitButton;
+
+        keyInput.addEventListener('input', () => { this.onKeyInput(); });
+        keyInput.addEventListener('paste', () => {
+            setTimeout(() => { this.onKeyInput(); }, 100);
+        });
+
+        submitButton.addEventListener('click', () => void this.validateKey());
+
+        const clearButton = this.element?.querySelector('#clear-stored-key-btn');
+        if (!(clearButton instanceof HTMLButtonElement)) {
+            throw new Error('Clear stored key button not found');
         }
+        clearButton.addEventListener('click', () => void this.clearStoredKey());
+
+        const loadBackupButton = this.element?.querySelector('#load-backup-btn');
+        if (!(loadBackupButton instanceof HTMLButtonElement)) {
+            throw new Error('Load backup button not found');
+        }
+        loadBackupButton.addEventListener('click', () => void this.handleLoadBackup());
     }
 
     private onKeyInput(): void {
@@ -286,7 +297,7 @@ export class KeyValidationModal extends BaseModal {
         }
         
         try {
-            const result: KeyValidationResult = await KeyManager.validateKey(key, KeyValidationModal.APP_PASSWORD);
+            const result: KeyValidationResult = KeyManager.validateKey(key, KeyValidationModal.APP_PASSWORD);
             
             if (result.valid && result.data) {
                 // Key is valid, store it
@@ -329,7 +340,7 @@ export class KeyValidationModal extends BaseModal {
         }
     }
 
-    public setOnValidKeyCallback(callback: (keyData: any) => void): void {
+    public setOnValidKeyCallback(callback: (keyData: KeyData) => void): void {
         this.onValidKeyCallback = callback;
     }
 

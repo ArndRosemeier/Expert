@@ -30,17 +30,30 @@ interface ComprehensiveImportResult {
     errors: string[];
 }
 
+interface ImportManifest {
+    exportDate?: string;
+    exportVersion?: string;
+    storeManifest?: Array<{ name: string; keyPath: string; file: string }>;
+}
+
 interface ImportStore {
     name: string;
     keyPath: string;
-    records: any[];
+    records: unknown[];
 }
 
 interface ImportValidation {
     isValid: boolean;
     errors: string[];
-    manifest?: any;
+    manifest?: ImportManifest;
     stores: ImportStore[];
+}
+
+interface OpenFilePickerWindow extends Window {
+    showOpenFilePicker(options: {
+        multiple: boolean;
+        types: Array<{ description: string; accept: Record<string, string[]> }>;
+    }): Promise<FileSystemFileHandle[]>;
 }
 
 // Keys that should be preserved during import (not overwritten)
@@ -161,7 +174,7 @@ export class ComprehensiveImportService {
     private static async validateBackupFile(file: File): Promise<ImportValidation> {
         const errors: string[] = [];
         const stores: ImportStore[] = [];
-        let manifest: any;
+        let manifest: ImportManifest | undefined;
         
         try {
             // Check file type
@@ -179,13 +192,14 @@ export class ComprehensiveImportService {
             } else {
                 try {
                     const manifestContent = await zipContent.files['manifest.json'].async('string');
-                    manifest = JSON.parse(manifestContent);
+                    const parsedManifest = JSON.parse(manifestContent) as ImportManifest;
+                    manifest = parsedManifest;
                     
                     // Validate manifest structure
-                    if (!manifest.exportDate || !manifest.exportVersion) {
+                    if (!parsedManifest.exportDate || !parsedManifest.exportVersion) {
                         errors.push('Invalid manifest format');
                     }
-                } catch (error) {
+                } catch {
                     errors.push('Invalid manifest.json file');
                 }
             }
@@ -214,7 +228,7 @@ export class ComprehensiveImportService {
                         continue;
                     }
                     stores.push({ name: entry.name, keyPath: entry.keyPath, records: data });
-                } catch (error) {
+                } catch {
                     errors.push(`Invalid ${entry.file} format`);
                 }
             }
@@ -224,15 +238,15 @@ export class ComprehensiveImportService {
                 errors.push('No valid data files found in backup');
             }
             
-        } catch (error) {
+        } catch {
             errors.push('Failed to read ZIP file');
         }
         
         return {
             isValid: errors.length === 0,
             errors,
-            manifest,
-            stores
+            stores,
+            ...(manifest !== undefined ? { manifest } : {})
         };
     }
     
@@ -261,12 +275,12 @@ export class ComprehensiveImportService {
         const allData = await indexedDBService.getAll('keyValue');
         
         // Find items to preserve
-        const preservedItems = allData.filter((item: unknown): item is { key: string; [k: string]: any } => {
-            if (!item || typeof item !== 'object' || item === null) {
+        const preservedItems = allData.filter((item: unknown): item is { key: string; [k: string]: unknown } => {
+            if (typeof item !== 'object' || item === null) {
                 return false;
             }
-            const obj = item as { [k: string]: any };
-            return 'key' in obj && typeof obj['key'] === 'string' && PRESERVED_KEYS.includes(obj['key']);
+            const obj = item as Record<string, unknown>;
+            return typeof obj['key'] === 'string' && PRESERVED_KEYS.includes(obj['key']);
         });
         
         console.log(`🔒 Found ${preservedItems.length} sensitive keys to preserve:`, preservedItems.map((item) => item.key));
@@ -324,18 +338,7 @@ export class ComprehensiveImportService {
      */
     private static async getIndexedDBService(): Promise<IndexedDBService> {
         const storage = await StorageService.getInstance();
-        
-        if (!storage.getIndexedDBService) {
-            throw new Error('Storage service does not support IndexedDB direct access');
-        }
-        
-        const indexedDBService = storage.getIndexedDBService();
-        
-        if (!indexedDBService) {
-            throw new Error('Could not access IndexedDB service for import');
-        }
-        
-        return indexedDBService;
+        return storage.getIndexedDBService();
     }
     
     /**
@@ -352,13 +355,17 @@ export class ComprehensiveImportService {
         try {
             // CRITICAL: Use modern File System Access API when available - DO NOT REMOVE!
             if ('showOpenFilePicker' in window) {
-                const [fileHandle] = await (window as any).showOpenFilePicker({
+                const fileHandles = await (window as OpenFilePickerWindow).showOpenFilePicker({
                     multiple: false,
                     types: [{
                         description: 'Expert Application Backup',
                         accept: { 'application/zip': ['.zip'] }
                     }]
                 });
+                const fileHandle = fileHandles[0];
+                if (!fileHandle) {
+                    return null;
+                }
                 return await fileHandle.getFile();
             } else {
                 // Silent fallback for input - no user message needed since behavior is identical
@@ -404,7 +411,7 @@ export class ComprehensiveImportService {
         isValid: boolean;
         summary: { name: string; count: number; status: 'available' | 'error' }[];
         errors: string[];
-        manifest?: any;
+        manifest?: ImportManifest;
     }> {
         const validation = await this.validateBackupFile(file);
         const summary: { name: string; count: number; status: 'available' | 'error' }[] = [];
@@ -426,7 +433,7 @@ export class ComprehensiveImportService {
             isValid: validation.isValid,
             summary,
             errors: validation.errors,
-            manifest: validation.manifest
+            ...(validation.manifest !== undefined ? { manifest: validation.manifest } : {})
         };
     }
 } 

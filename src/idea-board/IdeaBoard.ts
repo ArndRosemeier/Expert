@@ -10,8 +10,18 @@ import { OpenRouterClient } from '../OpenRouterClient';
 import { createPromptExpansionService } from '../services/PromptExpansionService';
 import { TransformModal, type TransformResult } from './ui/TransformModal';
 import * as state from '../state';
+import type { SettingsManager } from '../SettingsManager';
 import type { IdeaBoardState, Point, BoardElement } from './types/BoardTypes';
 import type { DocumentNode } from '../DocumentNode';
+import { applyConditionalContextItems } from '../ContextFormat';
+import '../ui/types/ProjectUiTypes';
+
+interface SaveFilePickerWindow extends Window {
+  showSaveFilePicker(options: {
+    suggestedName: string;
+    types: Array<{ description: string; accept: Record<string, string[]> }>;
+  }): Promise<FileSystemFileHandle>;
+}
 
 export class IdeaBoard {
   private canvas: HTMLCanvasElement;
@@ -144,13 +154,13 @@ export class IdeaBoard {
         this.createBackgroundRectAtCenter();
       },
       onAddNodeContent: () => {
-        this.showNodeSearchModal();
+        void this.showNodeSearchModal();
       },
       onExportMarkdown: () => {
-        this.exportAsMarkdown();
+        void this.exportAsMarkdown();
       },
       onExportJson: () => {
-        this.exportAsJson();
+        void this.exportAsJson();
       },
       onImportJson: () => {
         this.importFromJson();
@@ -158,17 +168,17 @@ export class IdeaBoard {
       onClearAll: () => {
         this.clearAll();
       },
-      onSummarize: async () => {
-        await this.summarizeSelectedPostIt();
+      onSummarize: () => {
+        void this.summarizeSelectedPostIt();
       },
-      onExpand: async () => {
-        await this.continueSelectedPostIt();
+      onExpand: () => {
+        void this.continueSelectedPostIt();
       },
-      onGenerateIdeas: async () => {
-        await this.generateIdeasForSelectedPostIt();
+      onGenerateIdeas: () => {
+        void this.generateIdeasForSelectedPostIt();
       },
-      onTransform: async () => {
-        await this.transformSelectedPostIt();
+      onTransform: () => {
+        void this.transformSelectedPostIt();
       },
       onModelChange: (modelPurpose: string) => {
         this.setSelectedModelPurpose(modelPurpose);
@@ -207,7 +217,7 @@ export class IdeaBoard {
           const postIt = new PostItNote({ x: 0, y: 0 });
           postIt.deserialize(elementData);
           this.elements.set(postIt.id, postIt);
-        } else if (elementData.type === 'background-rect') {
+        } else {
           const backgroundRect = new BackgroundRectangle({ x: 0, y: 0 });
           backgroundRect.deserialize(elementData);
           this.elements.set(backgroundRect.id, backgroundRect);
@@ -216,17 +226,15 @@ export class IdeaBoard {
 
       // Recreate connections from saved data
       this.connections.clear();
-      if (this.boardState.connections) {
-        for (const connectionData of this.boardState.connections) {
-          const connection = new Connection(
-            connectionData.fromPostItId,
-            connectionData.fromSide,
-            connectionData.toPostItId,
-            connectionData.toSide
-          );
-          connection.deserialize(connectionData);
-          this.connections.set(connection.id, connection);
-        }
+      for (const connectionData of this.boardState.connections) {
+        const connection = new Connection(
+          connectionData.fromPostItId,
+          connectionData.fromSide,
+          connectionData.toPostItId,
+          connectionData.toSide
+        );
+        connection.deserialize(connectionData);
+        this.connections.set(connection.id, connection);
       }
 
       this.requestRedraw();
@@ -539,21 +547,21 @@ export class IdeaBoard {
           // Copy requires selection
           if (hasSelection) {
           event.preventDefault();
-          this.copySelectedElement();
+          void this.copySelectedElement();
           }
           break;
         case 'x':
           // Cut requires selection
           if (hasSelection) {
           event.preventDefault();
-          this.cutSelectedElement();
+          void this.cutSelectedElement();
           }
           break;
         case 'v':
           // Paste works with selection (even without canvas focus) or without selection (only with canvas focus)
           if (hasSelection || canvasHasFocus) {
           event.preventDefault();
-          this.pasteElement();
+          void this.pasteElement();
           }
           break;
       }
@@ -600,7 +608,7 @@ export class IdeaBoard {
       return;
     }
 
-    const postIt = this.selectedElement as PostItNote;
+    const postIt = this.selectedElement;
     
     // Store in internal clipboard
     this.clipboard = {
@@ -662,7 +670,7 @@ export class IdeaBoard {
           size: parsedData.size
         };
         }
-      } catch (parseError) {
+      } catch {
         // Not valid JSON or not Expert post-it data
         // Check if we have plain text content that's not empty
         if (systemClipboard && systemClipboard.trim().length > 0) {
@@ -675,7 +683,7 @@ export class IdeaBoard {
 
         }
       }
-    } catch (error) {
+    } catch {
       // System clipboard read failed, use internal clipboard if available
     }
 
@@ -806,7 +814,7 @@ export class IdeaBoard {
     let sendBackToOriginOption: HTMLElement | null = null;
     if (postIt.source) {
       sendBackToOriginOption = createMenuOption('↩️', 'Send back to origin', () => {
-        this.sendBackToOrigin(postIt);
+        void this.sendBackToOrigin(postIt);
       });
     }
 
@@ -1029,27 +1037,14 @@ export class IdeaBoard {
     }
 
     try {
-      // Search for the origin node across all projects
-      const state = await import('../state');
-      const allProjects = state.getProjects();
-      
-      let originNode: any = null;
-      let originProjectManager: any = null;
-      
-      // Search through all projects to find the origin node
-      for (const project of allProjects) {
-        const node = project.findNodeById(postIt.source.nodeId);
-        if (node) {
-          originNode = node;
-          originProjectManager = project;
-          break;
-        }
-      }
+      const origin = state.findNodeGlobally(postIt.source.nodeId);
 
-      if (!originNode || !originProjectManager) {
+      if (!origin) {
         alert('Origin node not found in any project');
         return;
       }
+
+      const { node: originNode, projectManager: originProjectManager } = origin;
 
       // Show confirmation dialog
       const confirmMessage = 
@@ -1068,7 +1063,8 @@ export class IdeaBoard {
       if (postIt.source.type === 'content') {
         originNode.setContent(postIt.content, 'idea_board');
       } else {
-        originNode.setContext(postIt.content, 'idea_board');
+        applyConditionalContextItems(originNode, postIt.content);
+        originNode.getMasterVersion()!.tags.add('idea_board');
       }
 
       // Save the changes
@@ -1092,7 +1088,7 @@ export class IdeaBoard {
     if (modalContainer) {
       this.destroy();
       modalContainer.remove();
-      (window as any).currentIdeaBoard = null;
+      delete window.currentIdeaBoard;
     }
 
     // Import and trigger UI updates asynchronously
@@ -1144,7 +1140,7 @@ export class IdeaBoard {
   createBackgroundRectangle(position: Point): BackgroundRectangle {
     // Get existing background rectangles to choose next color
     const existingRectangles = Array.from(this.elements.values())
-      .filter(element => element instanceof BackgroundRectangle) as BackgroundRectangle[];
+      .filter((element): element is BackgroundRectangle => element instanceof BackgroundRectangle);
     
     const rectangle = new BackgroundRectangle(position);
     
@@ -1161,6 +1157,44 @@ export class IdeaBoard {
     this.autoSave();
     
     return rectangle;
+  }
+
+  /**
+   * Find an open area on the canvas for placing a rectangle of the given size,
+   * searching outward from the current viewport center.
+   */
+  findFreePlacement(neededWidth: number, neededHeight: number): Point & { width: number; height: number } {
+    const existingElements = Array.from(this.elements.values());
+    const viewportCenterX = this.viewport.x + this.viewport.width / (2 * this.viewport.zoom);
+    const viewportCenterY = this.viewport.y + this.viewport.height / (2 * this.viewport.zoom);
+
+    for (let radius = 0; radius < 500; radius += 50) {
+      for (let angle = 0; angle < 360; angle += 45) {
+        const x = viewportCenterX + Math.cos(angle * Math.PI / 180) * radius - neededWidth / 2;
+        const y = viewportCenterY + Math.sin(angle * Math.PI / 180) * radius - neededHeight / 2;
+
+        const hasOverlap = existingElements.some((element) => {
+          const elementRight = element.position.x + element.size.width;
+          const elementBottom = element.position.y + element.size.height;
+          const testRight = x + neededWidth;
+          const testBottom = y + neededHeight;
+
+          return !(x > elementRight || testRight < element.position.x ||
+                  y > elementBottom || testBottom < element.position.y);
+        });
+
+        if (!hasOverlap) {
+          return { x, y, width: neededWidth, height: neededHeight };
+        }
+      }
+    }
+
+    return {
+      x: viewportCenterX - neededWidth / 2 + 300,
+      y: viewportCenterY - neededHeight / 2,
+      width: neededWidth,
+      height: neededHeight,
+    };
   }
 
   /**
@@ -1519,7 +1553,7 @@ export class IdeaBoard {
   /**
    * Select an element or clear selection
    */
-  private selectElement(element: BoardElement | null): void {
+  selectElement(element: BoardElement | null): void {
     // Deselect previously selected element
     if (this.selectedElement) {
       if (this.selectedElement instanceof PostItNote || this.selectedElement instanceof BackgroundRectangle) {
@@ -1560,7 +1594,7 @@ export class IdeaBoard {
   /**
    * Update element data in board state
    */
-  private updateElementData(element: BoardElement): void {
+  updateElementData(element: BoardElement): void {
     const index = this.boardState.elements.findIndex(e => e.id === element.id);
     if (index >= 0) {
       this.boardState.elements[index] = element.serialize();
@@ -1607,7 +1641,7 @@ export class IdeaBoard {
         const postIt = new PostItNote({ x: 0, y: 0 });
         postIt.deserialize(elementData);
         this.elements.set(postIt.id, postIt);
-      } else if (elementData.type === 'background-rect') {
+      } else {
         const backgroundRect = new BackgroundRectangle({ x: 0, y: 0 });
         backgroundRect.deserialize(elementData);
         this.elements.set(backgroundRect.id, backgroundRect);
@@ -1621,7 +1655,7 @@ export class IdeaBoard {
   /**
    * Load board from a board state object (used for imports)
    */
-  private async loadBoardState(boardState: IdeaBoardState): Promise<void> {
+  private loadBoardState(boardState: IdeaBoardState): void {
     // Convert dates from strings to Date objects if needed
     if (typeof boardState.created === 'string') {
       boardState.created = new Date(boardState.created);
@@ -1655,7 +1689,7 @@ export class IdeaBoard {
         const postIt = new PostItNote({ x: 0, y: 0 });
         postIt.deserialize(elementData);
         this.elements.set(postIt.id, postIt);
-      } else if (elementData.type === 'background-rect') {
+      } else {
         const backgroundRect = new BackgroundRectangle({ x: 0, y: 0 });
         backgroundRect.deserialize(elementData);
         this.elements.set(backgroundRect.id, backgroundRect);
@@ -1712,7 +1746,7 @@ export class IdeaBoard {
   /**
    * Request a redraw on next frame
    */
-  private requestRedraw(): void {
+  requestRedraw(): void {
     this.needsRedraw = true;
   }
 
@@ -1802,12 +1836,13 @@ export class IdeaBoard {
 
     // Draw connections on top of background rectangles but below post-its (middle layer)
     for (const connection of this.connections.values()) {
-      const fromPostIt = this.elements.get(connection.fromPostItId) as PostItNote;
-      const toPostIt = this.elements.get(connection.toPostItId) as PostItNote;
-      
-      if (fromPostIt && toPostIt) {
-        connection.render(this.context, this.viewport, fromPostIt, toPostIt);
+      const fromPostIt = this.getPostItById(connection.fromPostItId);
+      const toPostIt = this.getPostItById(connection.toPostItId);
+      if (!fromPostIt || !toPostIt) {
+        continue;
       }
+
+      connection.render(this.context, this.viewport, fromPostIt, toPostIt);
     }
 
     // Draw connection preview while dragging
@@ -1921,32 +1956,33 @@ export class IdeaBoard {
     this.context.lineCap = 'round';
 
     for (const connection of this.connections.values()) {
-      const fromPostIt = this.elements.get(connection.fromPostItId) as PostItNote;
-      const toPostIt = this.elements.get(connection.toPostItId) as PostItNote;
-      
-      if (fromPostIt && toPostIt) {
-        // Get screen positions
-        const fromScreenPos = this.viewport.worldToScreen(fromPostIt.position.x, fromPostIt.position.y);
-        const fromScreenWidth = fromPostIt.size.width * this.viewport.zoom;
-        const fromScreenHeight = fromPostIt.size.height * this.viewport.zoom;
+      const fromPostIt = this.getPostItById(connection.fromPostItId);
+      const toPostIt = this.getPostItById(connection.toPostItId);
+      if (!fromPostIt || !toPostIt) {
+        continue;
+      }
 
-        const toScreenPos = this.viewport.worldToScreen(toPostIt.position.x, toPostIt.position.y);
-        const toScreenWidth = toPostIt.size.width * this.viewport.zoom;
-        const toScreenHeight = toPostIt.size.height * this.viewport.zoom;
+      // Get screen positions
+      const fromScreenPos = this.viewport.worldToScreen(fromPostIt.position.x, fromPostIt.position.y);
+      const fromScreenWidth = fromPostIt.size.width * this.viewport.zoom;
+      const fromScreenHeight = fromPostIt.size.height * this.viewport.zoom;
 
-        // Get connection dot positions
-        const fromDots = fromPostIt.getConnectionDotPositions(fromScreenPos, fromScreenWidth, fromScreenHeight);
-        const toDots = toPostIt.getConnectionDotPositions(toScreenPos, toScreenWidth, toScreenHeight);
+      const toScreenPos = this.viewport.worldToScreen(toPostIt.position.x, toPostIt.position.y);
+      const toScreenWidth = toPostIt.size.width * this.viewport.zoom;
+      const toScreenHeight = toPostIt.size.height * this.viewport.zoom;
 
-        const fromDot = fromDots.find(dot => dot.side === connection.fromSide);
-        const toDot = toDots.find(dot => dot.side === connection.toSide);
+      // Get connection dot positions
+      const fromDots = fromPostIt.getConnectionDotPositions(fromScreenPos, fromScreenWidth, fromScreenHeight);
+      const toDots = toPostIt.getConnectionDotPositions(toScreenPos, toScreenWidth, toScreenHeight);
 
-        if (fromDot && toDot) {
-          this.context.beginPath();
-          this.context.moveTo(fromDot.x, fromDot.y);
-          this.context.lineTo(toDot.x, toDot.y);
-          this.context.stroke();
-        }
+      const fromDot = fromDots.find(dot => dot.side === connection.fromSide);
+      const toDot = toDots.find(dot => dot.side === connection.toSide);
+
+      if (fromDot && toDot) {
+        this.context.beginPath();
+        this.context.moveTo(fromDot.x, fromDot.y);
+        this.context.lineTo(toDot.x, toDot.y);
+        this.context.stroke();
       }
     }
 
@@ -2123,11 +2159,11 @@ export class IdeaBoard {
     if (element instanceof BackgroundRectangle) {
       // For background rectangles, only bring to front among background rectangles
       const allElements = Array.from(this.elements.entries());
-      const backgroundRects = allElements.filter(([_, el]) => el instanceof BackgroundRectangle);
-      const postIts = allElements.filter(([_, el]) => el instanceof PostItNote);
+      const backgroundRects = allElements.filter(([, el]) => el instanceof BackgroundRectangle);
+      const postIts = allElements.filter(([, el]) => el instanceof PostItNote);
       
       // Remove the element and re-add at end of background rectangles
-      const elementEntry = allElements.find(([id, _]) => id === element.id);
+      const elementEntry = allElements.find(([id]) => id === element.id);
       if (elementEntry) {
         // Reconstruct elements map with background rectangles first, target element last among them
         this.elements.clear();
@@ -2278,8 +2314,13 @@ export class IdeaBoard {
       // Count outgoing connections for smart count behavior
       const outgoingConnectionCount = childPostIts.length > 0 ? childPostIts.length : undefined;
       
-      const transformResult = await new Promise<{ instruction: string; count: number } | null>((resolve) => {
-        const modalConfig: any = {
+      const transformResult = await new Promise<TransformResult | null>((resolve) => {
+        const modalConfig: {
+          id: string;
+          onTransformConfirmed: (result: TransformResult) => void;
+          triggeringContent: string;
+          outgoingConnectionCount?: number;
+        } = {
           id: 'transform-content-modal',
           onTransformConfirmed: (result: TransformResult) => {
             resolve(result);
@@ -2403,6 +2444,23 @@ export class IdeaBoard {
       // User instruction already obtained above for transformations
 
       // Create context that matches the expected structure
+      let countKey: 'idea_count' | 'expand_count' | 'transform_count';
+      if (type === 'ideas') {
+        countKey = 'idea_count';
+      } else if (type === 'continuations') {
+        countKey = 'expand_count';
+      } else {
+        countKey = 'transform_count';
+      }
+      let countValue: string;
+      if (type === 'transformations' && customCount) {
+        countValue = customCount.toString();
+      } else if (isConnectedMode) {
+        countValue = count.toString();
+      } else {
+        countValue = 'some';
+      }
+
       const promptContext = {
         node: {
           content: originalContent.trim(),
@@ -2414,9 +2472,7 @@ export class IdeaBoard {
           criteria: [] // Not needed for generation
         },
         custom: {
-          [type === 'ideas' ? 'idea_count' : type === 'continuations' ? 'expand_count' : 'transform_count']: 
-            (type === 'transformations' && customCount) ? customCount.toString() : 
-            (isConnectedMode ? count.toString() : 'some'),
+          [countKey]: countValue,
           ...(type === 'transformations' && { user_instruction: userInstruction }),
           ...(type === 'transformations' && { transform_context: '' }) // Empty context for idea board transformations
         }
@@ -2460,7 +2516,7 @@ export class IdeaBoard {
         }
       } else {
         // Free mode: create new post-its arranged below the selected one
-        this.createPostItsFromContent(selectedPostIt, results, type.slice(0, -1)); // Remove 's' from 'ideas'/'continuations'
+        this.createPostItsFromContent(selectedPostIt, results);
       }
 
       // Stop animation if it was running
@@ -2558,7 +2614,7 @@ export class IdeaBoard {
   /**
    * Generic method to create new post-its arranged below the triggering post-it
    */
-  private createPostItsFromContent(triggerPostIt: PostItNote, contentItems: string[], _contentType: string): void {
+  private createPostItsFromContent(triggerPostIt: PostItNote, contentItems: string[]): void {
     const gap = 20; // Gap between post-its
     const verticalOffset = 200; // Distance below the trigger post-it
     
@@ -2700,7 +2756,7 @@ export class IdeaBoard {
       return;
     }
 
-    const postIt = this.elements.get(this.ideaGenerationAnimation.postItId) as PostItNote;
+    const postIt = this.getPostItById(this.ideaGenerationAnimation.postItId);
     if (!postIt) {
       this.stopIdeaGenerationAnimation();
       return;
@@ -2772,7 +2828,7 @@ export class IdeaBoard {
       return;
     }
 
-    const postIt = this.elements.get(this.selfSummarizeAnimation.postItId) as PostItNote;
+    const postIt = this.getPostItById(this.selfSummarizeAnimation.postItId);
     if (!postIt) {
       this.stopSelfSummarizeAnimation();
       return;
@@ -2853,7 +2909,7 @@ export class IdeaBoard {
     this.context.save();
     
     for (const postItId of this.deletionAnimation.postItIds) {
-      const postIt = this.elements.get(postItId) as PostItNote;
+      const postIt = this.getPostItById(postItId);
       if (!postIt) continue;
 
       const screenPos = this.viewport.worldToScreen(postIt.position.x, postIt.position.y);
@@ -2904,6 +2960,11 @@ export class IdeaBoard {
     return Array.from(this.elements.values()).filter(
       (element): element is PostItNote => element instanceof PostItNote
     );
+  }
+
+  private getPostItById(id: string): PostItNote | undefined {
+    const element = this.elements.get(id);
+    return element instanceof PostItNote ? element : undefined;
   }
 
   /**
@@ -3156,7 +3217,7 @@ export class IdeaBoard {
   /**
    * Perform self-summarization on a post-it's own content
    */
-  private async performSelfSummarization(postIt: PostItNote, originalContent: string, settingsManager: any): Promise<void> {
+  private async performSelfSummarization(postIt: PostItNote, originalContent: string, settingsManager: SettingsManager): Promise<void> {
     try {
       // Start center animation to show processing
       this.startSelfSummarizeAnimation(postIt.id);
@@ -3612,7 +3673,7 @@ export class IdeaBoard {
       if ('showSaveFilePicker' in window) {
         // Modern browsers with File System Access API
         try {
-          const fileHandle = await (window as any).showSaveFilePicker({
+          const fileHandle = await (window as SaveFilePickerWindow).showSaveFilePicker({
             suggestedName: `${this.boardState.name}.md`,
             types: [{
               description: 'Markdown files',
@@ -3678,7 +3739,7 @@ export class IdeaBoard {
       if ('showSaveFilePicker' in window) {
         // Modern browsers with File System Access API
         try {
-          const fileHandle = await (window as any).showSaveFilePicker({
+          const fileHandle = await (window as SaveFilePickerWindow).showSaveFilePicker({
             suggestedName: `${this.boardState.name}.json`,
             types: [{
               description: 'JSON files',
@@ -3725,7 +3786,7 @@ export class IdeaBoard {
   /**
    * Import idea board from JSON file
    */
-  private async importFromJson(): Promise<void> {
+  private importFromJson(): void {
     try {
       // Create file input element
       const fileInput = document.createElement('input');
@@ -3734,44 +3795,8 @@ export class IdeaBoard {
       fileInput.style.display = 'none';
 
       // Handle file selection
-      fileInput.addEventListener('change', async (event) => {
-        const file = (event.target as HTMLInputElement).files?.[0];
-        if (!file) {
-          return;
-        }
-
-        try {
-          const text = await file.text();
-          const importedBoardState = JSON.parse(text) as IdeaBoardState;
-          
-          // Validate the imported data
-          if (!this.validateImportedBoardState(importedBoardState)) {
-            console.error('❌ Invalid board state format');
-            alert('❌ The selected file is not a valid Idea Board JSON file.');
-            return;
-          }
-
-          // Confirm import (this will replace current board)
-          const confirmImport = confirm(
-            `⚠️ Import Idea Board\n\n` +
-            `This will replace the current board with:\n` +
-            `• Board: "${importedBoardState.name}"\n` +
-            `• Elements: ${importedBoardState.elements.length}\n` +
-            `• Connections: ${importedBoardState.connections.length}\n\n` +
-            `Current board data will be lost. Continue?`
-          );
-
-          if (!confirmImport) {
-            return;
-          }
-
-          // Import the board state
-          await this.loadBoardState(importedBoardState);
-
-        } catch (error) {
-          console.error('❌ Failed to import JSON:', error);
-          alert('❌ Failed to import board. Please check that the file is a valid JSON format.');
-        }
+      fileInput.addEventListener('change', (event) => {
+        void this.handleJsonImport(event);
       });
 
       // Trigger file selection
@@ -3785,21 +3810,70 @@ export class IdeaBoard {
     }
   }
 
+  private async handleJsonImport(event: Event): Promise<void> {
+    const file = (event.target as HTMLInputElement).files?.[0];
+    if (!file) {
+      return;
+    }
+
+    try {
+      const text = await file.text();
+      const importedBoardState: unknown = JSON.parse(text);
+
+      if (!this.validateImportedBoardState(importedBoardState)) {
+        console.error('❌ Invalid board state format');
+        alert('❌ The selected file is not a valid Idea Board JSON file.');
+        return;
+      }
+
+      const confirmImport = confirm(
+        `⚠️ Import Idea Board\n\n` +
+        `This will replace the current board with:\n` +
+        `• Board: "${importedBoardState.name}"\n` +
+        `• Elements: ${importedBoardState.elements.length}\n` +
+        `• Connections: ${importedBoardState.connections.length}\n\n` +
+        `Current board data will be lost. Continue?`
+      );
+
+      if (!confirmImport) {
+        return;
+      }
+
+      this.loadBoardState(importedBoardState);
+    } catch (error) {
+      console.error('❌ Failed to import JSON:', error);
+      alert('❌ Failed to import board. Please check that the file is a valid JSON format.');
+    }
+  }
+
   /**
    * Validate imported board state structure
    */
-  private validateImportedBoardState(boardState: any): boardState is IdeaBoardState {
+  private validateImportedBoardState(boardState: unknown): boardState is IdeaBoardState {
+    if (typeof boardState !== 'object' || boardState === null) {
+      return false;
+    }
+
+    const candidate = boardState as Record<string, unknown>;
+    const viewport = candidate['viewport'];
+    const metadata = candidate['metadata'];
+
+    if (typeof viewport !== 'object' || viewport === null) {
+      return false;
+    }
+
+    const viewportRecord = viewport as Record<string, unknown>;
+
     return (
-      typeof boardState === 'object' &&
-      typeof boardState.id === 'string' &&
-      typeof boardState.name === 'string' &&
-      Array.isArray(boardState.elements) &&
-      Array.isArray(boardState.connections) &&
-      typeof boardState.viewport === 'object' &&
-      typeof boardState.viewport.x === 'number' &&
-      typeof boardState.viewport.y === 'number' &&
-      typeof boardState.viewport.zoom === 'number' &&
-      typeof boardState.metadata === 'object'
+      typeof candidate['id'] === 'string' &&
+      typeof candidate['name'] === 'string' &&
+      Array.isArray(candidate['elements']) &&
+      Array.isArray(candidate['connections']) &&
+      typeof viewportRecord['x'] === 'number' &&
+      typeof viewportRecord['y'] === 'number' &&
+      typeof viewportRecord['zoom'] === 'number' &&
+      typeof metadata === 'object' &&
+      metadata !== null
     );
   }
 
@@ -3882,14 +3956,15 @@ export class IdeaBoard {
       markdown += `This board contains ${this.connections.size} connection(s) between post-its:\n\n`;
       
       for (const connection of this.connections.values()) {
-        const fromPostIt = this.elements.get(connection.fromPostItId) as PostItNote;
-        const toPostIt = this.elements.get(connection.toPostItId) as PostItNote;
-        
-        if (fromPostIt && toPostIt) {
-          const fromTitle = this.getPostItTitle(fromPostIt);
-          const toTitle = this.getPostItTitle(toPostIt);
-          markdown += `- **${fromTitle}** → **${toTitle}**\n`;
+        const fromPostIt = this.getPostItById(connection.fromPostItId);
+        const toPostIt = this.getPostItById(connection.toPostItId);
+        if (!fromPostIt || !toPostIt) {
+          continue;
         }
+
+        const fromTitle = this.getPostItTitle(fromPostIt);
+        const toTitle = this.getPostItTitle(toPostIt);
+        markdown += `- **${fromTitle}** → **${toTitle}**\n`;
       }
       markdown += `\n`;
     }

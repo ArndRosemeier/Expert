@@ -29,7 +29,7 @@ export class ErrorLogService {
      */
     public async initialize(): Promise<void> {
         const storageService = await StorageService.getInstance();
-        this.indexedDBService = storageService.getIndexedDBService!();
+        this.indexedDBService = storageService.getIndexedDBService();
     }
 
     private async ensureInitialized(): Promise<void> {
