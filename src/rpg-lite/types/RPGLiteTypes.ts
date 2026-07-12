@@ -126,7 +126,7 @@ export interface RPGLiteStartPreset {
   maxContextMessages: number;
   /** When true, sessions started from this template shake up the opening by default. */
   shakeOpenings?: boolean;
-  /** Default summary mode for sessions started from this template. */
+  /** Default summary mode for sessions started from this template. Defaults to 'lean' when undefined. */
   summaryMode?: RPGLiteSummaryMode;
   /** Default milestone interval (messages) for sessions started from this template. */
   summaryInterval?: number;

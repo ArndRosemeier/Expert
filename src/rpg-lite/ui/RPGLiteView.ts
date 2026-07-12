@@ -249,6 +249,8 @@ export class RPGLiteView {
 
   /** Default number of new messages that must accumulate past the last milestone before a new one is generated. */
   private static readonly DEFAULT_SUMMARY_INTERVAL = 25;
+  /** Default summary mode for new templates and sessions started from templates. */
+  private static readonly DEFAULT_TEMPLATE_SUMMARY_MODE: RPGLiteSummaryMode = 'lean';
 
   /**
    * Drop every milestone whose summary covers messages at or beyond `index`.
@@ -427,6 +429,13 @@ export class RPGLiteView {
     }
     this.sessions.sort((a, b) => b.updatedAt - a.updatedAt);
     this.presets = await storage.listRPGLiteStartPresets<RPGLiteStartPreset>();
+    // Templates created before summaryMode existed stored no mode; lean is the intended default.
+    for (const preset of this.presets) {
+      if (preset.summaryMode === undefined) {
+        preset.summaryMode = RPGLiteView.DEFAULT_TEMPLATE_SUMMARY_MODE;
+        await storage.saveRPGLiteStartPreset(preset);
+      }
+    }
     this.presets.sort((a, b) => b.updatedAt - a.updatedAt);
     this.actionButtons = await storage.listRPGLiteActionButtons<RPGLiteActionButton>();
   }
@@ -987,7 +996,7 @@ export class RPGLiteView {
       shakeOpenings: preset.shakeOpenings ?? false,
       // Carry the source's summary mode; fall back to the lean default for legacy
       // templates that predate the setting.
-      summaryMode: preset.summaryMode ?? 'lean',
+      summaryMode: preset.summaryMode ?? RPGLiteView.DEFAULT_TEMPLATE_SUMMARY_MODE,
       ...(typeof preset.summaryInterval === 'number' ? { summaryInterval: preset.summaryInterval } : {})
     };
 
@@ -1013,7 +1022,7 @@ export class RPGLiteView {
     ];
 
     const selectedPurpose = preset.narratorPurpose ?? '';
-    const presetSummaryMode = preset.summaryMode ?? 'off';
+    const presetSummaryMode = preset.summaryMode ?? RPGLiteView.DEFAULT_TEMPLATE_SUMMARY_MODE;
     const presetSummariesOn = presetSummaryMode !== 'off';
 
     return `
@@ -1241,7 +1250,7 @@ export class RPGLiteView {
       shakeOpenings: preset.shakeOpenings ?? false,
       // Inherit the template's summary mode; fall back to the lean default for legacy
       // templates that predate the setting.
-      summaryMode: preset.summaryMode ?? 'lean',
+      summaryMode: preset.summaryMode ?? RPGLiteView.DEFAULT_TEMPLATE_SUMMARY_MODE,
       ...(typeof preset.summaryInterval === 'number' ? { summaryInterval: preset.summaryInterval } : {}),
       milestones: [],
       conversation: []
@@ -1545,7 +1554,7 @@ export class RPGLiteView {
         maxContextMessages: maxContext,
         shakeOpenings,
         // Lean summaries are the economical default for new templates.
-        summaryMode: 'lean'
+        summaryMode: RPGLiteView.DEFAULT_TEMPLATE_SUMMARY_MODE
       };
 
       const storage = await StorageService.getInstance();
@@ -1565,7 +1574,7 @@ export class RPGLiteView {
         maxContextMessages: maxContext,
         shakeOpenings,
         // Lean summaries are the economical default for new sessions.
-        summaryMode: 'lean',
+        summaryMode: RPGLiteView.DEFAULT_TEMPLATE_SUMMARY_MODE,
         conversation: []
       };
 
