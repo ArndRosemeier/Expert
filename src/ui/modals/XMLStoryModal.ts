@@ -4205,7 +4205,13 @@ export class XMLStoryModal extends SimpleModal {
      */
     private applyInitializationData(data: {title: string, content: string, contextItems: string[], sourceNode: DocumentNode}): void {
 
-        
+        // Render the whiteboard first so the outline controls (undo/redo buttons
+        // and version info) exist in the DOM before we seed the outline history.
+        // Seeding calls saveOutlineVersion -> updateOutlineControls, which reads
+        // those controls via a strict getElementById; without this initial render
+        // they would not exist yet and the lookup would throw during init.
+        this.updateWhiteboard();
+
         // Set title if provided and element exists
         if (data.title) {
             this.titleInput ??= getElementById<HTMLInputElement>('project-title-input');
