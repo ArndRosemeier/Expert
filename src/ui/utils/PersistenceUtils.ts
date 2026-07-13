@@ -66,11 +66,13 @@ async function executePersistenceOperationWithFallback<T>(
         }
         throw new Error(result.message);
     }
-    
-    if (result.data === undefined) {
-        throw new Error(`Persistence operation ${options.operation} succeeded but returned no data`);
-    }
-    return result.data;
+
+    // `success` is the authoritative success signal (real failures are caught
+    // upstream and set success=false). Many persistence operations legitimately
+    // return no data because they resolve to void (e.g. saving or clearing
+    // projects). Returning whatever the operation produced avoids fabricating a
+    // false "succeeded but returned no data" error for those void operations.
+    return result.data as T;
 }
 
 

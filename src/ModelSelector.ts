@@ -1832,8 +1832,16 @@ export class ModelSelector {
 
   // Log model and endpoint supported parameters to help diagnose missing controls like verbosity
   private logModelParameterSupport(modelId: string): void {
-    const model = this.models.find(m => m.id === modelId)!;
-    const endpoints = this.modelEndpoints[modelId]!;
+    const model = this.models.find(m => m.id === modelId);
+    if (!model) {
+      // A selected model id can legitimately be missing from the fetched models
+      // list (e.g. it was renamed or removed on OpenRouter, or belongs to a
+      // copied project). This is a diagnostic-only helper, so report the real
+      // condition clearly instead of crashing on a non-null assertion.
+      console.info(`logModelParameterSupport: model "${modelId}" is not in the fetched models list; skipping parameter diagnostics.`);
+      return;
+    }
+    const endpoints = this.modelEndpoints[modelId] ?? [];
     const modelParams = (model.supported_parameters ?? []).join(', ') || '(none)';
     const lines: string[] = [];
     lines.push(`Model: ${model.name} (${model.id})`);
