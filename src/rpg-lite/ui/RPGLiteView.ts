@@ -1614,7 +1614,7 @@ export class RPGLiteView {
         </div>
         <div class="rpg-lite-topbar-right">
           <div id="rpg-lite-context-stats-topbar" class="rpg-lite-context-stats"></div>
-          <button id="rpg-lite-settings" class="rpg-lite-btn" title="Session settings (narrator, temperature, context, summaries, retries)">⚙️ Settings</button>
+          <button id="rpg-lite-settings" class="rpg-lite-btn" title="Session settings (system prompt, prefix context, narrator, temperature, context, summaries, retries)">⚙️ Settings</button>
           <button id="rpg-lite-save-session" class="rpg-lite-btn">Save Session</button>
           <button id="rpg-lite-close" class="rpg-lite-btn">Close</button>
         </div>
@@ -1631,28 +1631,6 @@ export class RPGLiteView {
         </div>
         <div class="rpg-lite-resize-handle" id="rpg-lite-resize-left" title="Drag to resize"></div>
         <div class="rpg-lite-main">
-          <div class="rpg-lite-editors" id="rpg-lite-editors-panel">
-            <div class="rpg-lite-editors-header">
-              <button id="rpg-lite-toggle-editors" class="rpg-lite-btn rpg-lite-btn-sm" title="Toggle settings">
-                <span id="rpg-lite-editors-toggle-icon">▼</span> Settings
-              </button>
-            </div>
-            <div id="rpg-lite-editors-content" class="rpg-lite-editors-content" style="display: none;">
-              <div class="rpg-lite-editor">
-                <div style="display: flex; align-items: center; justify-content: space-between; gap: 0.5rem;">
-                  <div class="rpg-lite-section-title">System Prompt</div>
-                  <span style="font-size: 0.8rem; opacity: 0.7;">
-                    Available: <code style="background: rgba(255,255,255,0.1); padding: 0.1rem 0.3rem; border-radius: 3px;">{{noise_names}}</code>
-                  </span>
-                </div>
-                <textarea id="rpg-lite-system" class="rpg-lite-textarea"></textarea>
-              </div>
-              <div class="rpg-lite-editor">
-                <div class="rpg-lite-section-title">Prefix Context</div>
-                <textarea id="rpg-lite-prefix" class="rpg-lite-textarea"></textarea>
-              </div>
-            </div>
-          </div>
           <div id="rpg-lite-messages" class="rpg-lite-messages"></div>
           <div class="rpg-lite-composer">
             <textarea id="rpg-lite-input" class="rpg-lite-textarea" placeholder="${session.conversation.length === 0 ? 'Press Send to start, or type your first message...' : 'Your message...'}"></textarea>
@@ -1705,28 +1683,8 @@ export class RPGLiteView {
       void this.saveCurrentAsSessionCopy();
     });
 
-    const toggleEditorsBtn = this.container.querySelector('#rpg-lite-toggle-editors') as HTMLButtonElement;
-    const editorsContent = this.container.querySelector('#rpg-lite-editors-content') as HTMLElement;
-    const toggleIcon = this.container.querySelector('#rpg-lite-editors-toggle-icon') as HTMLElement;
-    toggleEditorsBtn.addEventListener('click', () => {
-      const isHidden = editorsContent.style.display === 'none';
-      editorsContent.style.display = isHidden ? 'flex' : 'none';
-      toggleIcon.textContent = isHidden ? '▲' : '▼';
-    });
-
-    const systemEl = this.container.querySelector('#rpg-lite-system') as HTMLTextAreaElement;
-    systemEl.value = session.systemPrompt;
-    systemEl.addEventListener('input', () => {
-      session.systemPrompt = systemEl.value;
-      void this.saveSession().then(async () => this.updateContextStats());
-    });
-
-    const prefixEl = this.container.querySelector('#rpg-lite-prefix') as HTMLTextAreaElement;
-    prefixEl.value = session.prefixContext;
-    prefixEl.addEventListener('input', () => {
-      session.prefixContext = prefixEl.value;
-      void this.saveSession().then(async () => this.updateContextStats());
-    });
+    // System Prompt and Prefix Context are edited in the Session settings modal
+    // (see showSessionSettingsModal), so no inline editors are wired up here.
 
     const clipboardEl = this.container.querySelector('#rpg-lite-clipboard') as HTMLTextAreaElement;
     clipboardEl.addEventListener('input', () => {
@@ -2189,6 +2147,19 @@ export class RPGLiteView {
         </div>
         <div class="rpg-lite-action-editor-body">
           <div class="rpg-lite-action-editor-field">
+            <label style="display:flex; align-items:center; justify-content:space-between; gap:.5rem;">
+              <span>System prompt</span>
+              <span style="font-weight:400; font-size:0.8rem; opacity:0.7;">Available: <code style="background: rgba(255,255,255,0.1); padding: 0.1rem 0.3rem; border-radius: 3px;">{{noise_names}}</code></span>
+            </label>
+            <textarea id="rpg-lite-settings-system" class="rpg-lite-textarea" style="min-height: 9rem;"></textarea>
+          </div>
+
+          <div class="rpg-lite-action-editor-field">
+            <label>Prefix context</label>
+            <textarea id="rpg-lite-settings-prefix" class="rpg-lite-textarea" style="min-height: 9rem;"></textarea>
+          </div>
+
+          <div class="rpg-lite-action-editor-field">
             <label>Narrator model</label>
             <div style="display:flex; align-items:center; gap:.6rem;">
               <select id="rpg-lite-settings-purpose" class="rpg-lite-select">
@@ -2256,6 +2227,8 @@ export class RPGLiteView {
     `;
     document.body.appendChild(overlay);
 
+    const systemEl = overlay.querySelector('#rpg-lite-settings-system') as HTMLTextAreaElement;
+    const prefixEl = overlay.querySelector('#rpg-lite-settings-prefix') as HTMLTextAreaElement;
     const purposeSelect = overlay.querySelector('#rpg-lite-settings-purpose') as HTMLSelectElement;
     const modelNameEl = overlay.querySelector('#rpg-lite-settings-model-name') as HTMLElement;
     const tempSlider = overlay.querySelector('#rpg-lite-settings-temperature') as HTMLInputElement;
@@ -2273,7 +2246,19 @@ export class RPGLiteView {
     const footerCloseBtn = overlay.querySelector('[data-role="close"]') as HTMLButtonElement;
 
     purposeSelect.value = session.narratorPurpose;
+    systemEl.value = session.systemPrompt;
+    prefixEl.value = session.prefixContext;
     this.updateRetriesDisplay();
+
+    systemEl.addEventListener('input', () => {
+      session.systemPrompt = systemEl.value;
+      void this.saveSession().then(async () => this.updateContextStats());
+    });
+
+    prefixEl.addEventListener('input', () => {
+      session.prefixContext = prefixEl.value;
+      void this.saveSession().then(async () => this.updateContextStats());
+    });
 
     purposeSelect.addEventListener('change', () => {
       session.narratorPurpose = purposeSelect.value as RPGLiteModelPurpose;
@@ -2535,7 +2520,6 @@ export class RPGLiteView {
             <span class="rpg-lite-version-indicator">${currentVersionIndex + 1}/${versionCount}</span>
             <button class="rpg-lite-btn rpg-lite-btn-icon" data-action="next-version" title="Next version" ${currentVersionIndex === versionCount - 1 ? 'disabled' : ''}>▶</button>
           ` : ''}
-          <button class="rpg-lite-btn rpg-lite-btn-sm" data-action="edit">Edit</button>
           ${msg.role === 'assistant' ? `<button class="rpg-lite-btn rpg-lite-btn-sm" data-action="retry"${retryDisabled}>Retry</button>` : ''}
           ${msg.role === 'assistant' ? `<button class="rpg-lite-btn rpg-lite-btn-icon" data-action="add-to-clipboard" title="Add to Clipboard">📋</button>` : ''}
         </div>
@@ -2575,7 +2559,18 @@ export class RPGLiteView {
       }
     }
 
-    (el.querySelector('[data-action="edit"]') as HTMLButtonElement).addEventListener('click', () => {
+    // Click anywhere in the message content to edit it — no separate Edit button.
+    // Ignore clicks that are part of a text selection (so reading/copying still
+    // works), clicks on interactive children (XML fold toggles stop propagation
+    // themselves) and links, and edits of the message that is currently streaming.
+    contentEl.style.cursor = 'text';
+    contentEl.title = 'Click to edit';
+    contentEl.addEventListener('click', (e) => {
+      if (e.button !== 0) return;
+      if (msg.id === this.streamingMessageId) return;
+      const selection = window.getSelection();
+      if (selection && selection.toString().length > 0) return;
+      if (e.target instanceof HTMLAnchorElement) return;
       this.startEditMessage(msg.id);
     });
     
