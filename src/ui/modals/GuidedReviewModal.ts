@@ -444,6 +444,23 @@ export class GuidedReviewModal extends SimpleModal {
         pageActivityService.on('visible', resumeStallTimer);
         pageActivityService.on('resumed', resumeStallTimer);
 
+        // Coalesce streaming renders. A single network read() can deliver a burst
+        // of buffered SSE lines (e.g. when a congested provider suddenly flushes
+        // its backlog); rendering each one synchronously (textContent write +
+        // reflow) for a whole burst starves the main thread so the Stop button and
+        // the stall watchdog cannot run. Text accumulation stays synchronous; the
+        // DOM update is throttled to one animation frame so the event loop keeps
+        // breathing.
+        let pendingRenderHandle: number | null = null;
+        const scheduleStreamingRender = (): void => {
+            if (pendingRenderHandle !== null) return;
+            pendingRenderHandle = requestAnimationFrame(() => {
+                pendingRenderHandle = null;
+                bubble.textContent = response;
+                this.scrollMessagesToBottom();
+            });
+        };
+
         armStallTimer();
         try {
             await this.openRouterClient.streamingChat(this.purpose, conversation, {
@@ -453,12 +470,17 @@ export class GuidedReviewModal extends SimpleModal {
                 onChunk: (chunk: string) => {
                     armStallTimer();
                     response += chunk;
-                    bubble.textContent = response;
-                    this.scrollMessagesToBottom();
+                    scheduleStreamingRender();
                 },
                 onComplete: (fullContent: string) => {
                     clearStallTimer();
                     response = fullContent;
+                    if (pendingRenderHandle !== null) {
+                        cancelAnimationFrame(pendingRenderHandle);
+                        pendingRenderHandle = null;
+                    }
+                    bubble.textContent = response;
+                    this.scrollMessagesToBottom();
                 },
                 onError: (error: Error) => {
                     clearStallTimer();
@@ -471,6 +493,10 @@ export class GuidedReviewModal extends SimpleModal {
             }
             throw error instanceof Error ? error : new Error('Streaming failed.');
         } finally {
+            if (pendingRenderHandle !== null) {
+                cancelAnimationFrame(pendingRenderHandle);
+                pendingRenderHandle = null;
+            }
             clearStallTimer();
             pageActivityService.off('hidden', suspendStallTimer);
             pageActivityService.off('frozen', suspendStallTimer);

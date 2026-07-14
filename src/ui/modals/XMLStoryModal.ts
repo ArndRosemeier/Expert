@@ -2269,6 +2269,30 @@ export class XMLStoryModal extends SimpleModal {
         pageActivityService.on('visible', resumeStallTimer);
         pageActivityService.on('resumed', resumeStallTimer);
 
+        // Coalesce streaming renders. A single network read() can deliver a burst
+        // of buffered SSE lines (e.g. when a congested provider suddenly flushes
+        // its backlog), and every chunk re-renders the FULL accumulated response
+        // (markdown parse + innerHTML + reflow = O(n) each, O(n^2) total). Doing
+        // that synchronously for a whole burst starves the main thread so the Stop
+        // button and the stall watchdog cannot run. Accumulating text stays
+        // synchronous; the expensive render is throttled to one animation frame so
+        // the event loop keeps breathing.
+        let pendingRenderHandle: number | null = null;
+        const scheduleStreamingRender = (): void => {
+            if (pendingRenderHandle !== null) return;
+            pendingRenderHandle = requestAnimationFrame(() => {
+                pendingRenderHandle = null;
+                this.updateStreamingMessage(placeholderMessage, response);
+            });
+        };
+        const flushStreamingRender = (): void => {
+            if (pendingRenderHandle !== null) {
+                cancelAnimationFrame(pendingRenderHandle);
+                pendingRenderHandle = null;
+            }
+            this.updateStreamingMessage(placeholderMessage, response);
+        };
+
         armStallTimer();
         try {
             await this.openRouterClient.streamingChat(modelPurpose, conversation, {
@@ -2278,14 +2302,16 @@ export class XMLStoryModal extends SimpleModal {
                 onChunk: (chunk: string) => {
                     armStallTimer();
                     response += chunk;
-                    this.updateStreamingMessage(placeholderMessage, response);
+                    scheduleStreamingRender();
                 },
                 onComplete: () => {
                     clearStallTimer();
+                    flushStreamingRender();
                     this.finalizeStreamingMessage(placeholderMessage);
                 },
                 onError: (error: Error) => {
                     clearStallTimer();
+                    flushStreamingRender();
                     this.finalizeStreamingMessage(placeholderMessage);
                     throw error;
                 }
@@ -2297,6 +2323,10 @@ export class XMLStoryModal extends SimpleModal {
             }
             throw error instanceof Error ? error : new Error('Streaming failed.');
         } finally {
+            if (pendingRenderHandle !== null) {
+                cancelAnimationFrame(pendingRenderHandle);
+                pendingRenderHandle = null;
+            }
             clearStallTimer();
             pageActivityService.off('hidden', suspendStallTimer);
             pageActivityService.off('frozen', suspendStallTimer);
