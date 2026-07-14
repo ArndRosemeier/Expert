@@ -583,6 +583,13 @@ export class UniversalTextEditor {
         // Remove existing overlay
         this.hideSelectionOverlay();
 
+        // Preserve the mapped text selection before an overlay button receives focus.
+        // Clicking a button can clear the browser Selection before its click handler runs.
+        const selection = this.enhancedEditor.getSelection();
+        if (selection === null) {
+            throw new Error('Could not map the selected editor text to character positions.');
+        }
+
         // Create overlay container
         this.selectionOverlay = document.createElement('div');
         this.selectionOverlay.className = 'selection-overlay';
@@ -688,13 +695,13 @@ export class UniversalTextEditor {
         sentenceBtn.addEventListener('click', (e) => {
             e.preventDefault();
             e.stopPropagation();
-            this.highlightSelectionWithMode('sentences');
+            this.highlightSelectionWithMode('sentences', selection);
         });
 
         paragraphBtn.addEventListener('click', (e) => {
             e.preventDefault();
             e.stopPropagation();
-            this.highlightSelectionWithMode('paragraphs');
+            this.highlightSelectionWithMode('paragraphs', selection);
         });
     }
 
@@ -864,11 +871,12 @@ export class UniversalTextEditor {
     /**
      * Highlight selection with specific mode
      */
-    private highlightSelectionWithMode(mode: 'sentences' | 'paragraphs'): void {
-        const selection = this.getSelection();
+    private highlightSelectionWithMode(
+        mode: 'sentences' | 'paragraphs',
+        selection: { startPos: number; endPos: number; text: string }
+    ): void {
         if (!selection.text.trim()) {
-            this.hideSelectionOverlay();
-            return;
+            throw new Error('The preserved editor selection contains no text.');
         }
 
         const text = this.enhancedEditor.getText();

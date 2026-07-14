@@ -12,6 +12,7 @@
 /* AI Replacement Highlight */
 .highlight-ai-replacement {
     background-color: #d4edda;
+    color: #1a1a1a;
     border-radius: 2px;
     padding: 1px 2px;
 }
@@ -19,6 +20,7 @@
 /* AI Preview Highlight (shows what will be processed) */
 .highlight-ai-preview {
     background-color: #cce5ff;
+    color: #1a1a1a;
     border: 1px dashed #007cba;
     border-radius: 2px;
     padding: 1px 2px;
@@ -33,24 +35,28 @@
 /* Multiple highlight colors for different types */
 .highlight-more-details {
     background-color: #cce5ff;
+    color: #1a1a1a;
     border-radius: 2px;
     padding: 1px 2px;
 }
 
 .highlight-simplify {
     background-color: #fff3cd;
+    color: #1a1a1a;
     border-radius: 2px;
     padding: 1px 2px;
 }
 
 .highlight-improve-clarity {
     background-color: #f8d7da;
+    color: #1a1a1a;
     border-radius: 2px;
     padding: 1px 2px;
 }
 
 .highlight-add-examples {
     background-color: #e2e3e5;
+    color: #1a1a1a;
     border-radius: 2px;
     padding: 1px 2px;
 }
@@ -58,6 +64,7 @@
 /* Find Result Highlight */
 .highlight-find-result {
     background-color: #ffeb3b;
+    color: #1a1a1a;
     border: 2px solid #f57f17;
     border-radius: 2px;
     padding: 1px 2px;
@@ -74,6 +81,7 @@
 /* Current Find Result (more prominent) */
 .highlight-find-current {
     background-color: #ff9800;
+    color: #1a1a1a;
     border: 2px solid #e65100;
     border-radius: 2px;
     padding: 1px 2px;

@@ -6,6 +6,7 @@ import { createPromptExpansionService } from '../../services/PromptExpansionServ
 import { SettingsManager } from '../../SettingsManager';
 import { getPromptText } from '../../PromptManager';
 import * as state from '../../state';
+import { UniversalTextEditor } from '../../ui/components/UniversalTextEditor';
 import {
   RPGLiteActionButton,
   RPGLiteChatMessage,
@@ -235,6 +236,7 @@ export class RPGLiteView {
   private currentStreamingAbortRequested = false;
   private streamingMessageId: string | null = null;
   private editingPresetId: string | null = null;
+  private messageEditAbortController: AbortController | null = null;
   private promptHistory: string[] = [];
   private prefixContextHistory: string[] = [];
 
@@ -1974,6 +1976,9 @@ export class RPGLiteView {
 
   private renderConversation(): void {
     if (!this.currentSession) throw new Error('No current session.');
+
+    this.messageEditAbortController?.abort();
+    this.messageEditAbortController = null;
     
     // Trace if called during streaming (this would explain the issue!)
     if (this.isStreaming) {
@@ -2653,14 +2658,41 @@ export class RPGLiteView {
     const msgEl = messagesEl.querySelector(`[data-message-id="${messageId}"]`) as HTMLElement;
     const contentEl = msgEl.querySelector('[data-role="content"]') as HTMLElement;
 
-    const textarea = document.createElement('textarea');
-    textarea.className = 'rpg-lite-textarea';
-    textarea.value = msg.content;
+    const editorContainer = document.createElement('div');
+    editorContainer.className = 'rpg-lite-message-editor';
     
-    // Set height based on content (approximate: 1.5rem per line, min 10rem, max 40rem)
+    // Size the enhanced editor from the message's line count.
     const lineCount = msg.content.split('\n').length;
     const estimatedHeight = Math.max(10, Math.min(40, lineCount * 1.5 + 2));
-    textarea.style.minHeight = `${estimatedHeight}rem`;
+    editorContainer.style.minHeight = `${estimatedHeight}rem`;
+    editorContainer.style.maxHeight = '70vh';
+
+    contentEl.replaceWith(editorContainer);
+    const updateEditedContent = (editedContent: string): void => {
+      msg.content = editedContent;
+      msg.editedAt = now();
+
+      if (msg.versions && msg.versions.length > 0) {
+        const activeIndex = msg.activeVersionIndex ?? 0;
+        const activeVersion = msg.versions[activeIndex];
+        if (!activeVersion) throw new Error(`Active message version not found: ${activeIndex}`);
+        activeVersion.content = editedContent;
+      }
+
+      this.invalidateMilestonesFrom(editIndex);
+    };
+
+    const editor = new UniversalTextEditor(editorContainer, {
+      mode: 'enhanced',
+      className: 'rpg-lite-textarea',
+      autoResize: false
+    }, {
+      onTextChange: (editedContent) => {
+        updateEditedContent(editedContent);
+        void this.saveSession();
+      }
+    });
+    editor.setText(msg.content);
 
     const controls = document.createElement('div');
     controls.style.display = 'flex';
@@ -2671,14 +2703,28 @@ export class RPGLiteView {
     controls.style.alignItems = 'center';
 
     const hint = document.createElement('span');
-    hint.textContent = 'Click outside to save, or';
-
-    const cancelBtn = document.createElement('button');
-    cancelBtn.className = 'rpg-lite-btn rpg-lite-btn-sm';
-    cancelBtn.textContent = 'Cancel';
+    hint.textContent = 'Select text to use the AI sentence or paragraph controls.';
 
     controls.appendChild(hint);
-    controls.appendChild(cancelBtn);
+
+    editorContainer.insertAdjacentElement('afterend', controls);
+    editor.focus();
+
+    this.messageEditAbortController?.abort();
+    const editAbortController = new AbortController();
+    this.messageEditAbortController = editAbortController;
+    document.addEventListener('pointerdown', (event) => {
+      const target = event.target;
+      if (!(target instanceof Node)) throw new Error('Pointer event target is not a DOM node.');
+      if (editorContainer.contains(target) || controls.contains(target)) return;
+      if (target instanceof Element && target.closest('.selection-overlay, .modal-overlay')) return;
+      this.renderConversation();
+    }, { signal: editAbortController.signal });
+
+    const saveEdit = async (): Promise<void> => {
+      updateEditedContent(editor.getText());
+      await this.saveSession();
+    };
 
     // For user messages, check if there's a next assistant message to retry
     if (msg.role === 'user') {
@@ -2694,22 +2740,7 @@ export class RPGLiteView {
         retryBtn.style.marginLeft = 'auto';
         
         retryBtn.addEventListener('click', () => {
-          cancelled = true;
-          msg.content = textarea.value;
-          msg.editedAt = now();
-          
-          // Also update the active version if versions exist
-          if (msg.versions && msg.versions.length > 0) {
-            const activeIndex = msg.activeVersionIndex ?? 0;
-            if (msg.versions[activeIndex]) {
-              msg.versions[activeIndex].content = textarea.value;
-            }
-          }
-
-          // The edited message's content changed, so drop summaries covering it or later.
-          this.invalidateMilestonesFrom(editIndex);
-
-          void this.saveSession().then(() => {
+          void saveEdit().then(() => {
             this.renderConversation();
             void this.retryFromAssistant(nextMsg.id);
           });
@@ -2719,43 +2750,9 @@ export class RPGLiteView {
       }
     }
 
-    contentEl.replaceWith(textarea);
-    textarea.insertAdjacentElement('afterend', controls);
-    textarea.focus();
-
-    let cancelled = false;
-
-    cancelBtn.addEventListener('click', () => {
-      cancelled = true;
-      this.renderConversation();
-    });
-
-    textarea.addEventListener('blur', () => {
-      // Small delay to allow button clicks to register
-      setTimeout(() => {
-        if (!cancelled && document.activeElement !== textarea) {
-          msg.content = textarea.value;
-          msg.editedAt = now();
-          
-          // Also update the active version if versions exist
-          if (msg.versions && msg.versions.length > 0) {
-            const activeIndex = msg.activeVersionIndex ?? 0;
-            if (msg.versions[activeIndex]) {
-              msg.versions[activeIndex].content = textarea.value;
-            }
-          }
-
-          // The edited message's content changed, so drop summaries covering it or later.
-          this.invalidateMilestonesFrom(editIndex);
-
-          void this.saveSession().then(() => { this.renderConversation(); });
-        }
-      }, 150);
-    });
-
-    textarea.addEventListener('keydown', (e) => {
+    editor.addEventListener('keydown', (e) => {
+      if (!(e instanceof KeyboardEvent)) throw new Error('Expected a keyboard event.');
       if (e.key === 'Escape') {
-        cancelled = true;
         this.renderConversation();
       }
     });
