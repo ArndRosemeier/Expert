@@ -312,6 +312,31 @@
   overflow-y: auto;
 }
 
+/* Rendered view of the clipboard shown when it contains SVG markup. */
+.rpg-lite-clipboard-display {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  font-size: 0.75rem;
+  line-height: 1.4;
+  background: rgba(255, 255, 255, 0.06);
+  border: 0.0625rem solid rgba(255, 255, 255, 0.18);
+  border-radius: 0.5rem;
+  padding: 0.5rem 0.65rem;
+  cursor: pointer;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+/* Fill the clipboard width; LLMs often emit SVGs with small fixed width/height
+   attributes, and width:auto would otherwise leave them tiny in the sidebar. */
+.rpg-lite-clipboard-display .rpg-lite-inline-svg {
+  width: 100%;
+  height: auto;
+  max-height: none;
+  margin: 0;
+}
+
 .rpg-lite-action-buttons-list {
   display: flex;
   flex-direction: column;
@@ -744,6 +769,21 @@
 
 .rpg-lite-message-image:hover {
   border-color: rgba(255, 255, 255, 0.3);
+}
+
+/* SVG the model wrote inline in its text reply, rendered between text blocks. */
+.rpg-lite-inline-svg {
+  width: auto;
+  max-width: 100%;
+  max-height: 28rem;
+  margin: 0.6rem 0;
+  background: rgba(255, 255, 255, 0.04);
+  cursor: default;
+}
+
+/* Text runs surrounding an inline SVG keep normal spacing. */
+.rpg-lite-content-text {
+  white-space: pre-wrap;
 }
 
 .rpg-lite-message-info {

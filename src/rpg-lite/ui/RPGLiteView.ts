@@ -7,6 +7,7 @@ import { SettingsManager } from '../../SettingsManager';
 import { getPromptText } from '../../PromptManager';
 import * as state from '../../state';
 import { UniversalTextEditor } from '../../ui/components/UniversalTextEditor';
+import { splitSvgSegments, contentHasSvg, svgToDataUrl } from './svg-content';
 import {
   RPGLiteActionButton,
   RPGLiteChatMessage,
@@ -236,6 +237,7 @@ export class RPGLiteView {
   private currentStreamingAbortRequested = false;
   private streamingMessageId: string | null = null;
   private editingPresetId: string | null = null;
+  private clipboardEditing = false;
   private messageEditAbortController: AbortController | null = null;
   private promptHistory: string[] = [];
   private prefixContextHistory: string[] = [];
@@ -1652,6 +1654,7 @@ export class RPGLiteView {
           <div class="rpg-lite-right-sidebar-bottom">
             <div class="rpg-lite-section-title">Clipboard</div>
             <textarea id="rpg-lite-clipboard" class="rpg-lite-clipboard-textarea" placeholder="Add GM answers here for reference...">${session.clipboard ?? ''}</textarea>
+            <div id="rpg-lite-clipboard-display" class="rpg-lite-clipboard-display" title="Click to edit" style="display: none;"></div>
           </div>
         </div>
       </div>
@@ -1693,6 +1696,19 @@ export class RPGLiteView {
       session.clipboard = clipboardEl.value;
       void this.saveSession();
     });
+    // Leaving the edit area re-renders it as a picture when it contains SVG,
+    // mirroring how chat messages return to their rendered form after editing.
+    clipboardEl.addEventListener('blur', () => {
+      this.clipboardEditing = false;
+      this.updateClipboardView();
+    });
+    // Clicking the rendered SVG switches back to the editable text area.
+    const clipboardDisplayEl = requireHTMLElement(this.container, '#rpg-lite-clipboard-display');
+    clipboardDisplayEl.addEventListener('click', () => {
+      this.enterClipboardEditMode();
+    });
+    this.clipboardEditing = false;
+    this.updateClipboardView();
 
     const sendBtn = this.container.querySelector('#rpg-lite-send') as HTMLButtonElement;
     const abortBtn = this.container.querySelector('#rpg-lite-abort') as HTMLButtonElement;
@@ -2363,6 +2379,37 @@ export class RPGLiteView {
     return hasBoxDrawing || hasRepeatedGraphicChars || hasAsciiArtStructure || hasMultipleEmojis;
   }
 
+  /**
+   * Renders a completed assistant message into `contentEl`, turning any
+   * `<svg>…</svg>` blocks the model wrote inline into rendered graphics while
+   * keeping the surrounding text highlighted. This lets models that cannot
+   * generate images still produce a visual representation as SVG markup.
+   */
+  private renderAssistantContent(contentEl: HTMLElement, content: string): void {
+    // Fast path: no SVG present — keep the original highlight-in-place behaviour.
+    if (!contentHasSvg(content)) {
+      contentEl.innerHTML = this.highlightContent(content);
+      this.attachXmlFoldHandlers(contentEl);
+      return;
+    }
+
+    for (const segment of splitSvgSegments(content)) {
+      if (segment.kind === 'text') {
+        const textEl = document.createElement('div');
+        textEl.className = 'rpg-lite-content-text';
+        textEl.innerHTML = this.highlightContent(segment.text);
+        this.attachXmlFoldHandlers(textEl);
+        contentEl.appendChild(textEl);
+      } else {
+        const img = document.createElement('img');
+        img.src = svgToDataUrl(segment.svg);
+        img.className = 'rpg-lite-message-image rpg-lite-inline-svg';
+        img.alt = 'Generated SVG graphic';
+        contentEl.appendChild(img);
+      }
+    }
+  }
+
   private highlightContent(content: string): string {
     // Escape HTML to prevent injection
     const escapeHtml = (text: string): string => {
@@ -2545,9 +2592,7 @@ export class RPGLiteView {
     
     // Apply syntax highlighting for assistant messages (but not during streaming)
     if (msg.role === 'assistant' && msg.id !== this.streamingMessageId) {
-      contentEl.innerHTML = this.highlightContent(msg.content);
-      // Add click handlers for XML folding
-      this.attachXmlFoldHandlers(contentEl);
+      this.renderAssistantContent(contentEl, msg.content);
     } else {
       contentEl.textContent = msg.content;
     }
@@ -2632,19 +2677,54 @@ export class RPGLiteView {
 
   private addToClipboard(content: string): void {
     if (!this.currentSession) throw new Error('No current session.');
-    
-    const clipboardEl = queryHTMLTextAreaElement(this.container, '#rpg-lite-clipboard');
-    if (!clipboardEl) return;
-    
+
+    const clipboardEl = requireHTMLTextAreaElement(this.container, '#rpg-lite-clipboard');
+
     // Append to clipboard with a separator if there's already content
     const separator = this.currentSession.clipboard?.trim() ? '\n\n---\n\n' : '';
     this.currentSession.clipboard = (this.currentSession.clipboard ?? '') + separator + content;
-    
+
     clipboardEl.value = this.currentSession.clipboard;
     void this.saveSession();
-    
+
+    // Changing the clipboard drops back to the edit area so the user sees the
+    // appended text; it re-renders to a picture on blur if it contains SVG.
+    this.enterClipboardEditMode();
+
     // Scroll to bottom of clipboard
     clipboardEl.scrollTop = clipboardEl.scrollHeight;
+  }
+
+  /**
+   * Switches the clipboard to its editable text area and focuses it. Used when
+   * the rendered SVG is clicked and when the clipboard content changes.
+   */
+  private enterClipboardEditMode(): void {
+    this.clipboardEditing = true;
+    this.updateClipboardView();
+    const clipboardEl = requireHTMLTextAreaElement(this.container, '#rpg-lite-clipboard');
+    clipboardEl.focus();
+  }
+
+  /**
+   * Chooses between the editable text area and a rendered SVG preview for the
+   * clipboard, mirroring the chat's click-to-edit behaviour: when the clipboard
+   * holds SVG markup and is not being edited, it is shown as a picture.
+   */
+  private updateClipboardView(): void {
+    const clipboardEl = requireHTMLTextAreaElement(this.container, '#rpg-lite-clipboard');
+    const displayEl = requireHTMLElement(this.container, '#rpg-lite-clipboard-display');
+    const content = this.currentSession?.clipboard ?? '';
+
+    if (!this.clipboardEditing && contentHasSvg(content)) {
+      displayEl.innerHTML = '';
+      this.renderAssistantContent(displayEl, content);
+      displayEl.style.display = '';
+      clipboardEl.style.display = 'none';
+    } else {
+      clipboardEl.style.display = '';
+      displayEl.style.display = 'none';
+    }
   }
 
   private startEditMessage(messageId: string): void {
