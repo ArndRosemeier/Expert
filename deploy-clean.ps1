@@ -231,6 +231,20 @@ try {
         Write-Host ""
         Write-Host "COMPLETE CLEAN DEPLOYMENT finished! Uploaded $uploaded/$totalFiles files." -ForegroundColor Green
         Write-Host "App should now work at: https://futuremagic.de/Expert/" -ForegroundColor Cyan
+
+        $registerScript = "C:\Projekte\Futuremagic\scripts\Register-FuturemagicApp.ps1"
+        if (Test-Path $registerScript) {
+            Write-Host ""
+            & $registerScript `
+                -Slug "Expert" `
+                -Title "Expert" `
+                -Path "/Expert/" `
+                -FtpPassword $FTP_PASSWORD `
+                -ManifestoLocalPath (Join-Path (Get-Location) "dist\futuremagic.json") `
+                -AppRemoteDir "/webseiten/Expert/"
+        } else {
+            Write-Host "[SKIP] Futuremagic registry helper not found: $registerScript" -ForegroundColor Yellow
+        }
         
     } else {
         throw "Build failed - no index.html found"
