@@ -121,6 +121,15 @@ export class SettingsModal extends BaseModal {
             classes: ['header-title-container']
         });
 
+        const titleRow = createElement('div', {
+            classes: ['header-title-row']
+        });
+
+        const logo = document.createElement('img');
+        logo.className = 'settings-header-logo';
+        logo.src = `${import.meta.env.BASE_URL}expert-logo-horizontal.png`;
+        logo.alt = 'Expert';
+
         const title = createElement('h2', {
             content: 'Settings'
         });
@@ -139,7 +148,9 @@ export class SettingsModal extends BaseModal {
             this.handleClose();
         });
 
-        titleContainer.appendChild(title);
+        titleRow.appendChild(logo);
+        titleRow.appendChild(title);
+        titleContainer.appendChild(titleRow);
         titleContainer.appendChild(versionInfo);
         header.appendChild(titleContainer);
         header.appendChild(closeButton);
@@ -1019,6 +1030,24 @@ export class SettingsModal extends BaseModal {
                     display: flex;
                     flex-direction: column;
                     gap: 0.25rem;
+                    min-width: 0;
+                }
+
+                .settings-modal-container .header-title-row {
+                    display: flex;
+                    flex-direction: row;
+                    align-items: center;
+                    gap: 0.85rem;
+                    min-width: 0;
+                }
+
+                .settings-modal-container .settings-header-logo {
+                    display: block;
+                    height: 3.25rem;
+                    width: auto;
+                    max-width: 100%;
+                    object-fit: contain;
+                    flex-shrink: 0;
                 }
                 
                 .settings-modal-container .modal-header h2 {
