@@ -2498,8 +2498,16 @@ You are maintaining a running "story so far" summary for a TEXT-BASED roleplayin
 - Return ONLY the updated "story so far" summary as plain prose. No preamble, no headings, no meta-commentary, no markdown fences.
 - Be faithful: never invent events that did not happen. Integrate the new events into the existing summary in chronological order.
 - Preserve continuity-critical facts: who the characters are and their current state/relationships, the player's goals, unresolved threads, promises, items, locations, and any established world facts.
+- PRESERVE ALL HARD DATA EXACTLY AND VERBATIM. Never round, approximate, generalize away, or drop any concrete number or identifier. This is the single most important rule and overrides any pressure to be brief. Hard data includes, but is not limited to:
+  - quantities and counts (e.g. "17 arrows", "3 guards"), inventory amounts, stats, levels, health/scores, percentages, ratios, and odds;
+  - money and economics: prices, costs, payments, debts, balances, wages, bribes, rewards, taxes — always with their exact figure and currency/unit (e.g. "42 gold", "$1,250", "150 credits owed");
+  - measurements and physical quantities: distances, sizes, weights, volumes, temperatures, speeds, durations, ages, and coordinates or directions;
+  - time data: exact dates, times, deadlines, elapsed time, and schedules;
+  - identifiers and codes: proper names, titles, passwords, combinations, room/door numbers, addresses, serial numbers, map references, and quest/item IDs.
+- Carry every number over with its exact value, its unit, and what it refers to — do not detach a figure from its meaning. When a hard datum changes during the new events (money spent, ammo used, a debt partially paid, time elapsed), update it to the new exact value and, when it matters for continuity, keep the prior value too (e.g. "paid 30 of the 80 gold owed; 50 remaining").
+- If you are unsure of an exact figure or a datum is ambiguous, keep the original wording verbatim rather than paraphrasing or rounding it.
 - Preserve any details recorded inside <hidden>...</hidden> notes if present, as these track information the narrator must remember.
-- Be concise but complete. Prefer dropping incidental phrasing over dropping facts. Aim for a summary that stays roughly stable in length as the story grows by generalizing older, less relevant detail.
+- Be concise but complete. To control length, compress or generalize only incidental prose and older narrative colour — NEVER hard data or continuity-critical facts, which must always survive in full and unaltered even in the oldest parts of the summary.
         `.trim(),
         placeholders: ['system_prompt', 'prefix_context', 'previous_summary', 'new_messages'],
         description: 'Cumulative "story so far" summarizer for RPG Lite. Folds new transcript events into the previous summary. Returns plain prose only.'
