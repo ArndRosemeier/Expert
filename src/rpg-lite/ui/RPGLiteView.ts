@@ -2043,7 +2043,7 @@ export class RPGLiteView {
     el.title =
       `Summary checkpoint: the earlier ${milestone.coveredCount} messages are condensed into a ` +
       `"story so far" summary in the model's context. Messages below this line are sent verbatim. ` +
-      `Click to view the summary.`;
+      `Click to view, edit, or regenerate the summary.`;
     el.style.display = 'flex';
     el.style.alignItems = 'center';
     el.style.gap = '0.75rem';
@@ -2055,7 +2055,7 @@ export class RPGLiteView {
     el.innerHTML =
       `<span style="flex:1 1 auto; height:0; border-top:1px dashed currentColor; opacity:.5;"></span>` +
       `<span style="flex:0 0 auto; font-size:0.78rem; white-space:nowrap; padding:0.15rem 0.6rem; border:1px solid currentColor; border-radius:1rem;">` +
-      `📜 Summary checkpoint · earlier ${milestone.coveredCount} messages condensed · 🔍 view` +
+      `📜 Summary checkpoint · earlier ${milestone.coveredCount} messages condensed · ✏️ edit` +
       `</span>` +
       `<span style="flex:1 1 auto; height:0; border-top:1px dashed currentColor; opacity:.5;"></span>`;
     el.addEventListener('click', () => { this.showMilestoneSummaryModal(milestone); });
@@ -2063,11 +2063,13 @@ export class RPGLiteView {
   }
 
   /**
-   * Read-only modal that displays a milestone's "story so far" summary plus its
-   * generation metadata. Purely a debugging/inspection aid so summarization
-   * problems (drift, omissions, hallucinations) can be spotted directly.
+   * Modal for the active milestone's "story so far" summary. The text is editable
+   * (edits persist live) and can be regenerated from the covered conversation
+   * using the session's current summary mode (lean vs full).
    */
   private showMilestoneSummaryModal(milestone: RPGLiteMilestone): void {
+    if (!this.currentSession) throw new Error('No current session.');
+
     const overlay = document.createElement('div');
     overlay.className = 'rpg-lite-action-editor-overlay';
     overlay.innerHTML = `
@@ -2079,13 +2081,19 @@ export class RPGLiteView {
         <div class="rpg-lite-action-editor-body">
           <div style="font-size:0.82rem; opacity:0.75; line-height:1.5;" data-role="meta"></div>
           <div class="rpg-lite-action-editor-field">
-            <label>Summary text (read-only)</label>
-            <textarea class="rpg-lite-textarea rpg-lite-action-editor-textarea" readonly data-role="summary"></textarea>
+            <label>Summary text</label>
+            <textarea class="rpg-lite-textarea rpg-lite-action-editor-textarea" data-role="summary"></textarea>
+            <div style="font-size:0.78rem; opacity:0.65; line-height:1.4;">
+              Edits save automatically and are used as the model's "story so far" context.
+              Regenerate rebuilds this checkpoint from the covered messages
+              (${this.currentSession.summaryMode === 'full' ? 'full re-summary from scratch' : 'lean fold from the previous checkpoint'}).
+            </div>
           </div>
         </div>
         <div class="rpg-lite-action-editor-footer">
+          <button class="rpg-lite-btn rpg-lite-btn-secondary" data-role="regenerate" title="Rebuild this summary from the covered messages">↻ Regenerate</button>
           <button class="rpg-lite-btn rpg-lite-btn-secondary" data-role="copy">Copy</button>
-          <button class="rpg-lite-btn rpg-lite-btn-primary" data-role="close">Close</button>
+          <button class="rpg-lite-btn rpg-lite-btn-primary" data-role="close">Done</button>
         </div>
       </div>
     `;
@@ -2096,34 +2104,126 @@ export class RPGLiteView {
     const headerCloseBtn = overlay.querySelector('.rpg-lite-action-editor-close') as HTMLButtonElement;
     const footerCloseBtn = overlay.querySelector('[data-role="close"]') as HTMLButtonElement;
     const copyBtn = overlay.querySelector('[data-role="copy"]') as HTMLButtonElement;
+    const regenerateBtn = overlay.querySelector('[data-role="regenerate"]') as HTMLButtonElement;
 
     summaryEl.value = milestone.summary;
 
-    const metaParts = [
-      `Covers first ${milestone.coveredCount} messages`,
-      `created ${new Date(milestone.createdAt).toLocaleString()}`
-    ];
-    const gen = milestone.generation;
-    if (gen) {
-      metaParts.push(`model ${gen.model}`);
-      metaParts.push(`${gen.completionChars.toLocaleString()} chars`);
-      if (typeof gen.totalCostUsd === 'number') {
-        metaParts.push(`$${gen.totalCostUsd.toFixed(4)}`);
+    const refreshMeta = (): void => {
+      const metaParts = [
+        `Covers first ${milestone.coveredCount} messages`,
+        `updated ${new Date(milestone.createdAt).toLocaleString()}`
+      ];
+      const gen = milestone.generation;
+      if (gen) {
+        metaParts.push(`model ${gen.model}`);
+        metaParts.push(`${gen.completionChars.toLocaleString()} chars`);
+        if (typeof gen.totalCostUsd === 'number') {
+          metaParts.push(`$${gen.totalCostUsd.toFixed(4)}`);
+        }
       }
-    }
-    metaEl.textContent = metaParts.join(' · ');
+      metaEl.textContent = metaParts.join(' · ');
+    };
+    refreshMeta();
+
+    const setBusy = (busy: boolean, statusText?: string): void => {
+      summaryEl.disabled = busy;
+      regenerateBtn.disabled = busy;
+      copyBtn.disabled = busy;
+      footerCloseBtn.disabled = busy;
+      headerCloseBtn.disabled = busy;
+      if (busy) {
+        regenerateBtn.textContent = '↻ Regenerating…';
+        if (statusText) {
+          metaEl.textContent = statusText;
+        }
+      } else {
+        regenerateBtn.textContent = '↻ Regenerate';
+        refreshMeta();
+      }
+    };
+
+    summaryEl.addEventListener('input', () => {
+      milestone.summary = summaryEl.value;
+      void this.saveSession();
+    });
+
+    regenerateBtn.addEventListener('click', () => {
+      void (async () => {
+        setBusy(true, 'Regenerating summary from the covered messages…');
+        try {
+          await this.regenerateMilestoneSummary(milestone);
+          summaryEl.value = milestone.summary;
+        } catch (error) {
+          console.error('Failed to regenerate milestone summary:', error);
+          alert('Failed to regenerate summary: ' + (error instanceof Error ? error.message : String(error)));
+        } finally {
+          setBusy(false);
+        }
+      })();
+    });
 
     const cleanup = () => { overlay.remove(); };
     headerCloseBtn.addEventListener('click', cleanup);
     footerCloseBtn.addEventListener('click', cleanup);
     overlay.addEventListener('click', (e) => {
-      if (e.target === overlay) cleanup();
+      if (e.target === overlay && !regenerateBtn.disabled) cleanup();
     });
     copyBtn.addEventListener('click', () => {
-      void navigator.clipboard.writeText(milestone.summary);
+      void navigator.clipboard.writeText(summaryEl.value);
       copyBtn.textContent = 'Copied';
       setTimeout(() => { copyBtn.textContent = 'Copy'; }, 1200);
     });
+  }
+
+  /**
+   * Rebuild an existing milestone's summary in place from the conversation it
+   * covers, using the session's current summary mode (lean folds from the prior
+   * checkpoint; full re-summarizes the whole covered prefix from scratch).
+   */
+  private async regenerateMilestoneSummary(milestone: RPGLiteMilestone): Promise<void> {
+    if (!this.currentSession) throw new Error('No current session.');
+    const session = this.currentSession;
+    const mode = session.summaryMode ?? 'off';
+    if (mode === 'off') {
+      throw new Error('Summaries are off for this session — turn them on in Settings before regenerating.');
+    }
+
+    const completed = session.conversation.filter(m => m.content.trim().length > 0);
+    if (milestone.coveredCount <= 0 || milestone.coveredCount > completed.length) {
+      throw new Error(
+        `Milestone covers ${milestone.coveredCount} messages, but the session only has ${completed.length} completed messages.`
+      );
+    }
+
+    const previous = (session.milestones ?? [])
+      .filter(m => m.id !== milestone.id && m.coveredCount < milestone.coveredCount)
+      .sort((a, b) => b.coveredCount - a.coveredCount)[0] ?? null;
+
+    const previousSummary = mode === 'full' ? '' : (previous?.summary ?? '');
+    const sliceStart = mode === 'full' ? 0 : (previous?.coveredCount ?? 0);
+    const newMessages = completed.slice(sliceStart, milestone.coveredCount);
+    if (newMessages.length === 0) {
+      throw new Error('No messages available to regenerate this summary from.');
+    }
+
+    const rebuilt = await this.summaryService.buildMilestone(
+      session,
+      previousSummary,
+      newMessages,
+      milestone.coveredCount
+    );
+
+    // Mutate in place so any open modal / marker still holds the live object.
+    milestone.summary = rebuilt.summary;
+    milestone.createdAt = rebuilt.createdAt;
+    if (rebuilt.generation) {
+      milestone.generation = rebuilt.generation;
+    } else {
+      delete milestone.generation;
+    }
+
+    await this.saveSession();
+    void this.updateContextStats();
   }
 
   /** Human-readable description of what each summary mode does, shown in settings. */
