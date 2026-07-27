@@ -722,7 +722,7 @@ export class ExportModal extends BaseModal {
                 hierarchyTitles,
                 includeHtmlToc: this.htmlTocCheckbox ? this.htmlTocCheckbox.checked : false,
                 author: this.epubAuthorInput ? this.epubAuthorInput.value : 'Expert Application'
-            });
+            }, this.projectManager);
 
             // Copy to clipboard
             if (result.content instanceof Blob) {

@@ -33,6 +33,15 @@ interface ContentNode {
     isLeaf: boolean;
 }
 
+/**
+ * One ancestor on the path from root toward a leaf, carrying the real document
+ * level so hierarchyTitles checkboxes (indexed by template level) map correctly.
+ */
+interface ParentPathEntry {
+    title: string;
+    level: number;
+}
+
 interface RootNodeReimportExport {
     title: string;
     content: string;
@@ -636,23 +645,23 @@ export class ExportService implements IExportService {
             let currentLevel = tocNodes;
             let currentKey = '';
             
-            // Add parent hierarchy levels
-            parentPath.forEach((title, level) => {
-                const includeTitle = this.shouldIncludeTitle(level, config);
+            // Add parent hierarchy levels (use real document levels, not array indices)
+            for (const entry of parentPath) {
+                const includeTitle = this.shouldIncludeTitle(entry.level, config);
                 
                 if (includeTitle) {
-                    currentKey += `${level}:${title}|`;
+                    currentKey += `${entry.level}:${entry.title}|`;
                     
                     // Check if this node already exists at this level
                     let existingNode = nodeMap.get(currentKey);
                     
                     if (!existingNode) {
                         // Create new parent node
-                        const titleId = this.generateHierarchyTitleId(title, level);
-                        const indent = level > 6 ? 6 : level + 1;
+                        const titleId = this.generateHierarchyTitleId(entry.title, entry.level);
+                        const indent = entry.level > 6 ? 6 : entry.level + 1;
                         
                         existingNode = {
-                            title,
+                            title: entry.title,
                             href: `#${titleId}`,
                             level: indent,
                             children: []
@@ -664,7 +673,7 @@ export class ExportService implements IExportService {
                     
                     currentLevel = existingNode.children;
                 }
-            });
+            }
             
             // Add leaf nodes to the current level
             for (const node of nodeGroup) {
@@ -772,24 +781,24 @@ export class ExportService implements IExportService {
             let currentLevel = contentNodes;
             let currentKey = '';
             
-            // Add parent hierarchy levels
-            parentPath.forEach((title, level) => {
-                const includeTitle = this.shouldIncludeTitle(level, config);
+            // Add parent hierarchy levels (use real document levels, not array indices)
+            for (const entry of parentPath) {
+                const includeTitle = this.shouldIncludeTitle(entry.level, config);
                 
                 if (includeTitle) {
-                    currentKey += `${level}:${title}|`;
+                    currentKey += `${entry.level}:${entry.title}|`;
                     
                     // Check if this node already exists at this level
                     let existingNode = nodeMap.get(currentKey);
                     
                     if (!existingNode) {
                         // Create new parent node
-                        const titleId = this.generateHierarchyTitleId(title, level);
+                        const titleId = this.generateHierarchyTitleId(entry.title, entry.level);
                         
                         existingNode = {
-                            title,
+                            title: entry.title,
                             titleId,
-                            level,
+                            level: entry.level,
                             content: '',
                             children: [],
                             isLeaf: false
@@ -801,7 +810,7 @@ export class ExportService implements IExportService {
                     
                     currentLevel = existingNode.children;
                 }
-            });
+            }
             
             // Add leaf nodes to the current level
             for (const node of nodeGroup) {
@@ -935,17 +944,12 @@ export class ExportService implements IExportService {
                 plain += grandchildContent.plain;
             }
             
-        } else if (isEmptyParent) {
-            // Empty parent with multiple children - skip parent title, render children normally
-            for (const child of node.children) {
-                const childContent = this.renderContentNode(child, config);
-                html += childContent.html;
-                markdown += childContent.markdown;
-                plain += childContent.plain;
-            }
-            
         } else {
-            // Normal rendering for nodes with content or leaf nodes
+            // Normal rendering for nodes with content, empty parents with multiple
+            // children, or leaf nodes. Empty parents keep their title (when the
+            // hierarchyTitles config included this level) so chapter/section headers
+            // appear above their children — the previous multi-child branch skipped
+            // those titles entirely, which made markdown/HTML exports look title-less.
             
             // Render the node title if it exists
             if (node.title) {
@@ -1002,19 +1006,19 @@ export class ExportService implements IExportService {
     /**
      * Groups nodes by their parent hierarchy path
      */
-    private groupNodesByParent(nodes: DocumentNode[], projectManager?: ProjectManager): Map<string[], DocumentNode[]> {
-        const groups = new Map<string[], DocumentNode[]>();
+    private groupNodesByParent(nodes: DocumentNode[], projectManager?: ProjectManager): Map<ParentPathEntry[], DocumentNode[]> {
+        const groups = new Map<ParentPathEntry[], DocumentNode[]>();
 
         for (const node of nodes) {
             const parentPath = this.getNodeParentPath(node, projectManager);
-            const pathKey = parentPath.join('|'); // Use string key for Map
+            const pathKey = parentPath.map(entry => `${entry.level}:${entry.title}`).join('|');
             
             // Find existing group with same path
             let existingGroup: DocumentNode[] | undefined;
-            let existingKey: string[] | undefined;
+            let existingKey: ParentPathEntry[] | undefined;
             
             for (const [key, group] of groups) {
-                if (key.join('|') === pathKey) {
+                if (key.map(entry => `${entry.level}:${entry.title}`).join('|') === pathKey) {
                     existingGroup = group;
                     existingKey = key;
                     break;
@@ -1032,33 +1036,37 @@ export class ExportService implements IExportService {
     }
 
     /**
-     * Gets the parent hierarchy path for a node by traversing up the actual parent chain
+     * Gets the parent hierarchy path for a node by traversing up the actual parent chain.
+     * Each entry carries the real document level so hierarchyTitles checkboxes map correctly
+     * (they are indexed by template/document level, not by path-array index).
+     * The project root is omitted — the export already uses it as the document title.
      */
-    private getNodeParentPath(node: DocumentNode, projectManager?: ProjectManager): string[] {
-        const path: string[] = [];
+    private getNodeParentPath(node: DocumentNode, projectManager?: ProjectManager): ParentPathEntry[] {
+        const path: ParentPathEntry[] = [];
         
         if (projectManager) {
             // Traverse up the parent chain to get actual parent titles
             let currentNodeId = node.parentId;
             while (currentNodeId) {
                 const currentNode = projectManager.findNodeById(currentNodeId);
-                if (currentNode && currentNode.parentId !== null) { // Don't include root node
-                    // Insert at the beginning to maintain correct hierarchy order (root -> leaf)
-                    path.unshift(currentNode.title);
-                    currentNodeId = currentNode.parentId;
-                } else {
+                if (!currentNode) {
                     break;
                 }
+                if (currentNode.parentId === null) {
+                    // Stop at the project root; do not include it as a parent heading.
+                    break;
+                }
+                path.unshift({ title: currentNode.title, level: currentNode.level });
+                currentNodeId = currentNode.parentId;
             }
         } else {
-            // Fallback to the old method if no project manager available
+            // Fallback when no project manager is available: generic titles from the template.
             if (node.level > 0) {
                 for (let i = 0; i < node.level; i++) {
                     const templateLevel = node.template[i];
                     if (templateLevel) {
-                        // Create a generic parent title based on template level
                         const levelName = templateLevel.replace(/\s+\d+$/, ''); // Remove numbers
-                        path.push(`${levelName} 1`); // Use consistent numbering for grouped export
+                        path.push({ title: `${levelName} 1`, level: i });
                     }
                 }
             }
