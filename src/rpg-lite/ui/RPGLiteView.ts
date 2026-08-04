@@ -2,12 +2,14 @@ import { OpenRouterClient, OpenRouterMessage } from '../../OpenRouterClient';
 import { StorageService } from '../../StorageService';
 import { RPGLitePromptSplitService } from '../services/RPGLitePromptSplitService';
 import { RPGLiteSummaryService } from '../services/RPGLiteSummaryService';
+import { RPGLiteTransferService } from '../services/RPGLiteTransferService';
 import { createPromptExpansionService } from '../../services/PromptExpansionService';
 import { SettingsManager } from '../../SettingsManager';
 import { getPromptText } from '../../PromptManager';
 import * as state from '../../state';
 import { UniversalTextEditor } from '../../ui/components/UniversalTextEditor';
 import { splitSvgSegments, contentHasSvg, svgToDataUrl } from './svg-content';
+import { RPGLiteTransferModal } from './RPGLiteTransferModal';
 import {
   RPGLiteActionButton,
   RPGLiteChatMessage,
@@ -243,12 +245,16 @@ export class RPGLiteView {
   private prefixContextHistory: string[] = [];
 
   private defaultNarratorPurpose: RPGLiteModelPurpose = 'creator';
+  private readonly transferService: RPGLiteTransferService;
+  private readonly transferModal: RPGLiteTransferModal;
 
   constructor(container: HTMLElement) {
     this.container = container;
     this.openRouterClient = OpenRouterClient.getInstance();
     this.promptSplitService = new RPGLitePromptSplitService(this.openRouterClient);
     this.summaryService = new RPGLiteSummaryService(this.openRouterClient);
+    this.transferService = new RPGLiteTransferService();
+    this.transferModal = new RPGLiteTransferModal();
   }
 
   /** Default number of new messages that must accumulate past the last milestone before a new one is generated. */
@@ -494,6 +500,8 @@ export class RPGLiteView {
               <option value="rater">Rater</option>
             </select>
           </label>
+          <button id="rpg-lite-save-file" class="rpg-lite-btn" title="Save sessions and templates to a file">Save</button>
+          <button id="rpg-lite-load-file" class="rpg-lite-btn" title="Load sessions and templates from a file">Load</button>
           <button id="rpg-lite-close" class="rpg-lite-btn">Close</button>
         </div>
       </div>
@@ -528,6 +536,14 @@ export class RPGLiteView {
       this.modalEl = null;
     });
 
+    (this.container.querySelector('#rpg-lite-save-file') as HTMLButtonElement).addEventListener('click', () => {
+      void this.saveSessionsAndTemplatesToFile();
+    });
+
+    (this.container.querySelector('#rpg-lite-load-file') as HTMLButtonElement).addEventListener('click', () => {
+      void this.loadSessionsAndTemplatesFromFile();
+    });
+
     const defaultNarratorSelect = this.container.querySelector('#rpg-lite-default-narrator') as HTMLSelectElement;
     defaultNarratorSelect.value = this.defaultNarratorPurpose;
     defaultNarratorSelect.addEventListener('change', () => {
@@ -547,6 +563,48 @@ export class RPGLiteView {
     this.renderSessionList();
     this.renderPresetList();
     this.bindPresetEditorEvents();
+  }
+
+  /**
+   * Opens a checkbox modal, then writes the selected sessions/templates to a JSON file
+   * (Save As when supported, otherwise a Downloads download).
+   */
+  private async saveSessionsAndTemplatesToFile(): Promise<void> {
+    const selection = await this.transferModal.showSaveSelection(this.sessions, this.presets);
+    if (!selection) return;
+
+    const data = this.transferService.buildTransferFile(this.sessions, this.presets, selection);
+    const result = await this.transferService.saveTransferFile(data);
+    if (result.cancelled) return;
+    if (!result.success) {
+      throw new Error(result.error ?? 'Failed to save RPG Lite export file.');
+    }
+
+    const count = data.sessions.length + data.templates.length;
+    const where = result.method === 'save-as'
+      ? (result.actualFilename ?? 'chosen location')
+      : 'Downloads';
+    alert(`Saved ${count} item(s) to ${where}.`);
+  }
+
+  /**
+   * Picks a transfer JSON file and merges it into local storage.
+   * Matching session titles / template names overwrite; everything else is added.
+   */
+  private async loadSessionsAndTemplatesFromFile(): Promise<void> {
+    const file = await this.transferService.pickTransferFile();
+    if (!file) return;
+
+    const data = await this.transferService.parseTransferFile(file);
+    const result = await this.transferService.importTransferFile(data);
+    await this.loadAll();
+    this.renderSelector();
+
+    alert(
+      `Loaded from file.\n` +
+      `Sessions: ${result.sessionsAdded} added, ${result.sessionsOverwritten} overwritten.\n` +
+      `Templates: ${result.templatesAdded} added, ${result.templatesOverwritten} overwritten.`
+    );
   }
 
   private renderSessionList(): void {

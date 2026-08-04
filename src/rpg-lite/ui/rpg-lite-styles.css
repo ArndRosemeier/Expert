@@ -919,3 +919,89 @@
   border-top: 0.0625rem solid rgba(255, 255, 255, 0.12);
 }
 
+/* Save / Load transfer modal */
+.rpg-lite-transfer-modal {
+  max-width: min(40rem, 100%);
+  width: 100%;
+  max-height: 90vh;
+}
+
+.rpg-lite-transfer-hint {
+  margin: 0;
+  opacity: 0.85;
+  font-size: 0.95rem;
+}
+
+.rpg-lite-transfer-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.rpg-lite-transfer-section {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  min-height: 0;
+}
+
+.rpg-lite-transfer-section-title {
+  font-weight: 650;
+  font-size: 0.95rem;
+  opacity: 0.95;
+}
+
+.rpg-lite-transfer-checklist {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  max-height: 30vh;
+  overflow-y: auto;
+  padding: 0.5rem;
+  border: 0.0625rem solid rgba(255, 255, 255, 0.12);
+  border-radius: 0.5rem;
+  background: rgba(0, 0, 0, 0.15);
+}
+
+.rpg-lite-transfer-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.6rem;
+  padding: 0.4rem 0.35rem;
+  border-radius: 0.35rem;
+  cursor: pointer;
+}
+
+.rpg-lite-transfer-item:hover {
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.rpg-lite-transfer-item input {
+  margin-top: 0.2rem;
+  flex: 0 0 auto;
+}
+
+.rpg-lite-transfer-item-text {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  min-width: 0;
+}
+
+.rpg-lite-transfer-item-name {
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.rpg-lite-transfer-item-meta {
+  font-size: 0.85rem;
+  opacity: 0.75;
+  overflow-wrap: anywhere;
+}
+
+.rpg-lite-transfer-empty {
+  padding: 0.75rem 0.5rem;
+  opacity: 0.65;
+  font-size: 0.9rem;
+}
+
