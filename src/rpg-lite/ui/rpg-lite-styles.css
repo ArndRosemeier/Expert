@@ -188,6 +188,36 @@
   flex-direction: column;
   gap: 0.75rem;
   min-height: 0;
+  overflow: hidden;
+}
+
+/* Sessions / templates each take half the sidebar. Lists use flex-basis 0 so
+   their content height is NOT a flex base size; otherwise, as more items are
+   added, flex-shrink (default 1) gradually crushes the create buttons toward
+   zero height — scrollbar appears early, button vanishes much later. */
+.rpg-lite-sidebar-section {
+  flex: 1 1 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.rpg-lite-sidebar-section > .rpg-lite-section-title {
+  flex-shrink: 0;
+}
+
+.rpg-lite-sidebar-section > .rpg-lite-btn,
+.rpg-lite-sidebar-action {
+  flex-shrink: 0;
+  width: 100%;
+}
+
+.rpg-lite-sidebar-divider {
+  flex-shrink: 0;
+  text-align: center;
+  opacity: 0.5;
+  font-size: 0.85rem;
 }
 
 .rpg-lite-panel {
@@ -206,6 +236,7 @@
 }
 
 .rpg-lite-list {
+  flex: 1 1 0;
   display: flex;
   flex-direction: column;
   gap: 0.5rem;

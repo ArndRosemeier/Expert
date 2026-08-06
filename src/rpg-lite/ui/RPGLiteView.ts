@@ -507,15 +507,19 @@ export class RPGLiteView {
       </div>
       <div class="rpg-lite-body">
         <div class="rpg-lite-sidebar">
-          <div class="rpg-lite-section-title">Active Sessions</div>
-          <div class="rpg-lite-list" id="rpg-lite-session-list"></div>
-          <button id="rpg-lite-new-session-scratch" class="rpg-lite-btn rpg-lite-btn-primary" style="width: 100%;">+ New Session from Scratch</button>
-          
-          <div style="text-align: center; opacity: 0.5; font-size: 0.85rem; margin: 1.25rem 0 0.75rem;">or start from template</div>
-          
-          <div class="rpg-lite-section-title">Saved Templates</div>
-          <div class="rpg-lite-list" id="rpg-lite-preset-list"></div>
-          <button id="rpg-lite-new-template" class="rpg-lite-btn" style="width: 100%;">+ New Template</button>
+          <div class="rpg-lite-sidebar-section">
+            <div class="rpg-lite-section-title">Active Sessions</div>
+            <div class="rpg-lite-list" id="rpg-lite-session-list"></div>
+            <button id="rpg-lite-new-session-scratch" class="rpg-lite-btn rpg-lite-btn-primary rpg-lite-sidebar-action">+ New Session from Scratch</button>
+          </div>
+
+          <div class="rpg-lite-sidebar-divider">or start from template</div>
+
+          <div class="rpg-lite-sidebar-section">
+            <div class="rpg-lite-section-title">Saved Templates</div>
+            <div class="rpg-lite-list" id="rpg-lite-preset-list"></div>
+            <button id="rpg-lite-new-template" class="rpg-lite-btn rpg-lite-sidebar-action">+ New Template</button>
+          </div>
         </div>
         <div class="rpg-lite-main">
           ${this.editingPresetId ? this.renderPresetEditorHtml(this.editingPresetId) : `
@@ -1683,13 +1687,17 @@ export class RPGLiteView {
       </div>
       <div class="rpg-lite-body">
         <div class="rpg-lite-sidebar" id="rpg-lite-sidebar">
-          <div class="rpg-lite-section-title">Active Sessions</div>
-          <div class="rpg-lite-list" id="rpg-lite-session-list"></div>
-          
-          <div style="text-align: center; opacity: 0.5; font-size: 0.85rem; margin: 0.75rem 0;">or restart from template</div>
-          
-          <div class="rpg-lite-section-title">Templates</div>
-          <div class="rpg-lite-list" id="rpg-lite-preset-list-session"></div>
+          <div class="rpg-lite-sidebar-section">
+            <div class="rpg-lite-section-title">Active Sessions</div>
+            <div class="rpg-lite-list" id="rpg-lite-session-list"></div>
+          </div>
+
+          <div class="rpg-lite-sidebar-divider">or restart from template</div>
+
+          <div class="rpg-lite-sidebar-section">
+            <div class="rpg-lite-section-title">Templates</div>
+            <div class="rpg-lite-list" id="rpg-lite-preset-list-session"></div>
+          </div>
         </div>
         <div class="rpg-lite-resize-handle" id="rpg-lite-resize-left" title="Drag to resize"></div>
         <div class="rpg-lite-main">
