@@ -243,6 +243,8 @@ export class RPGLiteView {
   private messageEditAbortController: AbortController | null = null;
   private promptHistory: string[] = [];
   private prefixContextHistory: string[] = [];
+  /** Last transcript-search query; restored across session re-renders. */
+  private conversationSearchQuery = '';
 
   private defaultNarratorPurpose: RPGLiteModelPurpose = 'creator';
   private readonly transferService: RPGLiteTransferService;
@@ -1680,6 +1682,10 @@ export class RPGLiteView {
         </div>
         <div class="rpg-lite-topbar-right">
           <div id="rpg-lite-context-stats-topbar" class="rpg-lite-context-stats"></div>
+          <div class="rpg-lite-conversation-search" title="Find in model context: the last summary, then messages after it (skips condensed history above the checkpoint)">
+            <input id="rpg-lite-search-input" class="rpg-lite-input rpg-lite-search-input" type="search" placeholder="Find…" value="" />
+            <button id="rpg-lite-search" class="rpg-lite-btn" type="button">Search</button>
+          </div>
           <button id="rpg-lite-settings" class="rpg-lite-btn" title="Session settings (system prompt, prefix context, narrator, temperature, context, summaries, retries)">⚙️ Settings</button>
           <button id="rpg-lite-save-session" class="rpg-lite-btn">Save Session</button>
           <button id="rpg-lite-close" class="rpg-lite-btn">Close</button>
@@ -1748,6 +1754,21 @@ export class RPGLiteView {
 
     (this.container.querySelector('#rpg-lite-settings') as HTMLButtonElement).addEventListener('click', () => {
       this.showSessionSettingsModal();
+    });
+
+    const searchInput = this.container.querySelector('#rpg-lite-search-input') as HTMLInputElement;
+    searchInput.value = this.conversationSearchQuery;
+    searchInput.addEventListener('input', () => {
+      this.conversationSearchQuery = searchInput.value;
+    });
+    searchInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        this.scrollToFirstConversationFind(searchInput.value);
+      }
+    });
+    (this.container.querySelector('#rpg-lite-search') as HTMLButtonElement).addEventListener('click', () => {
+      this.scrollToFirstConversationFind(searchInput.value);
     });
 
     (this.container.querySelector('#rpg-lite-save-session') as HTMLButtonElement).addEventListener('click', () => {
@@ -2098,6 +2119,91 @@ export class RPGLiteView {
   }
 
   /**
+   * Scroll to the first transcript match for `query`. Search mirrors model
+   * context: the active summary first, then messages after that checkpoint.
+   * Condensed history above the summary is skipped. With no active milestone
+   * the whole conversation is searched.
+   */
+  private scrollToFirstConversationFind(query: string): void {
+    if (!this.currentSession) throw new Error('No current session.');
+
+    const needle = query.trim();
+    if (needle.length === 0) {
+      alert('Enter text to search for.');
+      const searchInput = this.container.querySelector('#rpg-lite-search-input') as HTMLInputElement;
+      searchInput.focus();
+      return;
+    }
+
+    this.conversationSearchQuery = query;
+    const hit = this.findFirstConversationMatch(needle);
+    if (!hit) {
+      alert(`No match for "${needle}" in the last summary or messages after it.`);
+      return;
+    }
+
+    const messagesEl = this.container.querySelector('#rpg-lite-messages') as HTMLElement;
+    messagesEl.querySelectorAll('.rpg-lite-search-hit').forEach((el) => {
+      el.classList.remove('rpg-lite-search-hit');
+    });
+
+    let target: HTMLElement | null = null;
+    if (hit.kind === 'message') {
+      target = messagesEl.querySelector(`[data-message-id="${CSS.escape(hit.messageId)}"]`) as HTMLElement | null;
+      if (!target) throw new Error(`Search hit message element missing: ${hit.messageId}`);
+    } else {
+      target = messagesEl.querySelector(
+        `.rpg-lite-milestone-marker[data-milestone-id="${CSS.escape(hit.milestoneId)}"]`
+      ) as HTMLElement | null;
+      if (!target) {
+        // Marker is omitted when the summary covers the entire transcript; open
+        // the summary modal so the match in the summary text is reachable.
+        const milestone = (this.currentSession.milestones ?? []).find((m) => m.id === hit.milestoneId);
+        if (!milestone) throw new Error(`Search hit milestone missing: ${hit.milestoneId}`);
+        this.showMilestoneSummaryModal(milestone);
+        return;
+      }
+    }
+
+    target.classList.add('rpg-lite-search-hit');
+    target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }
+
+  /**
+   * Locate the first case-insensitive match in model-context order: active
+   * milestone summary first, then messages at/after that checkpoint. History
+   * above the summary is not searched (it is not in the context window).
+   */
+  private findFirstConversationMatch(
+    query: string
+  ): { kind: 'message'; messageId: string } | { kind: 'summary'; milestoneId: string } | null {
+    if (!this.currentSession) throw new Error('No current session.');
+
+    const session = this.currentSession;
+    const needle = query.toLowerCase();
+    const completedCount = session.conversation.filter((m) => m.content.trim().length > 0).length;
+    const milestone = summariesEnabled(session)
+      ? latestValidMilestone(session, completedCount)
+      : null;
+
+    if (milestone && milestone.summary.toLowerCase().includes(needle)) {
+      return { kind: 'summary', milestoneId: milestone.id };
+    }
+
+    let completedSeen = 0;
+    for (const msg of session.conversation) {
+      const hasContent = msg.content.trim().length > 0;
+      const inContextWindow = milestone === null || completedSeen >= milestone.coveredCount;
+      if (inContextWindow && msg.content.toLowerCase().includes(needle)) {
+        return { kind: 'message', messageId: msg.id };
+      }
+      if (hasContent) completedSeen += 1;
+    }
+
+    return null;
+  }
+
+  /**
    * A boundary marker shown above the first message that is NOT covered by the
    * active milestone summary. Everything above the marker is represented to the
    * model by the "story so far" summary; messages below are sent verbatim.
@@ -2106,6 +2212,7 @@ export class RPGLiteView {
     const el = document.createElement('div');
     el.className = 'rpg-lite-milestone-marker';
     el.dataset['role'] = 'milestone-marker';
+    el.dataset['milestoneId'] = milestone.id;
     el.title =
       `Summary checkpoint: the earlier ${milestone.coveredCount} messages are condensed into a ` +
       `"story so far" summary in the model's context. Messages below this line are sent verbatim. ` +

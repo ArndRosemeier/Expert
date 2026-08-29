@@ -38,6 +38,36 @@
   min-width: 0;
 }
 
+.rpg-lite-conversation-search {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  flex: 0 1 auto;
+  min-width: 0;
+}
+
+.rpg-lite-search-input {
+  width: 9rem;
+  max-width: 100%;
+  padding: 0.35rem 0.55rem;
+  font-size: 0.9rem;
+}
+
+.rpg-lite-search-hit {
+  outline: 0.125rem solid rgba(255, 200, 80, 0.95);
+  outline-offset: 0.15rem;
+  animation: rpg-lite-search-hit-pulse 1.2s ease-out 1;
+}
+
+@keyframes rpg-lite-search-hit-pulse {
+  0% {
+    background-color: rgba(255, 200, 80, 0.35);
+  }
+  100% {
+    background-color: transparent;
+  }
+}
+
 .rpg-lite-title {
   font-size: 1.1rem;
   font-weight: 650;
