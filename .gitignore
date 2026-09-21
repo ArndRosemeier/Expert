@@ -12,6 +12,9 @@
 # Code quality reports
 /jscpd-report
 
+# Tool output (tools/duplicate-candidates)
+/reports/
+
 # Log files
 npm-debug.log*
 yarn-debug.log*
