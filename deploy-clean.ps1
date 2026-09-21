@@ -38,7 +38,6 @@ try {
             "$DIST_DIR/index.html",
             "$DIST_DIR/.htaccess", 
             "$DIST_DIR/pdf.worker.min.mjs",
-            "$DIST_DIR/keys.html",
             "$DIST_DIR/manual.html",
             "$DIST_DIR/creation-loop.html"
         )
