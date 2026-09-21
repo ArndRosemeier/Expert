@@ -29,6 +29,34 @@ live symlink target for `https://apps.futuremagic.de/expert/`.
 
 ---
 
+## Deduplicating (owner-set strategy)
+
+There are exactly two honest ways to deduplicate, and the choice is decided by
+whether the bodies are identical — **not** by how similar the names look:
+
+1. **Literally the same code → delete one.** Byte-identical bodies are one function;
+   pick the canonical home and have the others import it. This is behaviour-preserving
+   by construction and needs the gate, not a new test.
+2. **Big, almost-duplicate with a twist → parameterize.** Do **not** copy the twist or
+   silently adopt one caller's variant. Add a parameter (or options object) that
+   reproduces **each** caller's exact behaviour, and document what each value means.
+   Parameterizing is behaviour-*preserving*, which is what keeps it out of rule 3.
+
+Then verify: gate + (for UI) a render check. If the "twist" cannot be expressed as a
+parameter without changing what either caller does, it is not a duplicate — leave it,
+and write down why.
+
+Worked examples in this repo:
+
+- `escapeRegExp` / `escapeRegex` → literal copy, one deleted (`63e76f8`).
+- 9 × DOM `escapeHtml` → literal copies, now all import `modal-utils` (`ff27bdc`).
+- `addLogEntry` in the two log services → **parameterized** on `initInsideTry` and
+  `logEntryOnFailure`, preserving both services' deliberate differences (`8518de2`).
+- `escapeXml` (`&apos;`) vs `escapeHtml` (`&#39;`) → **NOT duplicates.** Different
+  output for different contexts (XML/XHTML vs HTML). Left alone on purpose.
+
+---
+
 ## Testing rule (owner-set, 2026-09-21)
 
 This app is large, mature, and has historically been "tested by using it a lot". That
@@ -47,10 +75,16 @@ change the thing being relied on**. So:
 5. If a change is behaviour-changing and there is nowhere to put a test, that is a
    **blocker to raise**, not something to quietly skip.
 
-`npm test` currently runs `node --test "tools/**/*.test.mjs"` — the portable tooling
-suite under `tools/`, which is dependency-free and fully tested. **`src/` still has no
-test runner.** Until it does, rule 3 means a behaviour-changing change to `src/` needs
-one to be stood up first (a dependency decision) — flag it, don't hand-wave past it.
+`npm test` runs `node --test "tools/**/*.test.mjs" "src/**/*.test.mjs"`:
+
+- `tools/**` — the portable analysis tools (dependency-free, fully tested).
+- `src/**` — app tests. Added 2026-09-21 with `tools/app-tests/load-ts.mjs`, which
+  transpiles a `.ts` file in memory using the **esbuild Vite already installs**, so
+  app tests need **no new dependency**. Write them as `*.test.mjs` next to the module
+  under test and import the source via `importTs(srcPath('module.ts'))`.
+
+App tests are still only where the rules above require them (new code, and code being
+changed) — `src/` is nowhere near fully tested, deliberately.
 
 ---
 
