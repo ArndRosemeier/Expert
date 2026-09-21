@@ -166,7 +166,8 @@ Always `npm ci` (lockfile-exact) before trusting a local gate run.
 | W3 | Windows build unverified after the dependency change | **DEMOTED** — fallback path, not worth verification effort | — |
 | W5 | Duplication gate is advisory; percentage metric is the wrong shape | **CLOSED (decision)** — see §Duplication reality above; do not re-propose enforcing it | — |
 | W7 | `tools/` portable analysis toolbox; duplicate-candidate finder | **DONE** — `ad7e208`+`c0801ec` via `wt-dupcand`, merged `322f464`, pushed | — |
-| W8 | Type-4 audit + deduplication | **IN PROGRESS** — 3 landings (`63e76f8`, `ff27bdc`, `8518de2`); escape variants DECIDED to stay; the 258-line block remains | — |
+| W8 | Type-4 audit + deduplication | **IN PROGRESS** — 4 landings (`63e76f8`, `ff27bdc`, `8518de2`, `f5df9cf`); 258-line block classified NOT a duplicate; escape variants DECIDED to stay | — |
+| W10 | **Attribute injection: quote-blind `escapeHtml` in 12 attribute positions** | **READY** — see W10 below | — |
 | W9 | Testing policy for changed vs untouched code | **RESOLVED** — owner rule in `AGENTS.md` | — |
 
 ### W8 — Type-4 audit and deduplication (IN PROGRESS)
@@ -215,6 +216,43 @@ Still open from the shortlist: the 258-line block between
 `idea-board/ui/TransformModal.ts` and `ui/modals/ManualModal.ts` (found by `jscpd`, not
 by name) — the next candidate, and large enough that the parameterize rule is the
 right tool if it proves to be an almost-duplicate rather than a literal one.
+
+### W8 result: the 258-line "clone" is NOT a duplicate (classified 2026-09-21)
+
+`jscpd` reports a 258-line clone between `idea-board/ui/TransformModal.ts` and
+`ui/modals/ManualModal.ts`. It was examined properly and is a **false positive of the
+percentage metric**, not duplicated logic:
+
+- the match carries only **127 tokens** across 258 lines; my own token analysis finds a
+  longest contiguous common run of just **45** tokens
+- only **3 of 222** four-line shingles of one side appear in the other; **4%** of lines
+  sit inside an identical run
+- the "48% verbatim lines" figure is dominated by lines like `});` and `// Add styles`
+- **0 shared CSS class selectors** between the two files, and only 35 shared CSS
+  declarations (Jaccard 0.17), all generic design tokens (`border-radius: 6px`,
+  `display: flex`, `#f8fafc`)
+
+**Conclusion: two independently written modals that share house style.** Nothing to
+extract without inventing an abstraction they do not have in common. Left alone
+deliberately, per the dedup rule's final clause.
+
+### W10 — the same quote-blind escaping bug in 12 more attribute positions (READY)
+
+Found by auditing for the pattern fixed in `f5df9cf`. `escapeHtml()` (DOM-based) escapes
+only `& < >`, **not quotes** — verified against real Chrome. Using it to build an HTML
+**attribute** lets a value containing `"` break out and inject markup. Sites still using
+it inside `value="..."` / `title="..."` / `data-*="..."`:
+
+| File | Count |
+|---|---|
+| `rpg/ui/RPGWorldInspector.ts` | 9 |
+| `ui/modals/NodeInspectorModal.ts` | 2 |
+| `ui/components/RatingsRenderer.ts` | 1 |
+
+The fix is mechanical: use `escapeHtmlAttribute` (escapes `& < > " '`) for attribute
+values; keep `escapeHtml` for text content. `getAttribute` decodes entities, so values
+read back are unchanged. This is a behaviour change (escaping output differs), so per
+the testing rule it needs a test for the changed code and a render check. **Not started.**
 
 ### W9 — testing policy (RESOLVED by owner rule, 2026-09-21)
 

@@ -7,7 +7,7 @@ import { UniversalTextEditor } from '../components/UniversalTextEditor';
 import { ConditionalContextEditor } from '../components/ConditionalContextEditor';
 import { DiffTool } from '../../DiffTool';
 import { promptForVersionName } from './VersionNameModal';
-import { escapeHtml } from './core/modal-utils';
+import { escapeHtml, escapeHtmlAttribute } from './core/modal-utils';
 
 
 export class NodeInspectorModal extends BaseModal {
@@ -536,7 +536,7 @@ export class NodeInspectorModal extends BaseModal {
                 <div class="version-section" id="ins-title-section">
                     <h4 class="section-title" id="ins-title-toggle" style="cursor: pointer;">▼ Title</h4>
                     <div class="section-content foldable-content" id="ins-title-content">
-                        <input type="text" class="title-editor" id="inspector-title-editor" value="${escapeHtml(version.title || '')}" placeholder="Enter title...">
+                        <input type="text" class="title-editor" id="inspector-title-editor" value="${escapeHtmlAttribute(version.title || '')}" placeholder="Enter title...">
                     </div>
                 </div>
                 
@@ -1046,7 +1046,7 @@ export class NodeInspectorModal extends BaseModal {
                 // freed-up width (abbreviated with an ellipsis; full text on hover).
                 return `
                 <div style="display: grid; grid-template-columns: 1fr auto; gap: 0.5rem; align-items: center; margin-bottom: 0.25rem; padding: 0.125rem 0;">
-                    <span title="${escapeHtml(criterionName)}" style="font-weight: 500; font-size: 0.85rem; color: #374151; text-overflow: ellipsis; overflow: hidden; white-space: nowrap; min-width: 0;">${escapeHtml(criterionName)}</span>
+                    <span title="${escapeHtmlAttribute(criterionName)}" style="font-weight: 500; font-size: 0.85rem; color: #374151; text-overflow: ellipsis; overflow: hidden; white-space: nowrap; min-width: 0;">${escapeHtml(criterionName)}</span>
                     <span style="font-weight: 600; font-size: 0.75rem; color: white; background: ${pillColor}; padding: 0.1rem 0.5rem; border-radius: 999px; min-width: 3rem; text-align: center; white-space: nowrap;">${label}</span>
                 </div>
                 `;

@@ -7,6 +7,7 @@
  */
 
 import { RPGAttitudeIntensity, RPGAttitudeStance, RPGGameSession, RPGGoal, RPGRelationship, RPGRelationshipKind, RPGSuspiciousEntityFlag } from '../types/RPGTypes';
+import { escapeHtmlAttribute } from '../../ui/modals/core/modal-utils';
 import { WorldStateService } from '../services/WorldStateService';
 import { RPGInteractionService } from '../services/RPGInteractionService';
 import { getActiveProject } from '../../state';
@@ -390,12 +391,12 @@ export class RPGWorldInspector {
             html += `<br><small class="rpg-muted">Last used turn: ${rel.lastUsedTurn}</small>`;
             html += `<br><small class="rpg-muted">From: <a class="rpg-relationship-link" data-target-id="${rel.fromId}">${this.escapeHtml(fromName)}</a></small>`;
             html += `<br><small class="rpg-muted">To: <a class="rpg-relationship-link" data-target-id="${rel.toId}">${this.escapeHtml(toName)}</a></small>`;
-            html += `<label>Note</label><input class="rpg-edit-input" data-rel-field="note" value="${this.escapeHtml(rel.note ?? '')}" />`;
+            html += `<label>Note</label><input class="rpg-edit-input" data-rel-field="note" value="${escapeHtmlAttribute(rel.note ?? '')}" />`;
 
             if (rel.kind === 'attitude_towards') {
                 html += `<label>Stance</label>${this.renderStanceSelect(rel.stance)}`;
                 html += `<label>Intensity</label>${this.renderIntensitySelect(rel.intensity)}`;
-                html += `<label>Reason</label><input class="rpg-edit-input" data-rel-field="reason" value="${this.escapeHtml(rel.reason ?? '')}" />`;
+                html += `<label>Reason</label><input class="rpg-edit-input" data-rel-field="reason" value="${escapeHtmlAttribute(rel.reason ?? '')}" />`;
             }
             html += `</div>`;
 
@@ -451,7 +452,7 @@ export class RPGWorldInspector {
             html += ` <span class="rpg-relationship-count">(${relationships.length} relationships)</span>`;
         }
         if (flag) {
-            html += ` <span class="rpg-suspicious-flag" title="${this.escapeHtml(flag.reason)}">⚠</span>`;
+            html += ` <span class="rpg-suspicious-flag" title="${escapeHtmlAttribute(flag.reason)}">⚠</span>`;
         }
         html += ` <small class="rpg-muted">(last used turn: ${lastUsedTurn})</small>`;
         html += '</div>';
@@ -505,7 +506,7 @@ export class RPGWorldInspector {
                 </div>
                 <div class="rpg-entity-editor-row">
                     <label>Name</label>
-                    <input class="rpg-edit-input" data-field="name" value="${this.escapeHtml(location.name)}" />
+                    <input class="rpg-edit-input" data-field="name" value="${escapeHtmlAttribute(location.name)}" />
                 </div>
                 <div class="rpg-entity-editor-row">
                     <label>Description</label>
@@ -548,7 +549,7 @@ export class RPGWorldInspector {
                 </div>
                 <div class="rpg-entity-editor-row">
                     <label>Name</label>
-                    <input class="rpg-edit-input" data-field="name" value="${this.escapeHtml(character.name)}" />
+                    <input class="rpg-edit-input" data-field="name" value="${escapeHtmlAttribute(character.name)}" />
                 </div>
                 <div class="rpg-entity-editor-row">
                     <label>Description</label>
@@ -593,7 +594,7 @@ export class RPGWorldInspector {
                 </div>
                 <div class="rpg-entity-editor-row">
                     <label>Title</label>
-                    <input class="rpg-edit-input" data-field="title" value="${this.escapeHtml(lore.title)}" />
+                    <input class="rpg-edit-input" data-field="title" value="${escapeHtmlAttribute(lore.title)}" />
                 </div>
                 <div class="rpg-entity-editor-row">
                     <label>Content</label>
@@ -601,7 +602,7 @@ export class RPGWorldInspector {
                 </div>
                 <div class="rpg-entity-editor-row">
                     <label>Tags (comma-separated)</label>
-                    <input class="rpg-edit-input" data-field="tags" value="${this.escapeHtml(lore.tags.join(', '))}" />
+                    <input class="rpg-edit-input" data-field="tags" value="${escapeHtmlAttribute(lore.tags.join(', '))}" />
                 </div>
                 <div class="rpg-entity-editor-actions">
                     <button type="button" data-rpg-action="save-entity" data-entity-id="${loreId}" data-entity-type="lore">Save</button>
@@ -633,12 +634,12 @@ export class RPGWorldInspector {
 
             html += `<div class="rpg-relationship-fields">`;
             html += `<small class="rpg-muted">Created turn: ${rel.createdTurn}</small>`;
-            html += `<label>Note</label><input class="rpg-edit-input" data-rel-field="note" value="${this.escapeHtml(rel.note ?? '')}" />`;
+            html += `<label>Note</label><input class="rpg-edit-input" data-rel-field="note" value="${escapeHtmlAttribute(rel.note ?? '')}" />`;
 
             if (rel.kind === 'attitude_towards') {
                 html += `<label>Stance</label>${this.renderStanceSelect(rel.stance)}`;
                 html += `<label>Intensity</label>${this.renderIntensitySelect(rel.intensity)}`;
-                html += `<label>Reason</label><input class="rpg-edit-input" data-rel-field="reason" value="${this.escapeHtml(rel.reason ?? '')}" />`;
+                html += `<label>Reason</label><input class="rpg-edit-input" data-rel-field="reason" value="${escapeHtmlAttribute(rel.reason ?? '')}" />`;
             }
             html += `</div>`;
 

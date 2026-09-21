@@ -1,4 +1,5 @@
 import { Rating } from '../../types/RatingTypes';
+import { escapeHtmlAttribute } from '../modals/core/modal-utils';
 
 export interface RatingsDisplayOptions {
     title?: string;
@@ -82,7 +83,7 @@ export class RatingsRenderer {
             return `
             <div class="rating-item" style="margin-bottom: ${itemMargin};">
                 <div class="rating-header" style="gap: 0.5rem;">
-                    <div class="rating-criterion" title="${this.escapeHtml(rating.criterion)}" style="flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${this.escapeHtml(rating.criterion)}</div>
+                    <div class="rating-criterion" title="${escapeHtmlAttribute(rating.criterion)}" style="flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${this.escapeHtml(rating.criterion)}</div>
                     <div class="rating-score-display" style="flex: none;">
                         <span class="rating-status-pill" style="background-color: ${statusColor}; color: white; font-weight: 600; padding: 0.1rem 0.6rem; border-radius: 999px; font-size: 0.85rem; white-space: nowrap;">${statusIcon} ${label}</span>
                     </div>
