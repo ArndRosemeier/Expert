@@ -758,7 +758,7 @@ export class UniversalTextEditor {
         
         while (walker.nextNode()) {
             const node = walker.currentNode as Text;
-            const nodeLength = node.textContent.length;
+            const nodeLength = node.textContent?.length ?? 0;
             
             if (currentPos + nodeLength >= regions[0].start) {
                 targetNode = node;

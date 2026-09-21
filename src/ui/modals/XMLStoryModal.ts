@@ -3703,7 +3703,7 @@ export class XMLStoryModal extends SimpleModal {
             // Progress indicator on button
             if (buttonEl) {
                 buttonEl.disabled = true;
-                const originalText = buttonEl.textContent;
+                const originalText = buttonEl.textContent ?? '';
                 buttonEl.dataset['origText'] = originalText;
                 buttonEl.textContent = '⏳ Splitting…';
             }

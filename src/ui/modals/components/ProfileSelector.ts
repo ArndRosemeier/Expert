@@ -130,7 +130,7 @@ export class ProfileSelector {
         // Find and click the criteria reset button
         const criteriaResetButtons = Array.from(document.querySelectorAll('.criteria-actions button'));
         for (const button of criteriaResetButtons) {
-            if (button.textContent.includes('Reset to Defaults')) {
+            if ((button.textContent ?? '').includes('Reset to Defaults')) {
                 (button as HTMLButtonElement).click();
                 break;
             }
@@ -139,7 +139,7 @@ export class ProfileSelector {
         // Find and click the prompts reset button
         const promptsResetButtons = Array.from(document.querySelectorAll('.prompt-actions button'));
         for (const button of promptsResetButtons) {
-            if (button.textContent.includes('Reset All Prompts to Defaults')) {
+            if ((button.textContent ?? '').includes('Reset All Prompts to Defaults')) {
                 (button as HTMLButtonElement).click();
                 break;
             }

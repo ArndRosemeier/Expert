@@ -442,7 +442,7 @@ export class RPGView {
                 
                 const requireText = (selector: string): string => {
                     const el = root.querySelector(selector);
-                    const text = el?.textContent.trim();
+                    const text = el?.textContent?.trim() ?? '';
                     if (!text) {
                         throw new Error(`Invalid setup response: missing required element '${selector}'`);
                     }

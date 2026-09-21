@@ -307,8 +307,8 @@ export class RPGInteractionService {
 
         const idEl = root.querySelector('entity_id');
         const stateEl = root.querySelector('state');
-        const idText = idEl?.textContent.trim();
-        const stateText = stateEl?.textContent.trim();
+        const idText = idEl?.textContent?.trim() ?? '';
+        const stateText = stateEl?.textContent?.trim() ?? '';
         if (!idText) throw new Error('Consolidation response missing <entity_id>.');
         if (idText !== entityId) throw new Error(`Consolidation response entity_id mismatch: expected '${entityId}', got '${idText}'.`);
         if (!stateText) throw new Error('Consolidation response missing <state>.');

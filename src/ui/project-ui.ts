@@ -3354,7 +3354,7 @@ export async function renderNodeDetails(retryOptions?: { _isRetry?: boolean }) {
             const node = projectManager.findNodeById(selectedNodeId);
             if (node) {
                 // Use version management system to update title with "edited" and "title_edited" tags
-                node.setTitleWithTags(nodeTitleDisplay.textContent, ['edited', 'title_edited']);
+                node.setTitleWithTags(nodeTitleDisplay.textContent ?? '', ['edited', 'title_edited']);
                 // Save to storage with debounced approach
                 clearTimeout(titleDisplay._saveTimeout);
                 titleDisplay._saveTimeout = setTimeout(() => {

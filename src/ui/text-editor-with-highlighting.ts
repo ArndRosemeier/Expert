@@ -1154,7 +1154,7 @@ export class TextEditorWithHighlighting {
         
         // Get the text content - DO NOT strip leading/trailing newlines
         // Those might be legitimate parts of the user's text
-        const text = tempDiv.textContent;
+        const text = tempDiv.textContent ?? '';
         
         return text;
     }

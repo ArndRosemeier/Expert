@@ -631,7 +631,7 @@ export class NodeInspectorModal extends BaseModal {
             if (t && c) {
                 t.addEventListener('click', () => {
                     const isCollapsed = c.classList.toggle('collapsed');
-                    const label = t.textContent;
+                    const label = t.textContent ?? '';
                     const clean = label.replace(/^([▼▶])\s*/, '');
                     t.textContent = (isCollapsed ? '▶ ' : '▼ ') + clean;
                 });

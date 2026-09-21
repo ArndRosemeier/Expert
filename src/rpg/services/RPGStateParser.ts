@@ -72,7 +72,7 @@ export class RPGStateParser {
                 const ids: string[] = [];
                 const idEls = rosterContainer.querySelectorAll('character_id');
                 for (const el of Array.from(idEls)) {
-                    const text = el.textContent.trim();
+                    const text = el.textContent?.trim() ?? '';
                     if (text) ids.push(text);
                 }
                 if (ids.length > 0) {
@@ -90,8 +90,8 @@ export class RPGStateParser {
                 for (const el of Array.from(els)) {
                     const idEl = el.querySelector('entity_id');
                     const reasonEl = el.querySelector('reason');
-                    const entityId = idEl?.textContent.trim();
-                    const reason = reasonEl?.textContent.trim();
+                    const entityId = idEl?.textContent?.trim() ?? '';
+                    const reason = reasonEl?.textContent?.trim() ?? '';
                     if (entityId && reason) {
                         items.push({ entityId, reason });
                     }
@@ -359,7 +359,7 @@ export class RPGStateParser {
             const kindElement = element.querySelector('kind');
             const legacyTypeElement = element.querySelector('type');
             
-            const kindText = kindElement?.textContent.trim() ?? legacyTypeElement?.textContent.trim();
+            const kindText = kindElement?.textContent?.trim() ?? legacyTypeElement?.textContent?.trim() ?? '';
             if (!fromIdElement?.textContent || !toIdElement?.textContent || !kindText) {
                 console.warn('Relationship element missing required fields, skipping');
                 continue;
