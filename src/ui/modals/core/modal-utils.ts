@@ -224,3 +224,33 @@ export const MODAL_STYLES = {
         color: #6b7280;
     `
 } as const; 
+/**
+ * Render the "previous instructions" history list shared by the idea-board
+ * TransformModal and the TextTransformModal.
+ *
+ * Both modals carried a byte-identical private `renderHistoryItems()`. The only
+ * difference between them was *whose* history was rendered, so that becomes a
+ * parameter (owner dedup rule: almost-duplicate -> parameterize, do not fork).
+ *
+ * @param history Instructions, oldest first. Rendered newest first.
+ */
+export function renderHistoryItems(history: string[]): string {
+    if (history.length === 0) {
+        return '<div class="history-empty">No previous instructions</div>';
+    }
+
+    return history
+        .slice() // Create a copy
+        .reverse() // Show most recent first
+        .map((instruction, index) => `
+        <div class="history-item" data-instruction="${escapeHtmlAttribute(instruction)}" title="Click to use this instruction">
+          <div class="history-item-content">
+            ${escapeHtml(instruction)}
+          </div>
+          <button class="history-item-delete" data-delete-index="${history.length - 1 - index}" title="Remove this instruction">
+            ×
+          </button>
+        </div>
+      `)
+        .join('');
+}

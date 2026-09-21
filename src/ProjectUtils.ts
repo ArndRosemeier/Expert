@@ -164,3 +164,28 @@ export function analyzeTagsInHierarchy(rootNode: DocumentNode): TagAnalysis {
         allTags
     };
 }
+
+/**
+ * Filter quality criteria to those that apply to the given node kind.
+ *
+ * Shared by PolisherModal and reader-edit-manager, which each carried an
+ * identical private copy. Criteria with neither flag are legacy and apply
+ * everywhere; leaf nodes get `leaf: true` criteria; outline/branch nodes get
+ * `outline: true` criteria.
+ */
+export function filterCriteriaForNodeType(criteria: QualityCriterion[], isLeafNode: boolean): QualityCriterion[] {
+    return criteria.filter(criterion => {
+        // If both outline and leaf are undefined or both are true, include the criterion
+        if (criterion.outline === undefined && criterion.leaf === undefined) {
+            return true; // Legacy criteria - apply to all
+        }
+
+        // For leaf nodes, include criteria where leaf is true
+        if (isLeafNode) {
+            return criterion.leaf === true;
+        }
+
+        // For outline/branch nodes, include criteria where outline is true
+        return criterion.outline === true;
+    });
+}

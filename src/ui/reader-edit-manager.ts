@@ -1,14 +1,13 @@
 import { ProjectManager } from '../ProjectManager.js';
 import { DocumentNode } from '../DocumentNode.js';
 import { OpenRouterClient } from '../OpenRouterClient.js';
-import { QualityCriterion } from '../types.js';
 import { 
     ReaderEditAction, 
     EditActionConfig, 
     EditContext 
 } from '../types/ReaderEditingTypes';
 import { PromptContextBuilder } from '../services/PromptContextBuilder.js';
-import { formatCriteriaAsJson } from '../ProjectUtils';
+import { formatCriteriaAsJson, filterCriteriaForNodeType } from '../ProjectUtils';
 import { createPromptExpansionService } from '../services/PromptExpansionService.js';
 import * as state from '../state.js';
 
@@ -300,7 +299,7 @@ export class ReaderEditManager {
         
         // Filter criteria for leaf nodes (most editing actions are on leaf content)
         const isLeafNode = node.isLeaf;
-        const criteria = this.filterCriteriaForNodeType(allCriteria, isLeafNode);
+        const criteria = filterCriteriaForNodeType(allCriteria, isLeafNode);
         
         return {
             'content': node.content || '',
@@ -327,22 +326,6 @@ export class ReaderEditManager {
      * @param isLeafNode Whether the node is a leaf node.
      * @returns Filtered criteria appropriate for the node type.
      */
-    private filterCriteriaForNodeType(criteria: QualityCriterion[], isLeafNode: boolean): QualityCriterion[] {
-        return criteria.filter(criterion => {
-            // If both outline and leaf are undefined or both are true, include the criterion
-            if (criterion.outline === undefined && criterion.leaf === undefined) {
-                return true; // Legacy criteria - apply to all
-            }
-            
-            // For leaf nodes, include criteria where leaf is true
-            if (isLeafNode) {
-                return criterion.leaf === true;
-            }
-            
-            // For outline/branch nodes, include criteria where outline is true
-            return criterion.outline === true;
-        });
-    }
 
     /**
      * Get available placeholders for prompt building UI

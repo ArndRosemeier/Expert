@@ -3,7 +3,7 @@ import { ModalConfig, ModalHooks } from '../modals/types/ModalTypes';
 import { createElement } from '../modals/core/modal-utils';
 import { StorageService, type IStorageService } from '../../StorageService';
 import { MODEL_PURPOSES } from '../../services/TaskModelService';
-import { escapeHtml } from '../modals/core/modal-utils';
+import { escapeHtml, renderHistoryItems } from '../modals/core/modal-utils';
 
 export interface TextTransformRequest {
   textToChange: string;
@@ -466,7 +466,7 @@ export class TextTransformModal extends BaseModal {
           <div class="transform-history-section">
             <label class="form-label">Previous Instructions</label>
             <div id="history-container" class="history-list">
-              ${this.renderHistoryItems()}
+              ${renderHistoryItems(this.transformHistory)}
             </div>
           </div>
         </div>
@@ -474,26 +474,6 @@ export class TextTransformModal extends BaseModal {
     `;
   }
 
-  private renderHistoryItems(): string {
-    if (this.transformHistory.length === 0) {
-      return '<div class="history-empty">No previous instructions</div>';
-    }
-    
-    return this.transformHistory
-      .slice() // Create a copy
-      .reverse() // Show most recent first
-      .map((instruction, index) => `
-        <div class="history-item" data-instruction="${escapeHtml(instruction)}" title="Click to use this instruction">
-          <div class="history-item-content">
-            ${escapeHtml(instruction)}
-          </div>
-          <button class="history-item-delete" data-delete-index="${this.transformHistory.length - 1 - index}" title="Remove this instruction">
-            ×
-          </button>
-        </div>
-      `)
-      .join('');
-  }
 
   private renderModelPurposeOptions(): string {
     return MODEL_PURPOSES
@@ -672,7 +652,7 @@ export class TextTransformModal extends BaseModal {
         
         // Update the UI
         if (this.historyContainer) {
-          this.historyContainer.innerHTML = this.renderHistoryItems();
+          this.historyContainer.innerHTML = renderHistoryItems(this.transformHistory);
         }
       }
     } catch (error) {

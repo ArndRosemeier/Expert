@@ -9,6 +9,7 @@ import { PromptContextBuilder } from '../../services/PromptContextBuilder';
 import { formatContentForPreWrap } from '../../utils/TextFormattingUtils';
 import * as state from '../../state';
 import { QualityCriterion } from '../../types';
+import { filterCriteriaForNodeType } from '../../ProjectUtils';
 
 export interface PolishingButton {
     id: string;
@@ -505,28 +506,12 @@ export class PolisherModal extends BaseModal {
         if (!currentProfile || !this.node) return [];
         
         const allCriteria = currentProfile.criteria ?? [];
-        return this.filterCriteriaForNodeType(allCriteria, this.node.isLeaf);
+        return filterCriteriaForNodeType(allCriteria, this.node.isLeaf);
     }
 
     /**
      * Filter criteria based on node type (leaf vs outline/branch)
      */
-    private filterCriteriaForNodeType(criteria: QualityCriterion[], isLeafNode: boolean): QualityCriterion[] {
-        return criteria.filter(criterion => {
-            // If both outline and leaf are undefined or both are true, include the criterion
-            if (criterion.outline === undefined && criterion.leaf === undefined) {
-                return true; // Legacy criteria - apply to all
-            }
-            
-            // For leaf nodes, include criteria where leaf is true
-            if (isLeafNode) {
-                return criterion.leaf === true;
-            }
-            
-            // For outline/branch nodes, include criteria where outline is true
-            return criterion.outline === true;
-        });
-    }
 
     /**
      * Format criteria as text for the prompt
