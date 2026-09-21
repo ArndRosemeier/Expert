@@ -79,22 +79,35 @@ Always `npm ci` (lockfile-exact) before trusting a local gate run.
 
 | ID | Item | State | Owner |
 |----|------|-------|-------|
-| W1 | `npm run build*` scripts clobber the live `dist/` symlink target | **READY** — brief written | — |
+| W1 | `npm run build*` scripts clobbered the live `dist/` symlink target | **DONE** — `264ed7e` via `wt-w1`, merged `e84397d`, pushed | — |
 | W2 | No test runner and no `test` script anywhere; gate is static-only | **BLOCKED (owner decision)** | — |
 | W3 | Windows build/deploy after the `lightningcss` dependency removal is unverified | **BLOCKED (owner-only)** | — |
-| W4 | Dead-code backlog: unused files/exports (two were found by hand) | **READY (cheap probe first)** | — |
+| W4 | Dead-code backlog: 6 unreachable files, ~1,370 lines | **BLOCKED (owner decision)** | — |
 | W5 | `.jscpd.json` runs `continue-on-error: true`, so duplication never fails CI | **READY, low priority** | — |
+| W6 | `npm run deadcode:*` scripts fail: `tsr` is not a declared dependency | **READY, low priority** | — |
 
-### W1 — make the build scripts safe (READY)
+### W1 — make the build scripts safe (DONE)
 
-**Intent:** a plain `npm run build` must not be able to take the live site down.
-**The one seam:** `package.json` scripts + the `dist`/staging convention.
-**Options:** (a) point the non-`apps` build modes at their own `outDir`
-(`dist-domainfactory`, `dist-github`); (b) leave `outDir` alone and make deployment an
-explicit `copy from dist-<mode>` step. (a) is smaller; the `apps` mode keeps `dist`.
-**Gate:** `bash scripts/gate.sh` → exit 0. Plus: prove the live app still resolves after
-a `build:domainfactory` run.
-**Worktree:** `/home/administrator/projects/Expert-wt-w1`, branch `wt-w1`.
+Landed as `264ed7e` on branch `wt-w1`, verified and merged to `master` as `e84397d`
+(merge commit), pushed. Fix: one Vite mode → one `outDir` inside the existing
+`defineConfig(({ mode }) => ...)`; only `apps` may write `dist/`, and an unknown mode
+gets `dist-<mode>` so nothing can ever fall back to the live directory. `deploy-clean.ps1`
+now reads `dist-domainfactory`, and `deploy`/`deploy:github` pass `-d dist-github` to
+`gh-pages` so they no longer publish the live bundle.
+
+**Dispatcher verification (not the writer's word):**
+- merge commit `e84397d` — own gate run → exit 0
+- **own injection**: `npm run build:domainfactory` on the merged tree left
+  `dist/index.html` **byte-identical including mtime**
+  (`fcb5160c…a203aa`, `main-2ZoN8fJL.js`, 14:07:30.296) while writing
+  `dist-domainfactory/` with base `/Expert/`. Live site still HTTP 200.
+- Before this change, that same command silently replaced the live bundle.
+
+Follow-up fixed in the same landing window: `deploy-clean.ps1` still listed
+`keys.html` as critical, a file that no longer exists anywhere — that `throw` would
+have aborted **every** Windows deploy. Removed in `e898420`. The line predated the
+key-mechanism removal, but that removal (`2a51071`) is what made it unsatisfiable, so
+it was fixed forward rather than filed.
 
 ### W2 — no behavioural safety net (BLOCKED, owner decision)
 
@@ -111,7 +124,7 @@ is a real decision (deps, conventions, CI time), so it goes to the owner.
 Nobody has run the Windows build since. The owner builds and deploys on Windows.
 **The dispatcher cannot verify this from this host** — do not claim it is fine.
 
-### W4 — dead-code backlog (READY, cheap probe first)
+### W4 — dead-code backlog (BLOCKED, owner decision)
 
 Two dead artifacts were already found and removed by hand this session
 (`src/keys/keys-ui.ts.broken`, `public/keys.html.backup`), which suggests more exist.
@@ -166,6 +179,15 @@ threshold is 5%.
   declared dependency. Recorded under W4.
 - **2026-09-21** — W4 probe: 6 unreachable files, ~1,370 lines. Owner decision before
   deletion. Recorded under W4.
+- **2026-09-21** — **W1 landed and verified.** Writer `wt-w1` commit `264ed7e`, merged
+  as `e84397d`. Dispatcher re-ran the gate (exit 0) and re-ran the injection itself:
+  `build:domainfactory` left the live `dist/index.html` byte-identical *including
+  mtime*, and wrote `dist-domainfactory/` instead. Worker branch and worktree retired
+  after verification.
+- **2026-09-21** — Found while verifying W1: `deploy-clean.ps1` demanded the deleted
+  `keys.html`, which would have aborted **every** Windows deploy at the verification
+  step. Fixed forward as `e898420` (my own `2a51071` is what made the check
+  unsatisfiable, so filing it as someone else's would have been wrong).
 
 ## Recovery pointers
 
