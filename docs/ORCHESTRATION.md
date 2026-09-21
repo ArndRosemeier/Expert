@@ -6,6 +6,75 @@ A successor session must be able to act within minutes from this file plus
 
 Last reconciled: 2026-09-21 (by the chief-of-staff session that created this file).
 
+> **Before proposing "let's gate on code duplication", read §Duplication reality below.**
+> The metric is the wrong shape and the obvious fix has already been investigated and
+> rejected once. That work is not worth redoing.
+
+---
+
+## THE HEAD START — reusing the analysis toolbox on another project
+
+This project now owns a small, portable toolbox at **`tools/`**. If you are an agent
+asked to hunt accumulated cruft in **another** repo, do not start from scratch:
+
+```bash
+cp -r ~/projects/Expert/tools /path/to/other-project/
+cd /path/to/other-project
+node --test "tools/**/*.test.mjs"        # must pass before anything else
+node tools/duplicate-candidates/find-duplicate-candidates.mjs --src <source-root>
+```
+
+Then read **`tools/README.md`** — it carries the folder's own rules (the contract that
+travels with it) and a **numbered 10-step porting checklist** plus the caveats that
+will actually bite you: monorepos with several source roots, generated/vendored files
+that inflate counts, non-`.ts` sources, and the fact that **JSX/Vue/Svelte need a real
+extractor** because this tokenizer does not understand markup blocks.
+
+The tool that exists today: **`tools/duplicate-candidates/`** — finds functions sharing
+an exact, normalised, or near-identical NAME across files, i.e. the Type-4 clone
+candidates `jscpd` is structurally blind to. Read that folder's README for the tiers,
+the `sim` hint, the early-exit prune reasons, and its stated limits.
+
+**What went into building it — reuse these decisions, don't rediscover them:**
+
+- Its first version emitted **12,313** tier-1 pairs of which **9,043 were
+  `constructor()`** — 73% noise, and the real finds (`escapeHtml`, `addLogEntry`) sat
+  below the default 60-per-tier stdout cap. **A candidate list nobody can read is not
+  a working tool.** The fix was a *ubiquitous-name filter*, and the rule that must
+  travel with any such filter is in `tools/README.md` rule 4: filtered items must be
+  **counted, reported, still written to the report, and recoverable by a flag**.
+- After filtering: **867 exact + 12 normalised + 1,842 near**, with **11,446** ignored
+  pairs still in the report. `--no-ignore` reproduces the original 12,313 exactly
+  (867 + 11,446 = 12,313), which is the test that proves filtering reclassifies
+  rather than hides. **Keep that invariant** in any port.
+- The body-evidence stage **exits early**: 66.2% of comparisons are ruled out by size
+  *without the bodies ever being tokenised*, plus disjoint-prune and early-confirm
+  paths. Counters are printed as evidence. `tools/README.md` rule 5 requires this.
+
+---
+
+## Duplication reality in this project (why W5 is closed as "wrong metric")
+
+The duplication gate is `jscpd` (`npm run duplication:check`, `.jscpd.json`
+`threshold: 5`, `minLines 3`, `minTokens 30`). Measured 2026-09-21 on 208 TS files /
+59,999 lines: **274 clones, 2,735 duplicated lines (4.56%), 21,589 duplicated tokens
+(4.92%)** — i.e. it currently PASSES with essentially no headroom.
+
+**`jscpd` is token-based, so it finds Type-1/2 clones and cannot find Type-4**
+(same purpose, independently written). Concretely, it reported this codebase as clean
+while `addLogEntry()` sat at ~0.90 similarity in `AILogService.ts` and
+`ErrorLogService.ts`, and `escapeHtml`/`escapeXml` were duplicated across ~8 files.
+**The 258-line clone it does flag is the easy, visible kind; the dangerous drift is
+the kind it cannot see.** A percentage threshold also gets *easier* as unrelated code
+is added and *harder* when dead code is deleted, so it is not a stable gate.
+
+**Decision: W5 stays ADVISORY (`continue-on-error: true` is deliberate).** Enforcing
+it at 5% was measured and rejected: there is ~0.08pp of margin, so any normal commit
+could turn CI red over a pre-existing condition — reintroducing exactly the
+untrustworthy-red-CI problem this session spent its time fixing. Options if the owner
+ever revisits: raise the threshold with real headroom then enforce, or replace the
+percentage with a "no NEW clones vs a baseline" check (a script, not a config flag).
+
 ---
 
 ## The contract
@@ -95,7 +164,25 @@ Always `npm ci` (lockfile-exact) before trusting a local gate run.
 | W6 | `npm run deadcode:*` scripts failed (`tsr` undeclared) | **DONE** — scripts and all doc references removed | — |
 | W2 | No test runner / no `test` script | **POLICY SET** — tests for new work only (above); no framework added | — |
 | W3 | Windows build unverified after the dependency change | **DEMOTED** — fallback path, not worth verification effort | — |
-| W5 | Duplication gate runs `continue-on-error`, never fails CI | **BLOCKED (owner decision)** — see the margin finding below | — |
+| W5 | Duplication gate is advisory; percentage metric is the wrong shape | **CLOSED (decision)** — see §Duplication reality above; do not re-propose enforcing it | — |
+| W7 | `tools/` portable analysis toolbox; duplicate-candidate finder | **DONE** — `ad7e208`+`c0801ec` via `wt-dupcand`, merged `322f464`, pushed | — |
+| W8 | One-off Type-4 audit of the tool's top candidates (extract shared helpers) | **READY, owner decision** — real refactoring, regression risk | — |
+
+### W8 — one-off Type-4 audit (READY, not started)
+
+`npm run dup:candidates` now produces an actionable shortlist. The known-good candidates
+worth opening, all confirmed by hand on 2026-09-21:
+
+| Candidate | Similarity | Where |
+|---|---|---|
+| `addLogEntry()` | ~0.90 | `AILogService.ts:44` ↔ `ErrorLogService.ts:45` — two log services, drifting |
+| `escapeHtml` / `escapeXml` | ≥0.75 | ~8 files incl. `WorkingEpubGenerator.ts:35`, `RPGContextBuilder.ts:364`, `RPGView.ts:921`, `XMLStoryModal.ts:2739` |
+| `escapeRegExp` / `escapeRegex` | ≥0.75 | `quality/metrics/textUtils.ts:27` ↔ `services/PromptExpansionService.ts:27` |
+| 258-line block | — | `idea-board/ui/TransformModal.ts` ↔ `ui/modals/ManualModal.ts` (found by `jscpd`, not by name) |
+
+**This is real refactoring on a mature app, so it is an owner call, not a queued job.**
+If taken, one candidate per landing, gate-verified, with a render check — extraction is
+where behaviour quietly changes.
 
 ### W5 — why this was NOT flipped to enforcing
 
@@ -214,14 +301,33 @@ threshold is 5%.
   `keys.html`, which would have aborted **every** Windows deploy at the verification
   step. Fixed forward as `e898420` (my own `2a51071` is what made the check
   unsatisfiable, so filing it as someone else's would have been wrong).
+- **2026-09-21** — **W7 landed.** Portable `tools/` toolbox + `npm test`. First W7
+  version was verified working (236 files, 3389 declarations, 14167 candidate pairs,
+  66.2% of body comparisons pruned by size without tokenising) but emitted 12,313
+  tier-1 pairs of which 9,043 were `constructor()`. Sent back for a ubiquitous-name
+  filter; `c0801ec` cut the default view to 867+12+1,842 while keeping all 11,446
+  ignored pairs counted and in the report. Dispatcher verified independently:
+  `npm test` 20/20, own gate exit 0, and kept 2,721 + ignored 11,446 = 14,167 =
+  the `--no-ignore` total (the invariant that proves nothing is hidden).
+- **2026-09-21** — **W5 closed as "wrong metric", not "too strict".** `jscpd` reports
+  this codebase clean while `addLogEntry()` sits at ~0.90 similarity across two log
+  services: it cannot see Type-4 clones at all, and its percentage threshold drifts
+  with codebase size. Full reasoning in §Duplication reality.
 
 ## Recovery pointers
 
 - Built and verified this session, all pushed and on `origin/master`: `19a6356`
   (repo cleanup), `98109ed` (Linux install fix + apps deploy mode + CI action bumps),
   `d00e75a` (82 lint errors), `32a4135` (restore null guards for TS 5.8.3),
-  `2a51071` (remove the access-key mechanism).
+  `2a51071` (remove the access-key mechanism), `436ae52` (gate.sh + this board),
+  `e84397d`/`264ed7e` (W1 build isolation), `e898420` (keys.html deploy fix),
+  `fba05df` (W4 dead files), `1834c07` (W6 deadcode scripts), `322f464` (W7 the
+  `tools/` toolbox, via `ad7e208`+`c0801ec`).
+- `npm test` now exists (W7) and runs `node --test "tools/**/*.test.mjs"`. There is
+  still **no test runner for the app itself** — see the owner policy above.
 - To redeploy after ANY rebuild: `npm run build:apps` (base `/expert/`), then verify
   `curl -s -o /dev/null -w '%{http_code}' https://apps.futuremagic.de/expert/` → 200.
 - A stronger check than HTTP 200: headless Chrome `--dump-dom` and confirm the app UI
   mounted (a wrong base path returns 200 with a blank page).
+- `npm run dup:candidates` regenerates `reports/duplicate-candidates.md` (git-ignored,
+  ~1.9 MB because ignored pairs are retained). That report is the durable artifact.
