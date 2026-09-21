@@ -198,7 +198,7 @@ export class ReviewStageApplier {
             return existing;
         }
         const node = this.scope.getNodeByHandle(handle);
-        if (!node || node.id !== nodeId) {
+        if (node?.id !== nodeId) {
             return null;
         }
         const contextItems: ReviewContextItem[] = node.getConditionalContextItems().map(item => ({

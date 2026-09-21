@@ -9,7 +9,7 @@ export class RPGLiteTransferModal {
    * Shows the save selection dialog.
    * Resolves with the chosen ids, or null if cancelled.
    */
-  public showSaveSelection(
+  public async showSaveSelection(
     sessions: RPGLiteSession[],
     templates: RPGLiteStartPreset[]
   ): Promise<RPGLiteTransferSelection | null> {

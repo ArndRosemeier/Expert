@@ -617,7 +617,7 @@ export class NodeInspectorModal extends BaseModal {
                             });
                         // Optionally, close and reopen to the selected node; for now, just refresh header
                     }
-                }) as EventListener;
+                });
                 window.addEventListener('cc-select-node', this.ccSelectListener);
             } catch (e) {
                 console.error('Failed to mount embedded Conditional Context editor in NodeInspector:', e);
@@ -631,7 +631,7 @@ export class NodeInspectorModal extends BaseModal {
             if (t && c) {
                 t.addEventListener('click', () => {
                     const isCollapsed = c.classList.toggle('collapsed');
-                    const label = t.textContent ?? '';
+                    const label = t.textContent;
                     const clean = label.replace(/^([▼▶])\s*/, '');
                     t.textContent = (isCollapsed ? '▶ ' : '▼ ') + clean;
                 });

@@ -109,7 +109,7 @@ export class ReaderEditManager {
             // TEMPORARY: Force reset to fix prompt issues - increment version to invalidate old configs
             const currentVersion = 5; // Incremented to add criteria support
             
-            if (savedConfig && savedConfig.version === currentVersion) {
+            if (savedConfig?.version === currentVersion) {
                 this.config = savedConfig;
                 console.log('✅ Reader edit actions config loaded from storage', {
                     actionCount: this.config.actions.length,

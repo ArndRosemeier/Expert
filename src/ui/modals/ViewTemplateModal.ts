@@ -171,7 +171,7 @@ export function showViewTemplateModal(rootNode: DocumentNode): void {
 
                                 // Save the project to persist template changes
                                 const currentProject = state.getActiveProject();
-                                if (currentProject && currentProject.rootNode.id === rootNode.id) {
+                                if (currentProject?.rootNode.id === rootNode.id) {
                                     await currentProject.saveToStorage();
                                 }
 
@@ -184,7 +184,7 @@ export function showViewTemplateModal(rootNode: DocumentNode): void {
 
                                 // Refresh the project UI to reflect template changes
                                 const activeProject = state.getActiveProject();
-                                if (activeProject && activeProject.rootNode.id === rootNode.id) {
+                                if (activeProject?.rootNode.id === rootNode.id) {
                                     // Refresh the UI
                                     const { initializeProjectUI } = await import('../project-ui');
                                     void initializeProjectUI(activeProject);

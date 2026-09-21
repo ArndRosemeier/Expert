@@ -362,7 +362,7 @@ export class RPGView {
             const initialSnapshot = await this.worldStateService.createSnapshot(session, 0);
             session.snapshots.push(initialSnapshot.id);
             const firstMsg = session.conversationHistory[0];
-            if (!firstMsg || firstMsg.role !== 'assistant') {
+            if (firstMsg?.role !== 'assistant') {
                 throw new Error('Expected initial GM message to be present before creating initial checkpoint.');
             }
             firstMsg.checkpointSnapshotId = initialSnapshot.id;
@@ -442,7 +442,7 @@ export class RPGView {
                 
                 const requireText = (selector: string): string => {
                     const el = root.querySelector(selector);
-                    const text = el?.textContent?.trim();
+                    const text = el?.textContent.trim();
                     if (!text) {
                         throw new Error(`Invalid setup response: missing required element '${selector}'`);
                     }
@@ -724,7 +724,7 @@ export class RPGView {
         const initialId = byTurn.get(0);
         if (initialId) {
             const msg0 = session.conversationHistory[0];
-            if (msg0 && msg0.role === 'assistant') {
+            if (msg0?.role === 'assistant') {
                 msg0.checkpointSnapshotId = initialId;
             }
         }
@@ -734,7 +734,7 @@ export class RPGView {
             if (turn === 0) continue;
             const idx = 1 + (turn * 2);
             const msg = session.conversationHistory[idx];
-            if (msg && msg.role === 'assistant') {
+            if (msg?.role === 'assistant') {
                 msg.checkpointSnapshotId = snapshotId;
             }
         }

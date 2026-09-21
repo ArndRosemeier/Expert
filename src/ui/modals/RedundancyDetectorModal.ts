@@ -778,8 +778,8 @@ export class RedundancyDetectorModal extends BaseModal {
                 
                 // Update the header to show deleted status
                 const headerTitle = redundancyItem.querySelector('h4');
-                if (headerTitle && !headerTitle.textContent?.includes('🗑️ Deleted:')) {
-                    headerTitle.textContent = headerTitle.textContent?.replace('⚠️ Suggested Deletion:', '🗑️ Deleted:') ?? '';
+                if (headerTitle && !headerTitle.textContent.includes('🗑️ Deleted:')) {
+                    headerTitle.textContent = headerTitle.textContent.replace('⚠️ Suggested Deletion:', '🗑️ Deleted:');
                     console.log(`Updated header for item ${index + 1}`);
                 }
         });

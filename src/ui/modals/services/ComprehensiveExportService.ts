@@ -212,7 +212,7 @@ export class ComprehensiveExportService {
     private static filterSensitiveData(data: unknown[]): unknown[] {
         return data.filter(item => {
             if (typeof item === 'object' && item !== null && 'key' in item) {
-                const key = (item as { key: unknown }).key;
+                const key = item.key;
                 return typeof key !== 'string' || !SENSITIVE_KEYS.includes(key);
             }
             return true;

@@ -2278,6 +2278,12 @@ export class XMLStoryModal extends SimpleModal {
         // synchronous; the expensive render is throttled to one animation frame so
         // the event loop keeps breathing.
         let pendingRenderHandle: number | null = null;
+        const cancelPendingRender = (): void => {
+            if (pendingRenderHandle !== null) {
+                cancelAnimationFrame(pendingRenderHandle);
+                pendingRenderHandle = null;
+            }
+        };
         const scheduleStreamingRender = (): void => {
             if (pendingRenderHandle !== null) return;
             pendingRenderHandle = requestAnimationFrame(() => {
@@ -2286,10 +2292,7 @@ export class XMLStoryModal extends SimpleModal {
             });
         };
         const flushStreamingRender = (): void => {
-            if (pendingRenderHandle !== null) {
-                cancelAnimationFrame(pendingRenderHandle);
-                pendingRenderHandle = null;
-            }
+            cancelPendingRender();
             this.updateStreamingMessage(placeholderMessage, response);
         };
 
@@ -2323,10 +2326,7 @@ export class XMLStoryModal extends SimpleModal {
             }
             throw error instanceof Error ? error : new Error('Streaming failed.');
         } finally {
-            if (pendingRenderHandle !== null) {
-                cancelAnimationFrame(pendingRenderHandle);
-                pendingRenderHandle = null;
-            }
+            cancelPendingRender();
             clearStallTimer();
             pageActivityService.off('hidden', suspendStallTimer);
             pageActivityService.off('frozen', suspendStallTimer);
@@ -3703,7 +3703,7 @@ export class XMLStoryModal extends SimpleModal {
             // Progress indicator on button
             if (buttonEl) {
                 buttonEl.disabled = true;
-                const originalText = buttonEl.textContent ?? '';
+                const originalText = buttonEl.textContent;
                 buttonEl.dataset['origText'] = originalText;
                 buttonEl.textContent = '⏳ Splitting…';
             }
@@ -3978,7 +3978,7 @@ export class XMLStoryModal extends SimpleModal {
             this.currentOutlineVersion >= 0 && 
             this.currentOutlineVersion < this.outlineHistory.length) {
             const currentVersion = this.outlineHistory[this.currentOutlineVersion];
-            if (currentVersion && currentVersion.content === content) {
+            if (currentVersion?.content === content) {
                 return;
             }
         }

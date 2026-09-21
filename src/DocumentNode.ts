@@ -374,7 +374,7 @@ export class DocumentNode {
                         id: uuidv4(),
                         text: text.trim(),
                         keywords: [],
-                        childScope: { mode: 'all' as ChildScopeMode, titles: [] },
+                        childScope: { mode: 'all', titles: [] },
                         leavesOnly: false
                     }));
                     legacyContextMigrated = true;

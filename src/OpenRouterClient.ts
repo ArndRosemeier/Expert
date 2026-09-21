@@ -1202,7 +1202,7 @@ export class OpenRouterClient {
         const modelSelector = state.getModelSelector();
         const params = modelSelector?.getSelectedParams();
         if (params?.[purpose]) {
-          const p = params[purpose] as { temperature?: number; top_p?: number; max_output_tokens?: number; verbosity?: string | number; thinking?: { enabled?: boolean; budget_tokens?: number }, reasoning?: { effort?: 'low' | 'medium' | 'high'; budget_tokens?: number } };
+          const p = params[purpose];
           if (typeof p.temperature === 'number') {
             request.temperature = Math.max(0, Math.min(2, p.temperature));
           }

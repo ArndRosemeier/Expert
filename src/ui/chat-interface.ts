@@ -543,14 +543,14 @@ export class ChatInterface {
 
         // Store references to DOM elements
         this.messagesContainer = this.chatContainer.querySelector('#messages-container');
-        this.messageInput = this.chatContainer.querySelector('#message-input') as HTMLTextAreaElement;
-        this.sendButton = this.chatContainer.querySelector('#send-btn') as HTMLButtonElement;
-        this.stopButton = this.chatContainer.querySelector('#stop-btn') as HTMLButtonElement;
-        this.retryButton = this.chatContainer.querySelector('#retry-btn') as HTMLButtonElement;
-        this.rewindButton = this.chatContainer.querySelector('#rewind-btn') as HTMLButtonElement;
-        this.modelPurposeSelect = this.chatContainer.querySelector('#model-purpose-select') as HTMLSelectElement;
+        this.messageInput = this.chatContainer.querySelector('#message-input');
+        this.sendButton = this.chatContainer.querySelector('#send-btn');
+        this.stopButton = this.chatContainer.querySelector('#stop-btn');
+        this.retryButton = this.chatContainer.querySelector('#retry-btn');
+        this.rewindButton = this.chatContainer.querySelector('#rewind-btn');
+        this.modelPurposeSelect = this.chatContainer.querySelector('#model-purpose-select');
         
-        this.modelPurposeSelect.value = this.selectedModelPurpose;
+        this.modelPurposeSelect!.value = this.selectedModelPurpose;
     }
 
     /**

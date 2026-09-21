@@ -1019,7 +1019,7 @@ async function handleSetProjectLanguage(): Promise<void> {
     }
     
     const selectedNode = projectManager.findNodeById(selectedNodeId);
-    if (!selectedNode || selectedNode.level !== 0) {
+    if (selectedNode?.level !== 0) {
         alert('Please select a project root to set the project language.');
         return;
     }
@@ -1155,7 +1155,7 @@ function deepCopyNodeWithLevelAdjustment(sourceNode: DocumentNode, levelAdjustme
         newMasterId = newNode.addVersion(masterTags, { title: masterVersion.title, content: masterVersion.content }, masterVersion.metadata, masterVersion.ratings);
     }
     for (const v of sourceVersions) {
-        if (masterVersion && v.id === masterVersion.id) continue;
+        if (v.id === masterVersion?.id) continue;
         const tags = Array.from(v.tags).filter(t => t !== 'master');
         newNode.addVersion(tags, { title: v.title, content: v.content }, v.metadata, v.ratings);
     }
@@ -2938,7 +2938,7 @@ export async function renderNodeDetails(retryOptions?: { _isRetry?: boolean }) {
     const isGenerationActive = projectManager.isAnyNodeGenerating();
     if (isGenerationActive) {
         const progressContainer = document.getElementById('generation-progress-container');
-        if (progressContainer && progressContainer.style.display === 'none') {
+        if (progressContainer?.style.display === 'none') {
             // Make sure progress container is visible if generation is active
             progressContainer.style.display = 'block';
         }
@@ -3354,7 +3354,7 @@ export async function renderNodeDetails(retryOptions?: { _isRetry?: boolean }) {
             const node = projectManager.findNodeById(selectedNodeId);
             if (node) {
                 // Use version management system to update title with "edited" and "title_edited" tags
-                node.setTitleWithTags(nodeTitleDisplay.textContent ?? '', ['edited', 'title_edited']);
+                node.setTitleWithTags(nodeTitleDisplay.textContent, ['edited', 'title_edited']);
                 // Save to storage with debounced approach
                 clearTimeout(titleDisplay._saveTimeout);
                 titleDisplay._saveTimeout = setTimeout(() => {
@@ -3812,7 +3812,7 @@ function handleDropdownAction(buttonId: string): void {
         case 'new-top-layer-btn':
             {
                 const node = projectManager.findNodeById(selectedNodeId);
-                if (!node || node.level !== 0) {
+                if (node?.level !== 0) {
                     alert('This action is only available for root nodes.');
                     return;
                 }
@@ -4629,7 +4629,7 @@ This action cannot be undone.`;
         case 'set-project-language-btn':
             {
                 const node = projectManager.findNodeById(selectedNodeId);
-                if (!node || node.level !== 0) {
+                if (node?.level !== 0) {
                     alert('Please select a project root to set the project language.');
                     return;
                 }
@@ -6448,7 +6448,7 @@ export const buttonHandlers: Record<string, (event: Event) => void> = {
         }
         
         const selectedNode = projectManager.findNodeById(selectedNodeId);
-        if (!selectedNode || selectedNode.level !== 0) {
+        if (selectedNode?.level !== 0) {
             alert('Please select a project root to set the project language.');
             return;
         }
@@ -6471,7 +6471,7 @@ function removeAllListeners() {
     
     // Remove click listeners from all tracked buttons
     Object.keys(buttonHandlers).forEach(buttonId => {
-        const button = document.getElementById(buttonId) as ExpertTrackedElement | null;
+        const button: ExpertTrackedElement | null = document.getElementById(buttonId);
         if (button) {
             const handler = button._expertHandler;
             if (handler) {

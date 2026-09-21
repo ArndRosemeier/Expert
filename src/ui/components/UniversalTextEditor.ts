@@ -31,7 +31,7 @@ class AIUndoState {
      * @returns The original text if this is an AI transformation that can be undone, null otherwise
      */
     static tryUndo(currentText: string): string | null {
-        if (this.current && currentText === this.current.changed) {
+        if (currentText === this.current?.changed) {
             // Return the original text
             const originalText = this.current.original;
             
@@ -758,7 +758,7 @@ export class UniversalTextEditor {
         
         while (walker.nextNode()) {
             const node = walker.currentNode as Text;
-            const nodeLength = node.textContent?.length ?? 0;
+            const nodeLength = node.textContent.length;
             
             if (currentPos + nodeLength >= regions[0].start) {
                 targetNode = node;

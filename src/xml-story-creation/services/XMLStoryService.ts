@@ -12,9 +12,6 @@ import type {
     HumanEdit,
     ParsedResponse,
     XMLStoryEvent,
-    ElementCreatedEvent,
-    ElementUpdatedEvent,
-    HumanEditEvent,
     XMLStoryConfig,
     ElementID,
     SystemCommand
@@ -208,7 +205,7 @@ export class XMLStoryService {
             type: 'human_edit',
             payload: { edit: humanEdit, element: updatedElement },
             timestamp: new Date()
-        } as HumanEditEvent);
+        });
     }
     
     /**
@@ -453,7 +450,7 @@ export class XMLStoryService {
                     source
                 },
                 timestamp: new Date()
-            } as ElementUpdatedEvent);
+            });
         } else {
             // Add new element
             this.state.elements.set(element.id, element);
@@ -482,7 +479,7 @@ export class XMLStoryService {
                 type: 'element_created',
                 payload: { element, source },
                 timestamp: new Date()
-            } as ElementCreatedEvent);
+            });
         }
         
         // Handle highlighting

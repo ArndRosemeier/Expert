@@ -147,10 +147,10 @@ export class SearchModal extends BaseModal {
 
     private setupEventListeners(container: HTMLElement): void {
         // Cache elements
-        this.searchInput = container.querySelector('#search-input') as HTMLInputElement;
-        this.replaceInput = container.querySelector('#replace-input') as HTMLInputElement;
-        this.resultsContainer = container.querySelector('#search-results') as HTMLElement;
-        this.statusElement = container.querySelector('#search-status') as HTMLElement;
+        this.searchInput = container.querySelector('#search-input');
+        this.replaceInput = container.querySelector('#replace-input');
+        this.resultsContainer = container.querySelector('#search-results');
+        this.statusElement = container.querySelector('#search-status');
 
         // Search button
         const searchBtn = container.querySelector('#search-btn') as HTMLButtonElement;
@@ -161,7 +161,7 @@ export class SearchModal extends BaseModal {
         replaceBtn.addEventListener('click', () => { this.performReplace(); });
 
         // Enter key in search input
-        this.searchInput.addEventListener('keydown', (e) => {
+        this.searchInput!.addEventListener('keydown', (e) => {
             if (e.key === 'Enter') {
                 this.performSearch();
             }
@@ -192,7 +192,7 @@ export class SearchModal extends BaseModal {
         });
 
         // Enter key in replace input
-        this.replaceInput.addEventListener('keydown', (e) => {
+        this.replaceInput!.addEventListener('keydown', (e) => {
             if (e.key === 'Enter') {
                 this.performReplace();
             }

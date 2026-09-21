@@ -269,7 +269,7 @@ export class RPGConversationPanel {
                 throw new Error('Cannot retry: no previous checkpoint available.');
             }
             const prevAssistant = history[history.length - 3];
-            if (!prevAssistant || prevAssistant.role !== 'assistant' || !prevAssistant.checkpointSnapshotId) {
+            if (prevAssistant?.role !== 'assistant' || !prevAssistant.checkpointSnapshotId) {
                 throw new Error('Cannot retry: missing previous assistant checkpoint.');
             }
             await this.interactionService.restoreCheckpointIntoSession(this.session, prevAssistant.checkpointSnapshotId);

@@ -2149,12 +2149,12 @@ export class RPGLiteView {
 
     let target: HTMLElement | null = null;
     if (hit.kind === 'message') {
-      target = messagesEl.querySelector(`[data-message-id="${CSS.escape(hit.messageId)}"]`) as HTMLElement | null;
+      target = messagesEl.querySelector(`[data-message-id="${CSS.escape(hit.messageId)}"]`);
       if (!target) throw new Error(`Search hit message element missing: ${hit.messageId}`);
     } else {
       target = messagesEl.querySelector(
         `.rpg-lite-milestone-marker[data-milestone-id="${CSS.escape(hit.milestoneId)}"]`
-      ) as HTMLElement | null;
+      );
       if (!target) {
         // Marker is omitted when the summary covers the entire transcript; open
         // the summary modal so the match in the summary text is reachable.
@@ -2186,7 +2186,7 @@ export class RPGLiteView {
       ? latestValidMilestone(session, completedCount)
       : null;
 
-    if (milestone && milestone.summary.toLowerCase().includes(needle)) {
+    if (milestone?.summary.toLowerCase().includes(needle)) {
       return { kind: 'summary', milestoneId: milestone.id };
     }
 
@@ -3086,7 +3086,7 @@ export class RPGLiteView {
         ? this.currentSession.conversation[msgIdx + 1]
         : null;
       
-      if (nextMsg && nextMsg.role === 'assistant') {
+      if (nextMsg?.role === 'assistant') {
         const retryBtn = document.createElement('button');
         retryBtn.className = 'rpg-lite-btn rpg-lite-btn-sm rpg-lite-btn-primary';
         retryBtn.textContent = 'Retry Next Response';

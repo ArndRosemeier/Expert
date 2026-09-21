@@ -461,6 +461,13 @@ export class GuidedReviewModal extends SimpleModal {
             });
         };
 
+        const cancelPendingRender = (): void => {
+            if (pendingRenderHandle !== null) {
+                cancelAnimationFrame(pendingRenderHandle);
+                pendingRenderHandle = null;
+            }
+        };
+
         armStallTimer();
         try {
             await this.openRouterClient.streamingChat(this.purpose, conversation, {
@@ -493,10 +500,7 @@ export class GuidedReviewModal extends SimpleModal {
             }
             throw error instanceof Error ? error : new Error('Streaming failed.');
         } finally {
-            if (pendingRenderHandle !== null) {
-                cancelAnimationFrame(pendingRenderHandle);
-                pendingRenderHandle = null;
-            }
+            cancelPendingRender();
             clearStallTimer();
             pageActivityService.off('hidden', suspendStallTimer);
             pageActivityService.off('frozen', suspendStallTimer);

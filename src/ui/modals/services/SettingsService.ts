@@ -230,7 +230,7 @@ export class SettingsService {
         confirmOverwrite: (profileName: string) => Promise<boolean>
     ): Promise<ProfileImportResult> {
         try {
-            const result = await this.settingsManager.importProfileFromFile(file, confirmOverwrite) as ProfileImportResult;
+            const result = await this.settingsManager.importProfileFromFile(file, confirmOverwrite);
             
             if (result.success && result.profileName) {
                 this.emitChange({
@@ -245,7 +245,7 @@ export class SettingsService {
             return {
                 success: false,
                 message: 'Failed to import profile. Please check the file format and try again.'
-            } as ProfileImportResult;
+            };
         }
     }
 

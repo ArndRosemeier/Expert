@@ -701,7 +701,7 @@ export class CriteriaEditor {
                     outline: criterion.outline ?? true,
                     leaf: criterion.leaf ?? true,
                     enabled: criterion.enabled
-                } as MetricCriterion;
+                };
             }
 
             const migrated: QualityCriterion = {

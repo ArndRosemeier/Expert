@@ -67,5 +67,5 @@ export function charactersInTransit(graph: WorldGraph): WorldCharacter[] {
 
 /** In-transit characters whose destination is the given location. */
 export function charactersIncomingTo(graph: WorldGraph, locationId: string): WorldCharacter[] {
-  return Object.values(graph.characters).filter(c => c.transit !== undefined && c.transit.toId === locationId);
+  return Object.values(graph.characters).filter(c => c.transit?.toId === locationId);
 }

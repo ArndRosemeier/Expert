@@ -6,7 +6,7 @@
  * - World View: All locations, characters, lore with relationships
  */
 
-import { RPGAttitudeIntensity, RPGAttitudeStance, RPGGameSession, RPGGoal, RPGGoalPriority, RPGGoalStatus, RPGRelationship, RPGRelationshipKind, RPGSuspiciousEntityFlag } from '../types/RPGTypes';
+import { RPGAttitudeIntensity, RPGAttitudeStance, RPGGameSession, RPGGoal, RPGRelationship, RPGRelationshipKind, RPGSuspiciousEntityFlag } from '../types/RPGTypes';
 import { WorldStateService } from '../services/WorldStateService';
 import { RPGInteractionService } from '../services/RPGInteractionService';
 import { getActiveProject } from '../../state';
@@ -775,8 +775,8 @@ export class RPGWorldInspector {
                 return {
                     id,
                     text,
-                    status: status as RPGGoalStatus,
-                    priority: priority as RPGGoalPriority,
+                    status,
+                    priority,
                     createdTurn,
                     updatedTurn
                 };

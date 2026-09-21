@@ -451,7 +451,7 @@ export function openExtractContextModal(projectManager: ProjectManager, node: Do
                             const extractBtn = extractBtnElement;
                             const loadingSection = getElementById('loading-section');
                             const resultSection = getElementById('result-section');
-                            const originalText = extractBtn.textContent ?? 'Extract Context';
+                            const originalText = extractBtn.textContent;
                             
                             extractBtn.disabled = true;
                             extractBtn.textContent = '⏳ Extracting...';

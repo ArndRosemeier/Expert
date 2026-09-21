@@ -780,7 +780,7 @@ export class TextEditorWithHighlighting {
 
         // Find the text node and position within it
         const textNode = this.editableDiv.firstChild;
-        if (!textNode || textNode.nodeType !== Node.TEXT_NODE) return;
+        if (textNode?.nodeType !== Node.TEXT_NODE) return;
 
         try {
             range.setStart(textNode, startPos);
@@ -1154,7 +1154,7 @@ export class TextEditorWithHighlighting {
         
         // Get the text content - DO NOT strip leading/trailing newlines
         // Those might be legitimate parts of the user's text
-        const text = tempDiv.textContent ?? '';
+        const text = tempDiv.textContent;
         
         return text;
     }

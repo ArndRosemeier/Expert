@@ -29,7 +29,7 @@ export function getMetricDefinition<K extends MetricType>(type: K): MetricDefini
 
 /** Returns all registered metric definitions (for building UI option lists). */
 export function getAllMetricDefinitions(): MetricDefinition<MetricType>[] {
-    return Object.values(METRIC_REGISTRY) as MetricDefinition<MetricType>[];
+    return Object.values(METRIC_REGISTRY);
 }
 
 /**

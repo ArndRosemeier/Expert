@@ -424,7 +424,7 @@ export class XMLStoryParser {
                 }
 
                 // For new closing tag syntax, get description from text content instead of attribute
-                const textContent = xmlElement.textContent?.trim();
+                const textContent = xmlElement.textContent.trim();
                 if (textContent && !attributes['description']) {
                     attributes['description'] = textContent;
                 }

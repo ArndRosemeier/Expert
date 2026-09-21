@@ -2998,7 +2998,7 @@ export class ReaderGUI {
 
         // Check if this is a new action (not yet properly saved with user details)
         const existingAction = this.readerEditor.getAllActions().find(a => a.id === actionId);
-        if (existingAction && existingAction.title === 'New Action' && existingAction.prompt.includes('Please modify the following text:')) {
+        if (existingAction?.title === 'New Action' && existingAction.prompt.includes('Please modify the following text:')) {
             // This is a newly created action that hasn't been properly saved yet
             // Delete the temporary action and create a new one with the proper details
             await this.readerEditor.deleteAction(actionId);
@@ -4012,8 +4012,7 @@ export async function openReaderView(projectManager: ProjectManager, rootNode?: 
 
     // Check if we need to create a new reader instance or update the existing one
     const currentRootNode = rootNode ?? projectManager.rootNode;
-    if (!globalReaderInstance || 
-        globalReaderInstance.projectManager !== projectManager || 
+    if (globalReaderInstance?.projectManager !== projectManager || 
         globalReaderInstance.getRootNode() !== currentRootNode) {
         // Clean up existing instance if it exists
         if (globalReaderInstance) {

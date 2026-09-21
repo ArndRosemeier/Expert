@@ -89,8 +89,8 @@ export class ReviewCommitService {
                 continue;
             }
             const before = beforeById.get(after.id);
-            const textChanged = !before || before.text !== after.text;
-            const triggerChanged = !before || before.trigger !== after.trigger;
+            const textChanged = before?.text !== after.text;
+            const triggerChanged = before?.trigger !== after.trigger;
             if (textChanged || triggerChanged) {
                 node.updateConditionalContextItem(after.id, {
                     text: after.text,

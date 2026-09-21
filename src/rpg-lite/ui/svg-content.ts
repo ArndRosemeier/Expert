@@ -38,7 +38,7 @@ export function splitSvgSegments(content: string): RPGLiteContentSegment[] {
   while ((match = regex.exec(content)) !== null) {
     const fullMatch = match[0];
     const svg = match[1];
-    if (fullMatch === undefined || svg === undefined) {
+    if (svg === undefined) {
       throw new Error('SVG_BLOCK_REGEX matched without capturing the expected groups.');
     }
 

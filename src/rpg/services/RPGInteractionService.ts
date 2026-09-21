@@ -307,8 +307,8 @@ export class RPGInteractionService {
 
         const idEl = root.querySelector('entity_id');
         const stateEl = root.querySelector('state');
-        const idText = idEl?.textContent?.trim();
-        const stateText = stateEl?.textContent?.trim();
+        const idText = idEl?.textContent.trim();
+        const stateText = stateEl?.textContent.trim();
         if (!idText) throw new Error('Consolidation response missing <entity_id>.');
         if (idText !== entityId) throw new Error(`Consolidation response entity_id mismatch: expected '${entityId}', got '${idText}'.`);
         if (!stateText) throw new Error('Consolidation response missing <state>.');
@@ -633,7 +633,7 @@ export class RPGInteractionService {
 
             // Attach checkpoint to the assistant message for this turn
             const lastMessage = session.conversationHistory[session.conversationHistory.length - 1];
-            if (!lastMessage || lastMessage.role !== 'assistant') {
+            if (lastMessage?.role !== 'assistant') {
                 throw new Error('Expected last conversation message to be an assistant message when creating a checkpoint.');
             }
             lastMessage.checkpointSnapshotId = snapshot.id;

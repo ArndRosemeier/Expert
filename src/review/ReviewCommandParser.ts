@@ -18,7 +18,6 @@
  */
 
 import {
-    MultiReplaceScope,
     ReviewCommand,
     ReviewParseError,
     ReviewParseResult
@@ -67,7 +66,7 @@ export class ReviewCommandParser {
                     errors.push({ message: `multi_replace has invalid scope "${scopeRaw}" (use content|context|both).`, sourceText: raw });
                     return;
                 }
-                commands.push({ index, command: { kind: 'multi_replace', scope: scopeRaw as MultiReplaceScope, search, replace, rawXml: raw } });
+                commands.push({ index, command: { kind: 'multi_replace', scope: scopeRaw, search, replace, rawXml: raw } });
             }
         );
 
