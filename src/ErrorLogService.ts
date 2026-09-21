@@ -1,6 +1,7 @@
 import { StorageService } from './StorageService';
 import { IndexedDBService } from './IndexedDBService';
 import { ErrorLogEntry } from './types';
+import { addLogEntry } from './logPersistence';
 
 /**
  * Persists runtime errors to IndexedDB so that otherwise-silent failures
@@ -41,19 +42,21 @@ export class ErrorLogService {
     /**
      * Record a single error entry. Persistence failures are surfaced to the
      * console but swallowed afterwards to keep the logger non-blocking.
+     *
+     * Shared with AILogService via addLogEntry() in logPersistence.ts. The
+     * `initInsideTry` and `logEntryOnFailure` options preserve this service's
+     * two deliberate differences: initialization happens inside the try so a
+     * storage failure can never escape the logger, and the lost entry is
+     * included in the console output.
      */
     public async addLogEntry(entry: Omit<ErrorLogEntry, 'id'>): Promise<void> {
-        const logEntry: ErrorLogEntry = {
-            ...entry,
-            id: `error-log-${Date.now()}-${Math.random().toString(36).slice(2, 11)}`
-        };
-
-        try {
-            await this.ensureInitialized();
-            await this.indexedDBService!.set(this.storeName, logEntry.id, logEntry);
-        } catch (persistError) {
-            console.error('Failed to persist error log entry:', persistError, 'original entry:', logEntry);
-        }
+        await addLogEntry<ErrorLogEntry>(entry, this.indexedDBService!, async () => this.ensureInitialized(), {
+            storeName: this.storeName,
+            idPrefix: 'error-log',
+            failureMessage: 'Failed to persist error log entry:',
+            initInsideTry: true,
+            logEntryOnFailure: true
+        });
     }
 
     /**

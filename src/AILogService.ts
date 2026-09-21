@@ -1,6 +1,7 @@
 import { StorageService } from './StorageService';
 import { IndexedDBService } from './IndexedDBService';
 import { AILogEntry } from './types';
+import { addLogEntry } from './logPersistence';
 
 export class AILogService {
     private static instance: AILogService | null = null;
@@ -39,21 +40,18 @@ export class AILogService {
     }
 
     /**
-     * Add a new AI log entry
+     * Add a new AI log entry.
+     *
+     * Shared with ErrorLogService via addLogEntry() in logPersistence.ts. The
+     * defaults there are this service's semantics: initialize before the write
+     * (so an init failure propagates), and log only the error on failure.
      */
     public async addLogEntry(entry: Omit<AILogEntry, 'id'>): Promise<void> {
-        await this.ensureInitialized();
-
-        const logEntry: AILogEntry = {
-            ...entry,
-            id: `ai-log-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
-        };
-
-        try {
-            await this.indexedDBService!.set(this.storeName, logEntry.id, logEntry);
-        } catch (error) {
-            console.error('Failed to add AI log entry:', error);
-        }
+        await addLogEntry<AILogEntry>(entry, this.indexedDBService!, async () => this.ensureInitialized(), {
+            storeName: this.storeName,
+            idPrefix: 'ai-log',
+            failureMessage: 'Failed to add AI log entry:'
+        });
     }
 
     /**
