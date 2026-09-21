@@ -236,7 +236,7 @@ percentage metric**, not duplicated logic:
 extract without inventing an abstraction they do not have in common. Left alone
 deliberately, per the dedup rule's final clause.
 
-### W10 — the same quote-blind escaping bug in 12 more attribute positions (READY)
+### W10 — attribute injection in 12 positions (DONE)
 
 Found by auditing for the pattern fixed in `f5df9cf`. `escapeHtml()` (DOM-based) escapes
 only `& < >`, **not quotes** — verified against real Chrome. Using it to build an HTML
