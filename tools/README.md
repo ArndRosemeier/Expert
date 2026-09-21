@@ -29,7 +29,9 @@ every project this folder is ported to.
 4. **Pointers, not judges.** Every tool says plainly, in its own output, that what
    it emits are *candidates requiring human review*. A name or shape match is
    **not** proof. Over-reporting is acceptable and expected; **silently missing
-   things is not**.
+   things is not**. A tool may filter noise from its default view, but any filtered
+   item must be **counted, reported, still written to the report, and recoverable**
+   by a flag — never quietly discarded.
 5. **Evidence, not boasts.** Every tool prints its scan stats **and its own pruning
    counters** — how many comparisons it actually made, and how many it exited
    early on and why. A tool that claims to prune but compares everything anyway is

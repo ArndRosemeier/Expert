@@ -1,4 +1,4 @@
-// Tests for scripts/find-duplicate-candidates.mjs
+// Tests for tools/duplicate-candidates/find-duplicate-candidates.mjs
 //
 // Policy: new work ships with a test. Pure helpers are unit-tested here and the
 // scanner is exercised end-to-end against a throwaway fs.mkdtempSync fixture
@@ -26,6 +26,10 @@ import {
   jaccard,
   compareBodies,
   newPruneStats,
+  DEFAULT_IGNORED_NAMES,
+  resolveIgnoreList,
+  toIgnoreSet,
+  isUbiquitousPair,
 } from './find-duplicate-candidates.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
@@ -253,6 +257,85 @@ test('groupCandidates prune counters account for every candidate pair', () => {
 });
 
 // ---------------------------------------------------------------------------
+// Ubiquitous-name filter (auditable; never silently drops)
+// ---------------------------------------------------------------------------
+
+const mkFn = (name, file, line, values = ['a', 'b', 'c', 'd']) => ({
+  name,
+  file,
+  line,
+  kind: 'function',
+  size: values.length,
+  tokens: values.map((v) => ({ v, kind: 'punct', line: 1 })),
+  _shapeSet: null,
+});
+
+test('ubiquitous filter: constructor is excluded by default but counted', () => {
+  const functions = [
+    mkFn('constructor', 'src/a.ts', 1),
+    mkFn('constructor', 'src/b.ts', 2),
+    mkFn('sharedThing', 'src/c.ts', 3),
+    mkFn('sharedThing', 'src/d.ts', 4),
+  ];
+
+  const filtered = groupCandidates(functions);
+  assert.equal(filtered.tier1.length, 1, 'only sharedThing stays in tier 1');
+  assert.equal(filtered.tier1[0].a.name, 'sharedThing');
+  assert.equal(filtered.ignoredTotal, 1, 'the constructor pair is counted, not dropped');
+  assert.equal(filtered.ignored.length, 1);
+  assert.equal(filtered.ignored[0].tier, 1);
+  assert.equal(filtered.ignoredByName.get('constructor'), 1);
+  // Still compared (evidence computed) so the report entry is complete.
+  assert.notEqual(filtered.ignored[0].status, 'pending');
+});
+
+test('ubiquitous filter: --no-ignore brings ignored pairs back', () => {
+  const functions = [
+    mkFn('constructor', 'src/a.ts', 1),
+    mkFn('constructor', 'src/b.ts', 2),
+    mkFn('sharedThing', 'src/c.ts', 3),
+    mkFn('sharedThing', 'src/d.ts', 4),
+  ];
+
+  const unfiltered = groupCandidates(functions, { ignoreList: [] });
+  assert.equal(unfiltered.tier1.length, 2, 'constructor returns to tier 1');
+  assert.equal(unfiltered.ignoredTotal, 0);
+});
+
+test('ubiquitous filter: --ignore replaces the default list', () => {
+  const functions = [
+    mkFn('constructor', 'src/a.ts', 1),
+    mkFn('constructor', 'src/b.ts', 2),
+    mkFn('sharedThing', 'src/c.ts', 3),
+    mkFn('sharedThing', 'src/d.ts', 4),
+  ];
+
+  const replaced = groupCandidates(functions, { ignoreList: ['sharedThing'] });
+  assert.equal(replaced.ignoredTotal, 1);
+  assert.equal(replaced.ignoredByName.get('sharedThing'), 1);
+  assert.ok(
+    replaced.tier1.some((p) => p.a.name === 'constructor'),
+    'constructor is no longer ignored when the list is replaced',
+  );
+});
+
+test('isUbiquitousPair ignores only when EVERY name is boilerplate', () => {
+  const set = toIgnoreSet(['open']);
+  assert.equal(isUbiquitousPair({ a: { name: 'open' }, b: { name: 'open' } }, set), true);
+  assert.equal(isUbiquitousPair({ a: { name: 'open' }, b: { name: 'openDocument' } }, set), false);
+  assert.equal(isUbiquitousPair({ a: { name: 'open' }, b: { name: 'open' } }, new Set()), false);
+});
+
+test('resolveIgnoreList: default, --ignore replacement and --no-ignore', () => {
+  assert.ok(DEFAULT_IGNORED_NAMES.includes('constructor'));
+  assert.ok(DEFAULT_IGNORED_NAMES.includes('render'));
+  assert.ok(resolveIgnoreList({}).includes('constructor'));
+  assert.deepEqual(resolveIgnoreList({ ignore: 'foo, bar' }), ['foo', 'bar']);
+  assert.deepEqual(resolveIgnoreList({ noIgnore: true }), []);
+  assert.deepEqual(resolveIgnoreList({ ignore: 'foo', noIgnore: true }), []);
+});
+
+// ---------------------------------------------------------------------------
 // End-to-end over a throwaway fixture directory
 // ---------------------------------------------------------------------------
 
@@ -330,11 +413,71 @@ test('end-to-end: fixture directory reports tier 1 and ignores string/comment na
     assert.ok(!stdout.includes('ignored.d.ts'));
     assert.ok(!stdout.includes('ignored.test.ts'));
 
+    // Ubiquitous filter is ON by default and reports its (zero) total.
+    assert.match(stdout, /Ignored as ubiquitous: 0 pairs/);
+
     const markdown = fs.readFileSync(report, 'utf8');
     assert.match(markdown, /CANDIDATES, not verdicts/);
     assert.match(markdown, /sharedThing/);
     assert.match(markdown, /Evidence pruning/);
     assert.match(markdown, /ruled-out/);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('end-to-end: ubiquitous-name filter CLI (default, --no-ignore, --ignore)', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'dupcand-filter-'));
+  try {
+    const srcDir = path.join(dir, 'src');
+    fs.mkdirSync(srcDir);
+    fs.writeFileSync(
+      path.join(srcDir, 'a.ts'),
+      [
+        'export class Alpha { constructor(value: number) { this.value = value; } }',
+        'export function foo(x: number) { return x + 1; }',
+        '',
+      ].join('\n'),
+    );
+    fs.writeFileSync(
+      path.join(srcDir, 'b.ts'),
+      [
+        'export class Beta { constructor(value: number) { this.value = value; } }',
+        'export function foo(x: number) { return x + 2; }',
+        '',
+      ].join('\n'),
+    );
+
+    const run = (args) => {
+      const report = path.join(dir, `report-${args.join('_') || 'default'}.md`);
+      const res = spawnSync(
+        process.execPath,
+        [TOOL, '--src', srcDir, '--report', report, ...args],
+        { cwd: dir, encoding: 'utf8' },
+      );
+      assert.equal(res.status, 0, `expected exit 0 for ${args.join(' ')}; stderr: ${res.stderr}`);
+      return { stdout: res.stdout, markdown: fs.readFileSync(report, 'utf8') };
+    };
+
+    // 1. Default: constructor excluded from the inline listing, but counted and
+    //    still written to the report under its own section.
+    const def = run([]);
+    assert.ok(!/constructor\(\)/.test(def.stdout), 'constructor must not be listed inline by default');
+    assert.match(def.stdout, /Ignored as ubiquitous: 1 pairs \(constructor: 1\)/);
+    assert.match(def.stdout, /foo\(\)/, 'the non-ubiquitous pair is still listed');
+    assert.match(def.markdown, /## Ignored candidates/);
+    assert.match(def.markdown, /constructor/);
+
+    // 2. --no-ignore: the filter is off and the pair comes back inline.
+    const all = run(['--no-ignore']);
+    assert.match(all.stdout, /constructor\(\)/);
+    assert.match(all.stdout, /Ignored as ubiquitous: 0 pairs \(filter disabled/);
+
+    // 3. --ignore foo: the default list is REPLACED, not extended.
+    const replaced = run(['--ignore', 'foo']);
+    assert.match(replaced.stdout, /Ignored as ubiquitous: 1 pairs \(foo: 1\)/);
+    assert.match(replaced.stdout, /constructor\(\)/, 'constructor is no longer ignored');
+    assert.ok(!/\bfoo\(\)/.test(replaced.stdout), 'foo must now be filtered out');
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });
   }

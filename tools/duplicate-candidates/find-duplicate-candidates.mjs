@@ -41,6 +41,59 @@ export const DEFAULT_CONFIRM_FLOOR = 0.6;
 /** If shorter body is < 50% of the longer, the pair cannot be a duplicate. */
 export const DEFAULT_SIZE_RATIO = 0.5;
 
+/**
+ * UBIQUITOUS-NAME FILTER — auditable, editable, and never a cover-up.
+ *
+ * These names repeat structurally in any TypeScript codebase, so a pair that
+ * shares one carries almost no duplicate signal; without this list the tier-1
+ * listing is ~73% `constructor()` and the useful candidates sink below the fold.
+ *
+ * Filtering is a DISPLAY convenience only. Every ignored pair is:
+ *   - counted and printed as a total (stdout AND report),
+ *   - still written to the report under its own "Ignored candidates" section,
+ *   - recoverable in full with `--no-ignore` (which reproduces the unfiltered
+ *     tier counts exactly), and replaceable with `--ignore a,b,c`.
+ *
+ * Classes of name, and why each is here:
+ *   - lifecycle/boilerplate: constructor, render, destroy, componentDidMount,
+ *     componentWillUnmount, setupEventListeners, attachEventListeners,
+ *     addEventListeners — every component/class has its own by construction.
+ *   - ubiquitous API surface: open, close, cleanup, clear, initialize, init,
+ *     getInstance — same singleton/UI shape repeated by convention.
+ *   - language & runtime callbacks: toString, valueOf, main, handler, handleEvent
+ *     — prescribed by the language, the entry point, or the event system.
+ *
+ * A pair is ignored only when ALL of its names (normalised) are listed, so a
+ * near-match like `open` / `openDocument` is kept: only the unrelated half is
+ * ubiquitous.
+ */
+export const DEFAULT_IGNORED_NAMES = [
+  // lifecycle / boilerplate
+  'constructor',
+  'render',
+  'destroy',
+  'componentDidMount',
+  'componentWillUnmount',
+  'setupEventListeners',
+  'attachEventListeners',
+  'addEventListeners',
+  // ubiquitous API surface
+  'open',
+  'close',
+  'cleanup',
+  'clear',
+  'initialize',
+  'init',
+  'getInstance',
+  // language / runtime callbacks
+  'toString',
+  'valueOf',
+  'main',
+  'handler',
+  'handleEvent',
+];
+
+
 // ---------------------------------------------------------------------------
 // Masking: comments + strings + template literals + regex literals
 // ---------------------------------------------------------------------------
@@ -967,6 +1020,41 @@ function groupBy(functions, keyFn) {
   return map;
 }
 
+/** Display key for an ignored pair (also the key of the count breakdown). */
+export function ignoredPairName(p) {
+  return p.a.name === p.b.name ? p.a.name : `${p.a.name} / ${p.b.name}`;
+}
+
+/** Normalised lookup set for an ignore list. */
+export function toIgnoreSet(ignoreList) {
+  return new Set((ignoreList || []).map((n) => normaliseName(n)));
+}
+
+/**
+ * A pair is "ubiquitous" only when EVERY one of its names (normalised) is in the
+ * ignore set — so `open` / `openDocument` is kept: only one half is boilerplate.
+ */
+export function isUbiquitousPair(p, normalisedIgnore) {
+  if (!normalisedIgnore || normalisedIgnore.size === 0) return false;
+  const names = p.a.name === p.b.name ? [p.a.name] : [p.a.name, p.b.name];
+  return names.every((n) => normalisedIgnore.has(normaliseName(n)));
+}
+
+function sortIgnored(pairs) {
+  return pairs.sort((x, y) => {
+    const nx = ignoredPairName(x);
+    const ny = ignoredPairName(y);
+    if (nx !== ny) return nx < ny ? -1 : 1;
+    const sx = x.sim ?? 0;
+    const sy = y.sim ?? 0;
+    if (sy !== sx) return sy - sx;
+    if (x.a.file !== y.a.file) return x.a.file < y.a.file ? -1 : 1;
+    if (x.a.line !== y.a.line) return x.a.line - y.a.line;
+    if (x.b.file !== y.b.file) return x.b.file < y.b.file ? -1 : 1;
+    return x.b.line - y.b.line;
+  });
+}
+
 /**
  * Build the three candidate tiers. Every pair appears in exactly ONE tier: the
  * strongest one that applies, so tiers stay readable and nothing is repeated.
@@ -974,12 +1062,22 @@ function groupBy(functions, keyFn) {
  * Each surviving pair gets a body-shape Jaccard HINT; pairs the evidence stage
  * ruled out carry the prune reason instead of a misleading score.
  *
+ * UBIQUITOUS-NAME FILTER: pairs whose every name is in the ignore list are moved
+ * out of the tier lists into `ignored`, counted in `ignoredTotal` /
+ * `ignoredByName`, and still reported in full. Nothing is silently dropped;
+ * `ignoreList: []` disables the filter entirely (the `--no-ignore` flag).
+ *
  * @param {object[]} functions output of scanTree().functions
- * @param {{floor?:number, confirmFloor?:number, sizeRatio?:number, stats?:object}} [opts]
+ * @param {{floor?:number, confirmFloor?:number, sizeRatio?:number, stats?:object, ignoreList?:string[]|null}} [opts]
  */
 export function groupCandidates(functions, opts = {}) {
   const stats = opts.stats || newPruneStats();
+  const ignoreList = opts.ignoreList === undefined ? DEFAULT_IGNORED_NAMES : opts.ignoreList;
+  const ignoreSet = toIgnoreSet(ignoreList);
   const seen = new Set();
+  const ignored = [];
+  const ignoredByName = new Map();
+
   const take = (pairs) => {
     const out = [];
     for (const p of pairs) {
@@ -990,13 +1088,30 @@ export function groupCandidates(functions, opts = {}) {
     return out;
   };
 
+  const processTier = (pairs, tierName) => {
+    const taken = take(pairs);
+    attachEvidence(taken, stats, opts);
+    const kept = [];
+    for (const p of taken) {
+      p.tier = tierName;
+      if (isUbiquitousPair(p, ignoreSet)) {
+        ignored.push(p);
+        const key = ignoredPairName(p);
+        ignoredByName.set(key, (ignoredByName.get(key) || 0) + 1);
+      } else {
+        kept.push(p);
+      }
+    }
+    return sortPairs(kept);
+  };
+
   // Tier 1 — exact name match across different files.
   const exact = [];
   for (const list of groupBy(functions, (f) => f.name).values()) {
     if (list.length < 2) continue;
     exact.push(...crossFilePairs(list));
   }
-  const tier1 = sortPairs(attachEvidence(take(exact), stats, opts));
+  const tier1 = processTier(exact, 1);
 
   // Tier 2 — normalised name match (lowercase, `_`/`$` removed).
   const normalised = [];
@@ -1004,7 +1119,7 @@ export function groupCandidates(functions, opts = {}) {
     if (list.length < 2) continue;
     normalised.push(...crossFilePairs(list));
   }
-  const tier2 = sortPairs(attachEvidence(take(normalised), stats, opts));
+  const tier2 = processTier(normalised, 2);
 
   // Tier 3 — near name match (affix stripping + token split + edit distance).
   const byName = new Map();
@@ -1035,9 +1150,18 @@ export function groupCandidates(functions, opts = {}) {
       nearPairs.push(...crossFilePairs([...byName.get(names[i]), ...byName.get(names[j])]));
     }
   }
-  const tier3 = sortPairs(attachEvidence(take(nearPairs), stats, opts));
+  const tier3 = processTier(nearPairs, 3);
 
-  return { tier1, tier2, tier3, stats };
+  return {
+    tier1,
+    tier2,
+    tier3,
+    ignored: sortIgnored(ignored),
+    ignoredByName,
+    ignoredTotal: ignored.length,
+    ignoreList: ignoreList || [],
+    stats,
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -1075,6 +1199,28 @@ export function pruneSummaryLines(stats, functionCount) {
   ];
 }
 
+/** Names-by-count for the ubiquitous breakdown, count desc then name asc. */
+function ignoredBreakdown(tiers, limit = 12) {
+  const entries = [...tiers.ignoredByName.entries()].sort(
+    (a, b) => b[1] - a[1] || (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0),
+  );
+  return { entries, shown: entries.slice(0, limit), more: Math.max(0, entries.length - limit) };
+}
+
+/** Requirement 2: ignored pairs are always counted, never silently dropped. */
+export function ignoredSummaryLine(tiers, limit = 12) {
+  if (!tiers.ignoreList || tiers.ignoreList.length === 0) {
+    return 'Ignored as ubiquitous: 0 pairs (filter disabled — --no-ignore)';
+  }
+  if (tiers.ignoredTotal === 0) {
+    return `Ignored as ubiquitous: 0 pairs (none matched the ${tiers.ignoreList.length}-name default list)`;
+  }
+  const { shown, more } = ignoredBreakdown(tiers, limit);
+  const parts = shown.map(([name, count]) => `${name}: ${count}`);
+  const tail = more > 0 ? `, … +${more} more name(s)` : '';
+  return `Ignored as ubiquitous: ${tiers.ignoredTotal} pairs (${parts.join(', ')}${tail})`;
+}
+
 export function renderStdout(result, tiers, reportPath, opts = {}) {
   const displayBase = opts.displayBase || path.dirname(result.rootDir);
   const relReport = path.relative(displayBase, reportPath);
@@ -1086,9 +1232,15 @@ export function renderStdout(result, tiers, reportPath, opts = {}) {
   lines.push('This tool over-reports on purpose: it must not silently miss anything.');
   lines.push('');
   lines.push(`Scan: ${result.filesScanned} files scanned, ${result.functions.length} function-like declarations found, ${result.skipped.length} skipped`);
-  lines.push(`Tiers: ${tiers.tier1.length} exact, ${tiers.tier2.length} normalised, ${tiers.tier3.length} near (each pair appears once, in its strongest tier)`);
+  const filterState = tiers.ignoreList.length === 0
+    ? 'ubiquitous-name filter OFF (--no-ignore)'
+    : `ubiquitous-name filter ON (${tiers.ignoreList.length} names; --no-ignore disables)`;
+  lines.push(`Tiers: ${tiers.tier1.length} exact, ${tiers.tier2.length} normalised, ${tiers.tier3.length} near (each pair appears once, in its strongest tier; ${filterState})`);
+  lines.push(ignoredSummaryLine(tiers));
   lines.push(...pruneSummaryLines(tiers.stats, result.functions.length));
   lines.push(`Report: ${shownReport}`);
+  lines.push('Ignored pairs are counted above and listed IN FULL in the report under "Ignored candidates" —');
+  lines.push('nothing is silently dropped; re-run with --no-ignore to see them inline, or with --ignore a,b,c to retune.');
   lines.push('`sim` = body-shape Jaccard HINT (2 decimals); it is only meaningful because the names already match.');
   lines.push('`sim>=X` means the walk was stopped early on a guaranteed lower bound; `ruled-out` means the');
   lines.push('prune rule fired and the pair is shown for completeness, without a misleading score.');
@@ -1150,6 +1302,14 @@ export function renderMarkdown(result, tiers, opts = {}) {
   out.push(`- Tier 1 (exact name): **${tiers.tier1.length}** pairs`);
   out.push(`- Tier 2 (normalised name): **${tiers.tier2.length}** pairs`);
   out.push(`- Tier 3 (near name): **${tiers.tier3.length}** pairs`);
+  out.push(`- Ignored as ubiquitous (counted, NOT shown inline by default): **${tiers.ignoredTotal}** pairs`);
+  if (tiers.ignoreList.length === 0) {
+    out.push('- Ubiquitous-name filter: **OFF** (`--no-ignore`)');
+  } else {
+    const { shown, more } = ignoredBreakdown(tiers, 20);
+    out.push(`- Ubiquitous-name filter: **ON**, ${tiers.ignoreList.length} names (\`--no-ignore\` disables, \`--ignore a,b,c\` replaces)`);
+    out.push(`- Ignored breakdown: ${shown.map(([n, c]) => `\`${n}\`: ${c}`).join(', ')}${more > 0 ? `, … +${more} more name(s)` : ''}`);
+  }
   out.push(`- Generated: ${generated}`);
   out.push('');
   out.push('### Evidence pruning (early exits actually taken)');
@@ -1167,8 +1327,11 @@ export function renderMarkdown(result, tiers, opts = {}) {
   out.push('- **compared** — neither early exit fired; `sim` is exact.');
   out.push('');
   out.push('Each pair appears in exactly one tier — the strongest one that applies — so');
-  out.push('tiers never repeat a candidate. Within a tier, ordering is stable: `sim`');
-  out.push('descending, then name, then file/line, so two runs diff cleanly.');
+  out.push('tiers never repeat a candidate. Pairs whose **every** name is in the');
+  out.push('ubiquitous-name ignore list are pulled out of those tiers and listed in the');
+  out.push('"Ignored candidates" section below instead; they are still counted and never');
+  out.push('dropped. Within a tier, ordering is stable: `sim` descending, then name, then');
+  out.push('file/line, so two runs diff cleanly.');
   out.push('');
   out.push('`sim` is a **hint only**: Jaccard similarity of the two bodies\' shape');
   out.push('token-sets (identifiers replaced by `ID`, numbers by `NUM`). It is only');
@@ -1197,6 +1360,33 @@ export function renderMarkdown(result, tiers, opts = {}) {
       );
     }
     out.push('');
+  }
+
+  if (tiers.ignoreList.length > 0) {
+    out.push(`## Ignored candidates — ubiquitous names — ${tiers.ignoredTotal} pairs`);
+    out.push('');
+    out.push('> These are **candidates too**. They are excluded from the default stdout');
+    out.push('> listing only, because the shared name is structurally expected to repeat and');
+    out.push('> carries almost no duplicate signal. They are all recorded here, so nothing');
+    out.push('> is lost: re-run with `--no-ignore` to inline them, or `--ignore a,b,c` to');
+    out.push('> replace the list. The list itself is `DEFAULT_IGNORED_NAMES` in the tool.');
+    out.push('');
+    if (tiers.ignored.length === 0) {
+      out.push('(no pair matched the ignore list)');
+      out.push('');
+    } else {
+      const { shown, more } = ignoredBreakdown(tiers, 20);
+      out.push(`Breakdown by name: ${shown.map(([n, c]) => `\`${n}\`: ${c}`).join(', ')}${more > 0 ? `, … +${more} more name(s)` : ''}`);
+      out.push('');
+      out.push('| name | tier | evidence | file A | file B | body tokens A | body tokens B |');
+      out.push('| --- | ---: | --- | --- | --- | ---: | ---: |');
+      for (const p of tiers.ignored) {
+        out.push(
+          `| \`${ignoredPairName(p)}\` | ${p.tier} | ${evidenceText(p)} | \`${p.a.file}:${p.a.line}\` | \`${p.b.file}:${p.b.line}\` | ${p.a.size} | ${p.b.size} |`,
+        );
+      }
+      out.push('');
+    }
   }
 
   if (result.skipped.length > 0) {
@@ -1235,11 +1425,34 @@ function parseArgs(argv) {
       opts.max = argv[++i];
     } else if (arg.startsWith('--max=')) {
       opts.max = arg.slice('--max='.length);
+    } else if (arg === '--ignore') {
+      opts.ignore = argv[++i];
+    } else if (arg.startsWith('--ignore=')) {
+      opts.ignore = arg.slice('--ignore='.length);
+    } else if (arg === '--no-ignore') {
+      opts.noIgnore = true;
     } else {
       throw new Error(`unknown argument: ${arg}`);
     }
   }
   return opts;
+}
+
+/**
+ * Resolve the ubiquitous-name ignore list from parsed CLI args.
+ *   (no flag)        -> DEFAULT_IGNORED_NAMES
+ *   --ignore a,b,c   -> exactly that list (replaces the default)
+ *   --no-ignore      -> [] (filter disabled)
+ */
+export function resolveIgnoreList(args = {}) {
+  if (args.noIgnore) return [];
+  if (args.ignore !== undefined) {
+    return String(args.ignore)
+      .split(',')
+      .map((s) => s.trim())
+      .filter(Boolean);
+  }
+  return DEFAULT_IGNORED_NAMES.slice();
 }
 
 function main() {
@@ -1252,7 +1465,20 @@ function main() {
     return;
   }
   if (args.help) {
-    console.log('Usage: node tools/duplicate-candidates/find-duplicate-candidates.mjs [--src DIR] [--report FILE] [--max N]');
+    console.log([
+      'Usage: node tools/duplicate-candidates/find-duplicate-candidates.mjs [options]',
+      '',
+      'Options:',
+      '  --src DIR        source root to scan            (default: <repo>/src)',
+      '  --report FILE    markdown report path           (default: reports/duplicate-candidates.md)',
+      '  --max N          max pairs printed per tier     (default: 60; the report always has all)',
+      '  --ignore a,b,c   replace the default ubiquitous-name ignore list',
+      '  --no-ignore      disable ubiquitous-name filtering entirely',
+      '  -h, --help       show this help',
+      '',
+      'The ubiquitous-name filter only affects the default stdout listing: ignored',
+      'pairs are counted in the summary and always written to the report.',
+    ].join('\n'));
     return;
   }
 
@@ -1274,7 +1500,7 @@ function main() {
     return;
   }
 
-  const tiers = groupCandidates(result.functions);
+  const tiers = groupCandidates(result.functions, { ignoreList: resolveIgnoreList(args) });
   const parsedMax = Number.parseInt(args.max, 10);
   const text = renderStdout(result, tiers, reportPath, {
     displayBase: path.dirname(srcRoot),

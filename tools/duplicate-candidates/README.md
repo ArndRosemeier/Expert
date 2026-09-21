@@ -1,7 +1,7 @@
 # `duplicate-candidates` — name-based Type-4 clone discovery
 
 `npm run dup:candidates`
-`node tools/duplicate-candidates/find-duplicate-candidates.mjs [--src DIR] [--report FILE] [--max N]`
+`node tools/duplicate-candidates/find-duplicate-candidates.mjs [--src DIR] [--report FILE] [--max N] [--ignore a,b,c] [--no-ignore]`
 
 A dependency-free scanner that finds **function-like declarations sharing an
 exact, normalised or near-identical name across different files**, and emits them
@@ -63,6 +63,9 @@ worth reading.
      strings are within a small edit distance.
 4. **Compare bodies only as a HINT**, with pruning (below), and sort each tier by
    that hint descending.
+5. **Filter ubiquitous names from the default listing** (see below). Pairs whose
+   *every* name is structurally expected to repeat are moved out of the inline
+   tiers, **counted**, and written to their own report section. Nothing is dropped.
 
 ---
 
@@ -72,7 +75,8 @@ worth reading.
 Duplicate-function CANDIDATES (name-based discovery — NOT verdicts)
 ...
 Scan: 236 files scanned, 3389 function-like declarations found, 0 skipped
-Tiers: 12313 exact, 12 normalised, 1842 near (each pair appears once, in its strongest tier)
+Tiers: 867 exact, 12 normalised, 1842 near (each pair appears once, in its strongest tier; ubiquitous-name filter ON (20 names; --no-ignore disables))
+Ignored as ubiquitous: 11446 pairs (constructor: 9043, render: 1594, setupEventListeners: 171, destroy: 153, open: 120, cleanup: 102, getInstance: 91, close: 77, initialize: 66, clear: 28, attachEventListeners: 1)
 Evidence pruning: 14167 candidate comparisons
   fully compared: 2552 (18.0%)
   confirmed early (high end): 2162 (15.3%)
@@ -80,19 +84,22 @@ Evidence pruning: 14167 candidate comparisons
   ruled-out (disjoint, partial walk): 79 (0.6%)
   shape sets built: 938 function(s) of 3389; shape tokens examined: 35172
 Report: reports/duplicate-candidates.md
+Ignored pairs are counted above and listed IN FULL in the report under "Ignored candidates" —
+nothing is silently dropped; re-run with --no-ignore to see them inline, or with --ignore a,b,c to retune.
 
-== TIER 1 — EXACT name match across different files (12313 pairs) ==
+== TIER 1 — EXACT name match across different files (867 pairs) ==
   buildContentStyle()  sim=1.00  src/ui/modals/NodeInspectorModal.ts:85  <->  src/ui/modals/TagManagerModal.ts:54
   getLanguage()  sim=1.00  src/ProjectManager.ts:112  <->  src/SettingsManager.ts:759
   getModalStyles()  sim=1.00  src/idea-board/ui/TransformModal.ts:82  <->  src/ui/components/TextTransformModal.ts:89
+  escapeHtml()  sim>=0.75 (confirmed early)  src/DiffTool.ts:142  <->  src/idea-board/ui/TransformModal.ts:413
   addLogEntry()  sim>=0.60 (confirmed early)  src/AILogService.ts:44  <->  src/ErrorLogService.ts:45
   ...
 ```
 
 Line shape: `name()` — `evidence` — `file A:line` — `file B:line`. Stdout caps each
-tier at 60 pairs so it stays readable; the full list is always in
-`reports/duplicate-candidates.md`. Use `--max N` for more on stdout, e.g.
-`node tools/duplicate-candidates/find-duplicate-candidates.mjs --max 20000`.
+tier at 60 pairs so it stays readable; the full list (including every ignored pair)
+is always in `reports/duplicate-candidates.md`. Use `--max N` for more on stdout,
+e.g. `node tools/duplicate-candidates/find-duplicate-candidates.mjs --max 20000`.
 
 The markdown report opens with the scan stats and a plain statement that these are
 candidates requiring human review. Ordering is stable — similarity desc, then
@@ -138,10 +145,61 @@ passed to the exported functions for experiments.
 
 ---
 
+## The ubiquitous-name filter
+
+Without a filter, tier 1 on this repo is **73 % `constructor()`** (9043 of 12313
+pairs), and the handful of genuinely interesting candidates — `escapeHtml`
+repeated across several files, `addLogEntry` duplicated in the two log services —
+sink below the 60-pair stdout cap. A candidate list nobody can read is not doing
+its job.
+
+So names that are *structurally expected to repeat* are filtered from the
+**default stdout listing**:
+
+```js
+// DEFAULT_IGNORED_NAMES — auditable and editable in the tool
+constructor, render, destroy, componentDidMount, componentWillUnmount,
+setupEventListeners, attachEventListeners, addEventListeners,   // lifecycle/boilerplate
+open, close, cleanup, clear, initialize, init, getInstance,     // ubiquitous API surface
+toString, valueOf, main, handler, handleEvent                   // language/runtime callbacks
+```
+
+Why these: every component/class has its own `constructor`/`render`/`destroy` by
+construction; singletons and UI widgets repeat `getInstance`/`open`/`close` by
+convention; `toString`/`valueOf`/`main`/event handlers are prescribed by the
+language or the runtime. A shared name there carries almost no duplicate signal.
+
+**Nothing is hidden.** The filter is a display convenience, and the tool stays
+honest about over-reporting:
+
+- Ignored pairs are **counted** and printed: `Ignored as ubiquitous: 11446 pairs
+  (constructor: 9043, render: 1594, …)` — in stdout **and** in the report.
+- Ignored pairs are **still written to the report**, in full, under their own
+  clearly-labelled section (`## Ignored candidates — ubiquitous names`), with the
+  same evidence column as everything else.
+- A pair is filtered only when **every** one of its names is on the list, so a
+  near-match like `open` / `openDocument` is kept: only one half is boilerplate.
+- The tool calls itself a pointer, not a judge; the filter never turns it into a
+  tool that quietly drops things.
+
+### The three CLI flags
+
+| Flag | Effect |
+| --- | --- |
+| *(none)* | use `DEFAULT_IGNORED_NAMES` |
+| `--ignore a,b,c` | **replace** the list with exactly `a,b,c` (not extend it) |
+| `--no-ignore` | disable filtering entirely — reproduces the unfiltered tier counts exactly (`12313` tier-1 pairs here, vs `867` filtered) |
+
+`--no-ignore` is the proof that the list is a convenience, not a cover-up;
+`--help` lists every flag.
+
+---
+
 ## Known limitations (stated plainly)
 
 - **Same name is not proof.** Two unrelated `render()` methods are legitimately
-  reported. Expect thousands of tier-1 pairs on this repo; most are noise.
+  reported. Expect hundreds of tier-1 pairs on this repo even after the ubiquitous
+  filter (867 of 12313); most are still noise.
 - **Name-first, so it is blind to a duplicated body under two unrelated names.**
   `formatName` vs `buildDisplayName` above will **not** appear. Catching that needs
   a different (AST/embedding) tool.
