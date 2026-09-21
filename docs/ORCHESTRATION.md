@@ -167,7 +167,7 @@ Always `npm ci` (lockfile-exact) before trusting a local gate run.
 | W5 | Duplication gate is advisory; percentage metric is the wrong shape | **CLOSED (decision)** — see §Duplication reality above; do not re-propose enforcing it | — |
 | W7 | `tools/` portable analysis toolbox; duplicate-candidate finder | **DONE** — `ad7e208`+`c0801ec` via `wt-dupcand`, merged `322f464`, pushed | — |
 | W8 | Type-4 audit + deduplication | **IN PROGRESS** — 4 landings (`63e76f8`, `ff27bdc`, `8518de2`, `f5df9cf`); 258-line block classified NOT a duplicate; escape variants DECIDED to stay | — |
-| W10 | **Attribute injection: quote-blind `escapeHtml` in 12 attribute positions** | **READY** — see W10 below | — |
+| W10 | Attribute injection: quote-blind `escapeHtml` in 12 attribute positions | **DONE** — `af8b6c4`, grep-verified zero remaining | — |
 | W9 | Testing policy for changed vs untouched code | **RESOLVED** — owner rule in `AGENTS.md` | — |
 
 ### W8 — Type-4 audit and deduplication (IN PROGRESS)
@@ -251,8 +251,14 @@ it inside `value="..."` / `title="..."` / `data-*="..."`:
 
 The fix is mechanical: use `escapeHtmlAttribute` (escapes `& < > " '`) for attribute
 values; keep `escapeHtml` for text content. `getAttribute` decodes entities, so values
-read back are unchanged. This is a behaviour change (escaping output differs), so per
-the testing rule it needs a test for the changed code and a render check. **Not started.**
+read back are unchanged. **DONE in `af8b6c4`** — all 12 now use `escapeHtmlAttribute`; no attribute-position
+`escapeHtml` remains in `src/` (grep-verified). Text-content uses deliberately keep
+`escapeHtml`. Gate 0, 41/41 tests, render clean.
+
+Self-inflicted bug caught by the gate in that change: the first pass wrote
+`this.escapeHtmlAttribute(...)`, but the helper was imported as a FUNCTION while
+`this.escapeHtml` had worked because each class defines that *method*. A controlled
+probe reproduced the `TS2339`. Fixed to a bare call.
 
 ### W9 — testing policy (RESOLVED by owner rule, 2026-09-21)
 
