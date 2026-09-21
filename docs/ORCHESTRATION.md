@@ -166,23 +166,62 @@ Always `npm ci` (lockfile-exact) before trusting a local gate run.
 | W3 | Windows build unverified after the dependency change | **DEMOTED** — fallback path, not worth verification effort | — |
 | W5 | Duplication gate is advisory; percentage metric is the wrong shape | **CLOSED (decision)** — see §Duplication reality above; do not re-propose enforcing it | — |
 | W7 | `tools/` portable analysis toolbox; duplicate-candidate finder | **DONE** — `ad7e208`+`c0801ec` via `wt-dupcand`, merged `322f464`, pushed | — |
-| W8 | One-off Type-4 audit of the tool's top candidates (extract shared helpers) | **READY, owner decision** — real refactoring, regression risk | — |
+| W8 | Type-4 audit + deduplication | **IN PROGRESS** — 2 landings (`63e76f8`, `ff27bdc`); escape map recorded; owner call needed for the remaining variants | — |
+| W9 | The app has no test harness (`npm test` runs `tools/` only) | **BLOCKED (owner decision)** — see W9 below | — |
 
-### W8 — one-off Type-4 audit (READY, not started)
+### W8 — Type-4 audit and deduplication (IN PROGRESS)
 
-`npm run dup:candidates` now produces an actionable shortlist. The known-good candidates
-worth opening, all confirmed by hand on 2026-09-21:
+`npm run dup:candidates` produces the shortlist. **Two landings done 2026-09-21:**
 
-| Candidate | Similarity | Where |
+| Landing | What | Commit |
 |---|---|---|
-| `addLogEntry()` | ~0.90 | `AILogService.ts:44` ↔ `ErrorLogService.ts:45` — two log services, drifting |
-| `escapeHtml` / `escapeXml` | ≥0.75 | ~8 files incl. `WorkingEpubGenerator.ts:35`, `RPGContextBuilder.ts:364`, `RPGView.ts:921`, `XMLStoryModal.ts:2739` |
-| `escapeRegExp` / `escapeRegex` | ≥0.75 | `quality/metrics/textUtils.ts:27` ↔ `services/PromptExpansionService.ts:27` |
-| 258-line block | — | `idea-board/ui/TransformModal.ts` ↔ `ui/modals/ManualModal.ts` (found by `jscpd`, not by name) |
+| regex escaping | `PromptExpansionService.escapeRegex` removed; 6 call sites use the shared `escapeRegExp` from `quality/metrics/textUtils.ts`. Bodies were byte-identical. | `63e76f8` |
+| DOM `escapeHtml` | **9** byte-identical private copies removed; 50 call sites now import the canonical `escapeHtml` from `ui/modals/core/modal-utils.ts` (which already exported it and was used by nobody). | `ff27bdc` |
 
-**This is real refactoring on a mature app, so it is an owner call, not a queued job.**
-If taken, one candidate per landing, gate-verified, with a render check — extraction is
-where behaviour quietly changes.
+Verified: gate exit 0 on both, plus a headless-Chrome render after the 9-file
+consolidation (127,986 DOM bytes, identical to the pre-refactor render).
+
+#### ⚠ THE ESCAPE MAP — read this before merging any escape helper
+
+**This codebase has ~24 escape implementations hiding 7 distinct behaviours.** The
+names are shared across incompatible implementations, so merging by name alone WILL
+silently change escaping. Verified classification:
+
+| Count | Behaviour | Examples |
+|---|---|---|
+| 11 → **9 now merged** | DOM-based (`div.textContent` → `innerHTML`) | the 4 below |
+| 2 | DOM + extra pass (`\n`→`<br>`; or a regex pass) | `text-editor-with-highlighting.ts:1170`, `AILogModal.ts:355` |
+| 4 | escapes `& < > " '`→**`&#39;`** | `RPGWorldInspector.ts:988`, `RPGView.ts:921`, **`modal-utils.ts:24` (canonical)**, `RPGLiteTransferModal.ts:151` |
+| 4 | escapes `& < > "` (**no apostrophe**) | `NodeStatisticsModal.ts:13`, `WorkingEpubGenerator.ts:44`, `WorldRpgView.ts:60`, `worldRpgTextRenderer.ts:14` |
+| 2 | escapes `& < > " '`→**`&apos;`** | `RPGContextBuilder.ts:364` (escapeXml), `WorkingEpubGenerator.ts:35` (escapeXml) |
+| 2 | escapes `& < >` only (**no quotes**) | `GuidedReviewModal.ts:847`, `XMLStoryModal.ts:2739` |
+| 1 | escapes `& < " '`→`&#39;` + DOM | `AILogModal.ts:355` |
+
+**19 escape-function definitions remain** (28 before). They are NOT interchangeable:
+adding `'` or `"` escaping where it is absent changes output, and `&apos;` vs `&#39;`
+is a real difference in older HTML parsers. **Deciding the canonical form is an owner
+policy call, not a mechanical extraction.** The obvious direction — one `escapeHtml`
+and one `escapeHtmlAttribute` in `modal-utils.ts` — has to be chosen deliberately.
+
+Still open from the shortlist: `addLogEntry()` (~0.90, `AILogService` ↔
+`ErrorLogService`), and the 258-line block between `idea-board/ui/TransformModal.ts`
+and `ui/modals/ManualModal.ts`.
+
+### W9 — the app has no test harness (BLOCKED, owner decision)
+
+Raising this because the dedup work made it concrete. `npm test` exists but runs
+**only** `tools/**/*.test.mjs`. There is no runner and no test file for `src/`.
+
+Consequence: the tooling folder has real tests, and the app it analyses has none. Any
+refactor in `src/` — exactly what W8 does — is verified only by typecheck, lint, build,
+and a manual headless render. That is a reasonable bar for a byte-identical extraction,
+and a weak bar for behaviour-changing work.
+
+Options: (a) add a runner for `src/` (`tsx`/`vitest`) and require tests for new app
+code, per the existing "tests for new work" policy; (b) keep manual + gate verification
+and accept the risk; (c) add only a render smoke test committed as a script. **Not
+decided.** Note the existing policy already promises tests for new work — there is
+simply nowhere to put them yet.
 
 ### W5 — why this was NOT flipped to enforcing
 
