@@ -9,32 +9,38 @@ $FTP_SERVER = "ftp.futuremagic.de"
 $FTP_USER = "12529-Pyrion"
 $FTP_REMOTE_PATH = "/webseiten/Expert/"
 
+# The `domainfactory` Vite mode writes its OWN output dir (see OUT_DIRS in
+# vite.config.ts): `dist/` is the LIVE symlink target of ~/apps/expert
+# (https://apps.futuremagic.de/expert/) and must never be written by this script.
+# Keep this value in sync with OUT_DIRS.domainfactory in vite.config.ts.
+$DIST_DIR = "dist-domainfactory"
+
 Write-Host "Starting COMPLETE CLEAN deployment..." -ForegroundColor Red
 Write-Host "This will delete ALL files in the remote Expert directory!" -ForegroundColor Yellow
 
 try {
     Write-Host "Cleaning build folder..." -ForegroundColor Yellow
-    if (Test-Path "dist") {
-        Remove-Item -Recurse -Force "dist"
+    if (Test-Path $DIST_DIR) {
+        Remove-Item -Recurse -Force $DIST_DIR
     }
 
     Write-Host "Building application for domainfactory..." -ForegroundColor Yellow
     npm run build:domainfactory
 
     Write-Host "Copying .htaccess..." -ForegroundColor Yellow
-    Copy-Item "public/.htaccess" "dist/.htaccess" -Force
+    Copy-Item "public/.htaccess" "$DIST_DIR/.htaccess" -Force
 
-    if (Test-Path "dist/index.html") {
+    if (Test-Path "$DIST_DIR/index.html") {
         Write-Host "Build successful!" -ForegroundColor Green
         
         # Verify critical files exist locally before upload
         $criticalFiles = @(
-            "dist/index.html",
-            "dist/.htaccess", 
-            "dist/pdf.worker.min.mjs",
-            "dist/keys.html",
-            "dist/manual.html",
-            "dist/creation-loop.html"
+            "$DIST_DIR/index.html",
+            "$DIST_DIR/.htaccess", 
+            "$DIST_DIR/pdf.worker.min.mjs",
+            "$DIST_DIR/keys.html",
+            "$DIST_DIR/manual.html",
+            "$DIST_DIR/creation-loop.html"
         )
         
         foreach ($file in $criticalFiles) {
@@ -44,7 +50,7 @@ try {
         }
         
         # Count total files to upload
-        $totalFiles = (Get-ChildItem -Path "dist" -Recurse -File).Count
+        $totalFiles = (Get-ChildItem -Path $DIST_DIR -Recurse -File).Count
         Write-Host "Preparing to upload $totalFiles files..." -ForegroundColor Cyan
         
         # Try to get password from multiple sources
@@ -144,12 +150,12 @@ try {
         
         Write-Host "Uploading fresh files..." -ForegroundColor Green
         
-        $files = Get-ChildItem -Path "dist" -Recurse -File
+        $files = Get-ChildItem -Path $DIST_DIR -Recurse -File
         $uploaded = 0
         $failed = @()
         
         foreach ($file in $files) {
-            $relativePath = $file.FullName.Substring((Resolve-Path "dist").Path.Length + 1).Replace('\', '/')
+            $relativePath = $file.FullName.Substring((Resolve-Path $DIST_DIR).Path.Length + 1).Replace('\', '/')
             $remoteFile = "$FTP_REMOTE_PATH$relativePath"
             
             # Create directory if needed
@@ -240,7 +246,7 @@ try {
                 -Title "Expert" `
                 -Path "/Expert/" `
                 -FtpPassword $FTP_PASSWORD `
-                -ManifestoLocalPath (Join-Path (Get-Location) "dist\futuremagic.json") `
+                -ManifestoLocalPath (Join-Path (Get-Location) "$DIST_DIR\futuremagic.json") `
                 -AppRemoteDir "/webseiten/Expert/"
         } else {
             Write-Host "[SKIP] Futuremagic registry helper not found: $registerScript" -ForegroundColor Yellow

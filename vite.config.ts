@@ -51,6 +51,20 @@ export default defineConfig(({ mode }) => {
   } else if (mode === 'apps') {
     base = '/expert/';  // apps.futuremagic.de serves each app from a slug subpath
   }
+
+  // ONE mode -> ONE output directory. Only `apps` may write `dist/`: `~/apps/expert`
+  // is a symlink to `dist/`, so `dist/` IS the live deploy at
+  // https://apps.futuremagic.de/expert/. Every other mode writes to its own directory
+  // so that a stray non-apps build can never overwrite (and silently break) the live
+  // base-'/expert/' bundle. Unknown modes get a `dist-<mode>` dir, never `dist`.
+  const OUT_DIRS: Record<string, string> = {
+    apps: 'dist',                    // LIVE target — the symlinked deploy, keep as-is
+    domainfactory: 'dist-domainfactory',
+    github: 'dist-github',
+    production: 'dist-production',   // also the default `vite build` mode
+  };
+  const outDir = OUT_DIRS[mode] ?? `dist-${mode}`;
+  console.log(`📂 Output directory: ${outDir}`);
   
   // Generate version info
   const versionInfo = getVersionInfo();
@@ -80,7 +94,7 @@ export default defineConfig(({ mode }) => {
       __FULL_VERSION__: JSON.stringify(versionInfo.fullVersion)
     },
     build: {
-      outDir: 'dist',
+      outDir,
       assetsDir: 'assets',
       sourcemap: false,
       minify: 'esbuild',  // Enable JS minification

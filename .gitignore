@@ -2,7 +2,12 @@
 /node_modules
 
 # Build files
+# `dist` is the LIVE deploy target (~/apps/expert -> dist) — only `build:apps`
+# may write it. Every other mode writes its own non-live directory.
 /dist
+/dist-domainfactory
+/dist-github
+/dist-production
 
 # Code quality reports
 /jscpd-report
