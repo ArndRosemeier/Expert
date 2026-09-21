@@ -5,6 +5,7 @@ import { CoherenceService } from './services/CoherenceService';
 import { OpenRouterClient } from '../../OpenRouterClient';
 import { SettingsManager } from '../../SettingsManager';
 import { DiffTool } from '../../DiffTool';
+import { escapeHtml } from './core/modal-utils';
 
 export class CoherenceModal extends BaseModal {
     private analysisResult: CoherenceAnalysisResult | null = null;
@@ -136,7 +137,7 @@ export class CoherenceModal extends BaseModal {
         
         const infoContent = `
             <div class="analysis-info">
-                <p><strong>Analyzed Node:</strong> ${this.escapeHtml(nodeTitle)}</p>
+                <p><strong>Analyzed Node:</strong> ${escapeHtml(nodeTitle)}</p>
                 <p><strong>Analysis Time:</strong> ${analysisTimestamp.toLocaleString()}</p>
                 <p><strong>Child Nodes:</strong> ${this.analysisResult.childNodeIds.length}</p>
                 ${isComprehensiveMode ? '<p><strong>Note:</strong> This is a comprehensive view showing contradictions from multiple parent nodes.</p>' : ''}
@@ -436,7 +437,7 @@ export class CoherenceModal extends BaseModal {
                 </div>
                 
                 <div class="analysis-info">
-                    <p><strong>Analyzing Node:</strong> ${this.escapeHtml(nodeTitle)}</p>
+                    <p><strong>Analyzing Node:</strong> ${escapeHtml(nodeTitle)}</p>
                     <p><strong>Status:</strong> Analysis in progress</p>
                 </div>
                 
@@ -489,22 +490,22 @@ export class CoherenceModal extends BaseModal {
                                 <span class="severity-label">${severityInfo.label}</span>
                                 <span class="severity-number">(${contradiction.severity}/10)</span>
                             </div>
-                            <div class="justification-text">${this.escapeHtml(contradiction.justification)}</div>
+                            <div class="justification-text">${escapeHtml(contradiction.justification)}</div>
                         </div>
                         <div class="contradiction-meta">
-                            ${contradiction.parentNodeTitle ? `<span class="parent-title" style="color: #666; font-size: 0.9em; margin-right: 1rem;">From parent: <strong>${this.escapeHtml(contradiction.parentNodeTitle)}</strong></span>` : ''}
-                            <span class="child-title">In child: <strong>${this.escapeHtml(contradiction.offending_child_title)}</strong></span>
+                            ${contradiction.parentNodeTitle ? `<span class="parent-title" style="color: #666; font-size: 0.9em; margin-right: 1rem;">From parent: <strong>${escapeHtml(contradiction.parentNodeTitle)}</strong></span>` : ''}
+                            <span class="child-title">In child: <strong>${escapeHtml(contradiction.offending_child_title)}</strong></span>
                             ${contradiction.offending_child_id ? `<button class="button ${buttonState} fix-btn" data-child-id="${contradiction.offending_child_id}" data-contradiction-index="${originalIndex}" ${buttonDisabled ? 'disabled' : ''}>${buttonText}</button>` : ''}
                         </div>
                     </div>
                     <div class="contradiction-details">
                         <div class="outline-fact">
                             <strong>In Outline:</strong>
-                            <p>${this.escapeHtml(contradiction.fact_in_outline)}</p>
+                            <p>${escapeHtml(contradiction.fact_in_outline)}</p>
                         </div>
                         <div class="expansion-fact">
                             <strong>In Expanded Content:</strong>
-                            <p>${this.escapeHtml(contradiction.fact_in_expansion)}</p>
+                            <p>${escapeHtml(contradiction.fact_in_expansion)}</p>
                         </div>
                     </div>
                     ${hasProposedFix && fixData ? this.renderBeforeAfterComparison(originalIndex, fixData, isApplied) : ''}
@@ -1149,9 +1150,4 @@ export class CoherenceModal extends BaseModal {
     /**
      * Escape HTML characters
      */
-    private escapeHtml(text: string): string {
-        const div = document.createElement('div');
-        div.textContent = text;
-        return div.innerHTML;
-    }
 } 

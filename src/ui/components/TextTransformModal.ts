@@ -3,6 +3,7 @@ import { ModalConfig, ModalHooks } from '../modals/types/ModalTypes';
 import { createElement } from '../modals/core/modal-utils';
 import { StorageService, type IStorageService } from '../../StorageService';
 import { MODEL_PURPOSES } from '../../services/TaskModelService';
+import { escapeHtml } from '../modals/core/modal-utils';
 
 export interface TextTransformRequest {
   textToChange: string;
@@ -415,7 +416,7 @@ export class TextTransformModal extends BaseModal {
               id="text-to-change-textarea" 
               class="text-textarea"
               placeholder="Enter the text you want to transform..."
-            >${this.escapeHtml(config.defaultText ?? '')}</textarea>
+            >${escapeHtml(config.defaultText ?? '')}</textarea>
           </div>
           
           <div class="context-area">
@@ -426,7 +427,7 @@ export class TextTransformModal extends BaseModal {
               id="context-textarea" 
               class="context-textarea"
               placeholder="Provide additional context about the text, its purpose, audience, etc..."
-            >${this.escapeHtml(config.defaultContext ?? '')}</textarea>
+            >${escapeHtml(config.defaultContext ?? '')}</textarea>
           </div>
           
           <div class="format-area">
@@ -437,7 +438,7 @@ export class TextTransformModal extends BaseModal {
               id="format-instructions-textarea" 
               class="format-textarea"
               placeholder="Specify format requirements: bullet points, paragraphs, word count, tone, etc..."
-            >${this.escapeHtml(config.defaultFormatInstructions ?? '')}</textarea>
+            >${escapeHtml(config.defaultFormatInstructions ?? '')}</textarea>
           </div>
         </div>
         
@@ -450,7 +451,7 @@ export class TextTransformModal extends BaseModal {
               id="instruction-textarea" 
               class="instruction-textarea"
               placeholder="Describe how you want to transform the text...&#10;&#10;Examples:&#10;• Make it more formal and professional&#10;• Simplify for a younger audience&#10;• Add more detail and examples&#10;• Convert to a list format&#10;• Fix grammar and spelling&#10;• Change tone to be more engaging"
-            >${this.escapeHtml(config.defaultInstruction ?? '')}</textarea>
+            >${escapeHtml(config.defaultInstruction ?? '')}</textarea>
           </div>
           
           <div class="model-selection-area">
@@ -482,9 +483,9 @@ export class TextTransformModal extends BaseModal {
       .slice() // Create a copy
       .reverse() // Show most recent first
       .map((instruction, index) => `
-        <div class="history-item" data-instruction="${this.escapeHtml(instruction)}" title="Click to use this instruction">
+        <div class="history-item" data-instruction="${escapeHtml(instruction)}" title="Click to use this instruction">
           <div class="history-item-content">
-            ${this.escapeHtml(instruction)}
+            ${escapeHtml(instruction)}
           </div>
           <button class="history-item-delete" data-delete-index="${this.transformHistory.length - 1 - index}" title="Remove this instruction">
             ×
@@ -504,11 +505,6 @@ export class TextTransformModal extends BaseModal {
       .join('');
   }
 
-  private escapeHtml(text: string): string {
-    const div = document.createElement('div');
-    div.textContent = text;
-    return div.innerHTML;
-  }
 
   protected setupEventListeners(): void {
     // Get DOM elements

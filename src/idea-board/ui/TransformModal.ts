@@ -2,6 +2,7 @@ import { BaseModal } from '../../ui/modals/core/BaseModal';
 import { ModalConfig, ModalHooks } from '../../ui/modals/types/ModalTypes';
 import { createElement } from '../../ui/modals/core/modal-utils';
 import { StorageService, type IStorageService } from '../../StorageService';
+import { escapeHtml } from '../../ui/modals/core/modal-utils';
 
 export interface TransformResult {
   instruction: string;
@@ -372,7 +373,7 @@ export class TransformModal extends BaseModal {
           ${this.triggeringContent ? `
           <div class="triggering-content-area">
             <label class="form-label">Current Content:</label>
-            <div class="triggering-content-display">${this.escapeHtml(this.triggeringContent)}</div>
+            <div class="triggering-content-display">${escapeHtml(this.triggeringContent)}</div>
           </div>
           ` : ''}
         </div>
@@ -398,9 +399,9 @@ export class TransformModal extends BaseModal {
       .slice() // Create a copy
       .reverse() // Show most recent first
       .map((instruction, index) => `
-        <div class="history-item" data-instruction="${this.escapeHtml(instruction)}" title="Click to use this instruction">
+        <div class="history-item" data-instruction="${escapeHtml(instruction)}" title="Click to use this instruction">
           <div class="history-item-content">
-            ${this.escapeHtml(instruction)}
+            ${escapeHtml(instruction)}
           </div>
           <button class="history-item-delete" data-delete-index="${this.transformHistory.length - 1 - index}" title="Remove this instruction">
             ×
@@ -410,11 +411,6 @@ export class TransformModal extends BaseModal {
       .join('');
   }
 
-  private escapeHtml(text: string): string {
-    const div = document.createElement('div');
-    div.textContent = text;
-    return div.innerHTML;
-  }
 
   protected setupEventListeners(): void {
     // Get DOM elements

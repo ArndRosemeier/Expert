@@ -1,6 +1,7 @@
 import { BaseModal } from './core/BaseModal';
 import { ModalConfig, ModalHooks } from './types/ModalTypes';
 import { createElement, attachModalCloseHandlers } from './core/modal-utils';
+import { escapeHtml } from './core/modal-utils';
 
 export class ManualModal extends BaseModal {
     private manualContent: string = '';
@@ -455,7 +456,7 @@ export class ManualModal extends BaseModal {
         // Code blocks
         html = html.replace(/```[\s\S]*?```/g, (match) => {
             const code = match.slice(3, -3).trim();
-            return `<pre><code>${this.escapeHtml(code)}</code></pre>`;
+            return `<pre><code>${escapeHtml(code)}</code></pre>`;
         });
         
         // Inline code
@@ -489,11 +490,6 @@ export class ManualModal extends BaseModal {
         return html;
     }
 
-    private escapeHtml(text: string): string {
-        const div = document.createElement('div');
-        div.textContent = text;
-        return div.innerHTML;
-    }
 
     private addAppFeatureLinks(html: string): string {
         const featureNames = [

@@ -7,6 +7,7 @@ import { UniversalTextEditor } from '../components/UniversalTextEditor';
 import { ConditionalContextEditor } from '../components/ConditionalContextEditor';
 import { DiffTool } from '../../DiffTool';
 import { promptForVersionName } from './VersionNameModal';
+import { escapeHtml } from './core/modal-utils';
 
 
 export class NodeInspectorModal extends BaseModal {
@@ -242,8 +243,8 @@ export class NodeInspectorModal extends BaseModal {
                 ${tags ? `<div class="version-tags">${tags}</div>` : ''}
                 <div class="version-timestamp">Modified: ${new Date(version.timestamp).toLocaleString()}</div>
                 <div class="version-preview">
-                    ${version.title ? `<div class="preview-title"><strong>Title:</strong> ${this.escapeHtml(version.title.substring(0, 40))}${version.title.length > 40 ? '…' : ''}</div>` : ''}
-                    <div class="preview-content"><strong>Content:</strong> ${this.escapeHtml(version.content.substring(0, 50))}${version.content.length > 50 ? '…' : ''}</div>
+                    ${version.title ? `<div class="preview-title"><strong>Title:</strong> ${escapeHtml(version.title.substring(0, 40))}${version.title.length > 40 ? '…' : ''}</div>` : ''}
+                    <div class="preview-content"><strong>Content:</strong> ${escapeHtml(version.content.substring(0, 50))}${version.content.length > 50 ? '…' : ''}</div>
                     <!-- Context preview removed - using conditional context system -->
                 </div>
                 ${actionButtons}
@@ -337,12 +338,12 @@ export class NodeInspectorModal extends BaseModal {
                              <span class="justification-toggle">▶</span>
                          </div>
                          <div class="justification-content collapsed">
-                             ${this.escapeHtml(todo.logicError.justification)}
+                             ${escapeHtml(todo.logicError.justification)}
                          </div>
                      </div>
                      ${todo.logicError.suggestedFix 
                          ? `<div class="logic-error-suggestion">
-                              <strong>Suggested Fix:</strong> ${this.escapeHtml(todo.logicError.suggestedFix)}
+                              <strong>Suggested Fix:</strong> ${escapeHtml(todo.logicError.suggestedFix)}
                             </div>` 
                          : ''}
                    </div>`
@@ -350,7 +351,7 @@ export class NodeInspectorModal extends BaseModal {
 
             todoItem.innerHTML = `
                 <div class="todo-content">
-                    <div class="todo-description">${this.escapeHtml(todo.description)}</div>
+                    <div class="todo-description">${escapeHtml(todo.description)}</div>
                     ${logicErrorHtml}
                     ${relatedNodesHtml}
                     <div class="todo-timestamp">
@@ -432,7 +433,7 @@ export class NodeInspectorModal extends BaseModal {
         wrapper.className = 'descendant-todo-notice';
 
         const listItems = descendantsWithTodos
-            .map(n => `<li>${this.escapeHtml(n.title)} <span class="descendant-todo-count">${n.getIncompleteTodos().length}</span></li>`)
+            .map(n => `<li>${escapeHtml(n.title)} <span class="descendant-todo-count">${n.getIncompleteTodos().length}</span></li>`)
             .join('');
 
         const summary = totalTodos === 1
@@ -535,14 +536,14 @@ export class NodeInspectorModal extends BaseModal {
                 <div class="version-section" id="ins-title-section">
                     <h4 class="section-title" id="ins-title-toggle" style="cursor: pointer;">▼ Title</h4>
                     <div class="section-content foldable-content" id="ins-title-content">
-                        <input type="text" class="title-editor" id="inspector-title-editor" value="${this.escapeHtml(version.title || '')}" placeholder="Enter title...">
+                        <input type="text" class="title-editor" id="inspector-title-editor" value="${escapeHtml(version.title || '')}" placeholder="Enter title...">
                     </div>
                 </div>
                 
                 <div class="version-section" id="ins-content-section">
                     <h4 class="section-title" id="ins-content-toggle" style="cursor: pointer;">▼ Content</h4>
                     <div class="section-content foldable-content" id="ins-content-content">
-                        <textarea class="content-editor auto-resize" id="inspector-content-editor" placeholder="Enter content...">${this.escapeHtml(version.content || '')}</textarea>
+                        <textarea class="content-editor auto-resize" id="inspector-content-editor" placeholder="Enter content...">${escapeHtml(version.content || '')}</textarea>
                     </div>
                 </div>
                 
@@ -555,7 +556,7 @@ export class NodeInspectorModal extends BaseModal {
                 <div class="version-section" id="ins-notes-section">
                     <h4 class="section-title" id="ins-notes-toggle" style="cursor: pointer;">▼ Notes</h4>
                     <div class="section-content foldable-content" id="ins-notes-content">
-                        <textarea class="notes-editor auto-resize" id="inspector-notes-editor" placeholder="Enter personal notes about this node...">${this.escapeHtml(node.notes || '')}</textarea>
+                        <textarea class="notes-editor auto-resize" id="inspector-notes-editor" placeholder="Enter personal notes about this node...">${escapeHtml(node.notes || '')}</textarea>
                     </div>
                 </div>
                 </div>
@@ -672,11 +673,6 @@ export class NodeInspectorModal extends BaseModal {
         return 'Version';
     }
 
-    private escapeHtml(text: string): string {
-        const div = document.createElement('div');
-        div.textContent = text;
-        return div.innerHTML;
-    }
 
     /**
      * Show a highlighted side-by-side diff of the given (non-master) version
@@ -706,15 +702,15 @@ export class NodeInspectorModal extends BaseModal {
         const titleNote = master.title !== selected.title
             ? `<div style="margin-bottom:10px; padding:8px 10px; background:#fffbeb; border:1px solid #fde68a; border-radius:6px;">
                    <strong>Title changed:</strong>
-                   <span style="color:#b91c1c;">${this.escapeHtml(master.title || '(empty)')}</span>
+                   <span style="color:#b91c1c;">${escapeHtml(master.title || '(empty)')}</span>
                    →
-                   <span style="color:#166534;">${this.escapeHtml(selected.title || '(empty)')}</span>
+                   <span style="color:#166534;">${escapeHtml(selected.title || '(empty)')}</span>
                </div>`
             : '';
 
         const content = `
             <div style="display:flex; flex-direction:column; gap:10px;">
-                <div style="font-weight:600;">${this.escapeHtml(summary)}</div>
+                <div style="font-weight:600;">${escapeHtml(summary)}</div>
                 ${titleNote}
                 <div style="display:flex; gap:12px;">
                     <div style="${columnStyle}">
@@ -722,7 +718,7 @@ export class NodeInspectorModal extends BaseModal {
                         <div style="${bodyStyle}">${diff.originalHtml}</div>
                     </div>
                     <div style="${columnStyle}">
-                        <div style="${headStyle}">${this.escapeHtml(selectedLabel)}</div>
+                        <div style="${headStyle}">${escapeHtml(selectedLabel)}</div>
                         <div style="${bodyStyle}">${diff.modifiedHtml}</div>
                     </div>
                 </div>
@@ -1050,7 +1046,7 @@ export class NodeInspectorModal extends BaseModal {
                 // freed-up width (abbreviated with an ellipsis; full text on hover).
                 return `
                 <div style="display: grid; grid-template-columns: 1fr auto; gap: 0.5rem; align-items: center; margin-bottom: 0.25rem; padding: 0.125rem 0;">
-                    <span title="${this.escapeHtml(criterionName)}" style="font-weight: 500; font-size: 0.85rem; color: #374151; text-overflow: ellipsis; overflow: hidden; white-space: nowrap; min-width: 0;">${this.escapeHtml(criterionName)}</span>
+                    <span title="${escapeHtml(criterionName)}" style="font-weight: 500; font-size: 0.85rem; color: #374151; text-overflow: ellipsis; overflow: hidden; white-space: nowrap; min-width: 0;">${escapeHtml(criterionName)}</span>
                     <span style="font-weight: 600; font-size: 0.75rem; color: white; background: ${pillColor}; padding: 0.1rem 0.5rem; border-radius: 999px; min-width: 3rem; text-align: center; white-space: nowrap;">${label}</span>
                 </div>
                 `;
@@ -1071,7 +1067,7 @@ export class NodeInspectorModal extends BaseModal {
             
             return `
                 <div style="display: grid; grid-template-columns: 1fr 2fr auto; gap: 0.5rem; align-items: center; margin-bottom: 0.25rem; padding: 0.125rem 0;">
-                    <span style="font-weight: 500; font-size: 0.85rem; color: #374151; text-overflow: ellipsis; overflow: hidden; white-space: nowrap;">${this.escapeHtml(criterionName)}</span>
+                    <span style="font-weight: 500; font-size: 0.85rem; color: #374151; text-overflow: ellipsis; overflow: hidden; white-space: nowrap;">${escapeHtml(criterionName)}</span>
                     <div style="background: #e9ecef; border-radius: 4px; height: 12px; position: relative; min-width: 0;">
                         <div style="background: ${barColor}; height: 100%; border-radius: 4px; width: ${scorePercentage}%; transition: width 0.3s ease;"></div>
                         ${goal !== 10 ? `<div style="position: absolute; top: 0; left: ${goalPercentage}%; width: 2px; height: 12px; background: #6b7280; border-radius: 1px; transform: translateX(-50%);"></div>` : ''}

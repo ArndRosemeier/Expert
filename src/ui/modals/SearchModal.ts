@@ -13,6 +13,7 @@
 import { BaseModal } from './core/BaseModal';
 import { SearchService, type SearchOptions, type SearchResult, type ReplaceOptions, type ReplaceResult } from './services/SearchService';
 import type { DocumentNode } from '../../DocumentNode';
+import { escapeHtml } from './core/modal-utils';
 // NodeInspectorModal imported dynamically when needed
 
 // ============================================================================
@@ -326,8 +327,8 @@ export class SearchModal extends BaseModal {
             html += `
                 <div class="result-node">
                     <div class="result-node-header">
-                        <strong>${this.escapeHtml(node.title || 'Untitled')}</strong>
-                        <span class="result-node-path">${this.escapeHtml(nodePath)}</span>
+                        <strong>${escapeHtml(node.title || 'Untitled')}</strong>
+                        <span class="result-node-path">${escapeHtml(nodePath)}</span>
                         <span class="result-count">${nodeResults.length} match${nodeResults.length === 1 ? '' : 'es'}</span>
                     </div>
                     <div class="result-paragraphs">
@@ -422,9 +423,9 @@ export class SearchModal extends BaseModal {
      * Highlight match in paragraph
      */
     private highlightMatch(paragraph: string, matchStart: number, matchLength: number): string {
-        const before = this.escapeHtml(paragraph.substring(0, matchStart));
-        const match = this.escapeHtml(paragraph.substring(matchStart, matchStart + matchLength));
-        const after = this.escapeHtml(paragraph.substring(matchStart + matchLength));
+        const before = escapeHtml(paragraph.substring(0, matchStart));
+        const match = escapeHtml(paragraph.substring(matchStart, matchStart + matchLength));
+        const after = escapeHtml(paragraph.substring(matchStart + matchLength));
         
         return `${before}<mark class="search-highlight">${match}</mark>${after}`;
     }
@@ -452,11 +453,6 @@ export class SearchModal extends BaseModal {
     /**
      * Escape HTML special characters
      */
-    private escapeHtml(text: string): string {
-        const div = document.createElement('div');
-        div.textContent = text;
-        return div.innerHTML;
-    }
 
     /**
      * Show status message

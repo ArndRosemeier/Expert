@@ -1,5 +1,6 @@
 import { BaseModal } from './core/BaseModal';
 import { ModalConfig, ModalHooks } from './types/ModalTypes';
+import { escapeHtml } from './core/modal-utils';
 
 export interface ErrorDetails {
     title: string;
@@ -42,11 +43,6 @@ export class GenerationErrorModal extends BaseModal {
         return modalDiv;
     }
 
-    private escapeHtml(text: string): string {
-        const div = document.createElement('div');
-        div.textContent = text;
-        return div.innerHTML;
-    }
 
     private getModalContent(): string {
         const formattedTime = this.errorDetails.timestamp.toLocaleString();
@@ -56,7 +52,7 @@ export class GenerationErrorModal extends BaseModal {
                 <div class="error-header">
                     <div class="error-icon">⚠️</div>
                     <div class="error-title-section">
-                        <h2 class="error-main-title">${this.escapeHtml(this.errorDetails.title)}</h2>
+                        <h2 class="error-main-title">${escapeHtml(this.errorDetails.title)}</h2>
                         <div class="error-subtitle">An error occurred during AI generation</div>
                     </div>
                 </div>
@@ -64,16 +60,16 @@ export class GenerationErrorModal extends BaseModal {
                 <div class="error-details-section">
                     <div class="error-detail-card">
                         <h3>📋 Error Summary</h3>
-                        <div class="error-message">${this.escapeHtml(this.errorDetails.message)}</div>
+                        <div class="error-message">${escapeHtml(this.errorDetails.message)}</div>
                     </div>
 
                     ${this.errorDetails.purpose ? `
                     <div class="error-detail-card">
                         <h3>🎯 Operation Details</h3>
                         <div class="error-metadata">
-                            <div><strong>Purpose:</strong> ${this.escapeHtml(this.errorDetails.purpose)}</div>
-                            ${this.errorDetails.model ? `<div><strong>Model:</strong> ${this.escapeHtml(this.errorDetails.model)}</div>` : ''}
-                            ${this.errorDetails.operation ? `<div><strong>Operation:</strong> ${this.escapeHtml(this.errorDetails.operation)}</div>` : ''}
+                            <div><strong>Purpose:</strong> ${escapeHtml(this.errorDetails.purpose)}</div>
+                            ${this.errorDetails.model ? `<div><strong>Model:</strong> ${escapeHtml(this.errorDetails.model)}</div>` : ''}
+                            ${this.errorDetails.operation ? `<div><strong>Operation:</strong> ${escapeHtml(this.errorDetails.operation)}</div>` : ''}
                             <div><strong>Time:</strong> ${formattedTime}</div>
                         </div>
                     </div>
@@ -83,7 +79,7 @@ export class GenerationErrorModal extends BaseModal {
                     <div class="error-detail-card">
                         <h3>🔧 Technical Details</h3>
                         <div class="error-stack">
-                            <pre>${this.escapeHtml(this.errorDetails.stack)}</pre>
+                            <pre>${escapeHtml(this.errorDetails.stack)}</pre>
                         </div>
                     </div>
                     ` : ''}
@@ -203,7 +199,7 @@ ${JSON.stringify(this.errorDetails.originalError, null, 2)}`;
                            width: 80%; max-width: 600px; box-shadow: 0 4px 20px rgba(0,0,0,0.3);">
                     <h3>Copy Error Details</h3>
                     <p>Unable to copy automatically. Please select all text below and copy manually:</p>
-                    <textarea readonly style="width: 100%; height: 300px; font-family: monospace; font-size: 12px;">${this.escapeHtml(errorText)}</textarea>
+                    <textarea readonly style="width: 100%; height: 300px; font-family: monospace; font-size: 12px;">${escapeHtml(errorText)}</textarea>
                     <button onclick="this.parentElement.parentElement.remove()" style="margin-top: 10px; padding: 5px 15px;">Close</button>
                 </div>
             `;

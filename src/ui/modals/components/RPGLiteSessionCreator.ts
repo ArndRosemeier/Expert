@@ -12,6 +12,7 @@ import { StorageService } from '../../../StorageService';
 import { SessionToOutlineService, ConversionProgress } from '../services/SessionToOutlineService';
 import type { RPGLiteSession } from '../../../rpg-lite/types/RPGLiteTypes';
 import * as state from '../../../state';
+import { escapeHtml } from '../core/modal-utils';
 
 export interface RPGLiteSessionCreatorConfig {
     onCreate: (title: string, template: ProjectTemplate, aiData?: unknown) => void;
@@ -59,7 +60,7 @@ export class RPGLiteSessionCreator {
                            value="${session.id}"
                            ${index === 0 ? 'checked' : ''}>
                     <label for="session-${session.id}" class="session-label">
-                        <div class="session-title">${this.escapeHtml(session.title)}</div>
+                        <div class="session-title">${escapeHtml(session.title)}</div>
                         <div class="session-meta">
                             <span class="session-updated">${lastUpdated}</span>
                             <span class="session-messages">${messageCount} messages</span>
@@ -371,11 +372,6 @@ export class RPGLiteSessionCreator {
         }
     }
 
-    private escapeHtml(text: string): string {
-        const div = document.createElement('div');
-        div.textContent = text;
-        return div.innerHTML;
-    }
 
     public cleanup(): void {
         this.cleanupHandlers.forEach(cleanup => { cleanup(); });

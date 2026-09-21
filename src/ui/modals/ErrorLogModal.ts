@@ -8,6 +8,7 @@ import { ModalConfig, ModalHooks } from './types/ModalTypes';
 import { createElement } from './core/modal-utils';
 import { ErrorLogService } from '../../ErrorLogService';
 import { ErrorLogEntry } from '../../types';
+import { escapeHtml } from './core/modal-utils';
 
 export type ErrorLogModalConfig = ModalConfig;
 
@@ -194,11 +195,11 @@ export class ErrorLogModal extends BaseModal {
                     ${logs.map(log => `
                         <tr>
                             <td style="${bodyCell} width: 150px; white-space: nowrap; color: #6b7280;">${this.formatTimestamp(log.timestamp)}</td>
-                            <td style="${bodyCell} width: 140px; font-weight: 500; color: #b45309; font-family: monospace; font-size: 0.8rem;">${this.escapeHtml(log.source)}</td>
-                            <td style="${bodyCell} max-width: 360px; word-wrap: break-word; color: #b91c1c;">${this.escapeHtml(log.message)}</td>
-                            <td style="${bodyCell} max-width: 220px; word-wrap: break-word; color: #6b7280; font-family: monospace; font-size: 0.8rem;">${this.escapeHtml(log.details ?? '')}</td>
+                            <td style="${bodyCell} width: 140px; font-weight: 500; color: #b45309; font-family: monospace; font-size: 0.8rem;">${escapeHtml(log.source)}</td>
+                            <td style="${bodyCell} max-width: 360px; word-wrap: break-word; color: #b91c1c;">${escapeHtml(log.message)}</td>
+                            <td style="${bodyCell} max-width: 220px; word-wrap: break-word; color: #6b7280; font-family: monospace; font-size: 0.8rem;">${escapeHtml(log.details ?? '')}</td>
                             <td style="${bodyCell} max-width: 360px;">
-                                ${log.stack ? `<pre style="margin: 0; max-height: 160px; overflow: auto; white-space: pre-wrap; word-break: break-word; font-size: 0.75rem; color: #374151;">${this.escapeHtml(log.stack)}</pre>` : '<span style="color: #9ca3af;">—</span>'}
+                                ${log.stack ? `<pre style="margin: 0; max-height: 160px; overflow: auto; white-space: pre-wrap; word-break: break-word; font-size: 0.75rem; color: #374151;">${escapeHtml(log.stack)}</pre>` : '<span style="color: #9ca3af;">—</span>'}
                             </td>
                         </tr>
                     `).join('')}
@@ -235,11 +236,6 @@ export class ErrorLogModal extends BaseModal {
         });
     }
 
-    private escapeHtml(text: string): string {
-        const div = document.createElement('div');
-        div.textContent = text;
-        return div.innerHTML;
-    }
 }
 
 /**
