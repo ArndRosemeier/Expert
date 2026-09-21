@@ -260,6 +260,25 @@ Self-inflicted bug caught by the gate in that change: the first pass wrote
 `this.escapeHtml` had worked because each class defines that *method*. A controlled
 probe reproduced the `TS2339`. Fixed to a bare call.
 
+### W8 — remaining candidates classified (2026-09-21, autonomous session)
+
+The tool's top `sim=1.00` hits were each opened and classified. **None is a real
+duplicate**, and the reasons are worth keeping so nobody re-opens them:
+
+| Candidate | Files | Verdict |
+|---|---|---|
+| `getModalStyles()` | TransformModal / TextTransformModal / AddChildNodeModal / ManualModal | Modal-specific CSS. Same *shape* (`return \`...\``), different selectors. **Not a duplicate** — same false-positive family as the 258-line clone. |
+| `isAbortRequested()` | GenerationController ↔ UnifiedGenerationService | Identical body (60 chars) but returns **different fields** (`this.abortRequested` vs `this.stopRequested`) — and my similarity check compared `isAbortRequested` to `isStopRequested`. One-liners over different data; each class needs its own. **Not a duplicate.** |
+| `getLanguage()` | ProjectManager ↔ SettingsManager | Same name, different bodies/lengths (53 vs not) and different fields (`globalLanguage` vs `language`). **Not a duplicate.** |
+| `buildContentStyle()` | NodeInspectorModal ↔ TagManagerModal | Different bodies, zero `this` refs in either. **Not a duplicate.** |
+
+**Conclusion for W8: the extractable literal duplicates in this codebase have been
+taken** (`escapeRegExp`, 9 × DOM `escapeHtml`, `renderHistoryItems`,
+`filterCriteriaForNodeType`, `addLogEntry` parameterized). What remains at the top of
+the candidate list is name-collision noise, not duplication. Further dedup here would
+be inventing abstractions the code does not have — which the owner's rule explicitly
+says to leave alone, and write down why.
+
 ### W9 — testing policy (RESOLVED by owner rule, 2026-09-21)
 
 Owner's rule, now recorded in `AGENTS.md`: this app is large and mature and has been
