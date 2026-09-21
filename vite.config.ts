@@ -48,6 +48,8 @@ export default defineConfig(({ mode }) => {
     base = '/Expert/';
   } else if (mode === 'domainfactory') {
     base = '/Expert/';  // domainfactory also serves from /Expert/ subdirectory
+  } else if (mode === 'apps') {
+    base = '/expert/';  // apps.futuremagic.de serves each app from a slug subpath
   }
   
   // Generate version info

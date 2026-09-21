@@ -2,6 +2,31 @@
 
 This guide covers deploying the Expert application to different hosting platforms.
 
+## ⭐ Default: apps.futuremagic.de (current default going forward)
+
+The default deployment is now the static apps host, served at
+**https://apps.futuremagic.de/expert/**. It is published from this host and needs no
+FTP credentials or PowerShell.
+
+```bash
+npm run build:apps                     # vite build --mode apps  → base '/expert/'
+ln -sfn "$PWD/dist" "$HOME/apps/expert"   # symlink: rebuilds go live instantly
+curl -s -o /dev/null -w '%{http_code}\n' http://127.0.0.1:8082/expert/
+```
+
+Notes:
+
+- The `apps` mode sets Vite `base: '/expert/'`. A copy published under `/expert/` with
+  the old `/Expert/` base would load a blank page, so always build with `build:apps`
+  for this target.
+- Publishing by symlink means a plain `npm run build:apps` updates the live app with no
+  further step. **Do not delete `dist/` while it is the symlink target** — the published
+  app goes down until the next build.
+- The host is static only: no server code, no SPA history fallback (a client-side route
+  404s on refresh), and no range requests.
+
+The older DomainFactory/FTP path below still works and is unchanged.
+
 ## 📋 Prerequisites
 
 - Node.js installed locally
