@@ -2,6 +2,7 @@ import { QualityCriterion } from '../types';
 import { formatCriteriaAsJson } from '../ProjectUtils';
 import { SettingsManager } from '../SettingsManager';
 import { getElementById } from '../ui/dom-elements';
+import { escapeRegExp } from '../quality/metrics/textUtils';
 
 export interface PlaceholderContext {
     // Node-specific context
@@ -144,7 +145,7 @@ class PromptExpansionService {
                 // Check for override first
                 const overrideValue = context.globalOverrides?.[name];
                 const value = overrideValue ?? provider().value;
-                expanded = expanded.replace(new RegExp(`\\{\\{${this.escapeRegex(name)}\\}\\}`, 'g'), value);
+                expanded = expanded.replace(new RegExp(`\\{\\{${escapeRegExp(name)}\\}\\}`, 'g'), value);
             }
         }
         
@@ -153,14 +154,14 @@ class PromptExpansionService {
             const placeholder = `{{${name}}}`;
             if (expanded.includes(placeholder)) {
                 const result = provider(context);
-                expanded = expanded.replace(new RegExp(`\\{\\{${this.escapeRegex(name)}\\}\\}`, 'g'), result.value);
+                expanded = expanded.replace(new RegExp(`\\{\\{${escapeRegExp(name)}\\}\\}`, 'g'), result.value);
             }
         }
         
         // Handle custom placeholders
         if (context.custom) {
             for (const [name, value] of Object.entries(context.custom)) {
-                expanded = expanded.replace(new RegExp(`\\{\\{${this.escapeRegex(name)}\\}\\}`, 'g'), value);
+                expanded = expanded.replace(new RegExp(`\\{\\{${escapeRegExp(name)}\\}\\}`, 'g'), value);
             }
         }
         
@@ -194,7 +195,7 @@ class PromptExpansionService {
                 // Check for override first
                 const overrideValue = context.globalOverrides?.[name];
                 const value = overrideValue ?? provider().value;
-                expanded = expanded.replace(new RegExp(`\\{\\{${this.escapeRegex(name)}\\}\\}`, 'g'), value);
+                expanded = expanded.replace(new RegExp(`\\{\\{${escapeRegExp(name)}\\}\\}`, 'g'), value);
             }
         }
         
@@ -203,14 +204,14 @@ class PromptExpansionService {
             const placeholder = `{{${name}}}`;
             if (expanded.includes(placeholder)) {
                 const result = provider(context);
-                expanded = expanded.replace(new RegExp(`\\{\\{${this.escapeRegex(name)}\\}\\}`, 'g'), result.value);
+                expanded = expanded.replace(new RegExp(`\\{\\{${escapeRegExp(name)}\\}\\}`, 'g'), result.value);
             }
         }
         
         // Handle custom placeholders
         if (context.custom) {
             for (const [name, value] of Object.entries(context.custom)) {
-                expanded = expanded.replace(new RegExp(`\\{\\{${this.escapeRegex(name)}\\}\\}`, 'g'), value);
+                expanded = expanded.replace(new RegExp(`\\{\\{${escapeRegExp(name)}\\}\\}`, 'g'), value);
             }
         }
         
@@ -447,9 +448,6 @@ class PromptExpansionService {
         return context.custom![name]!;
     }
     
-    private escapeRegex(string: string): string {
-        return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    }
 
     /**
      * Expand every {{selectonefrom a;b;c}} occurrence by rolling a die and
