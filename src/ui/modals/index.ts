@@ -13,7 +13,6 @@ export { ExportModal } from './ExportModal';
 export { showGenericModal, GenericModal } from './GenericModal';
 export { AILogModal } from './AILogModal';
 export { AddChildNodeModal } from './AddChildNodeModal';
-export { KeyValidationModal } from './KeyValidationModal';
 // ContextInfoModal removed - using conditional context system
 // Version-mismatch/migration modals removed - settings are self-healed on load
 export { NewProjectModal } from './NewProjectModal';

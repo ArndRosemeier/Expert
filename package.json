@@ -87,9 +87,9 @@
     "duplication:report": "jscpd src --min-lines 3 --min-tokens 30 --reporters html --output jscpd-report",
     "duplication:detailed": "jscpd src --min-lines 2 --min-tokens 20 --reporters html,console --output jscpd-report",
     "quality:all": "powershell -ExecutionPolicy Bypass -File scripts/check-code-quality.ps1",
-    "deadcode:check": "npx tsr \"src/main\\.ts$\" \"src/keys/index\\.ts$\"",
-    "deadcode:remove": "npx tsr --write \"src/main\\.ts$\" \"src/keys/index\\.ts$\"",
-    "deadcode:check-ci": "npx tsr \"src/main\\.ts$\" \"src/keys/index\\.ts$\""
+    "deadcode:check": "npx tsr \"src/main\\.ts$\"",
+    "deadcode:remove": "npx tsr --write \"src/main\\.ts$\"",
+    "deadcode:check-ci": "npx tsr \"src/main\\.ts$\""
   },
   "keywords": [],
   "author": "",

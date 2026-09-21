@@ -10,9 +10,6 @@ RewriteEngine On
     AddType application/wasm .wasm
 </IfModule>
 
-# Redirect /keys to /keys.html for the standalone key management app
-RewriteRule ^keys/?$ keys.html [L]
-
 # Don't rewrite actual files and directories (including assets)
 RewriteCond %{REQUEST_FILENAME} !-f
 RewriteCond %{REQUEST_FILENAME} !-d

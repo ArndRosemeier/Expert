@@ -6,7 +6,6 @@ Essential technical documentation for the Expert application architecture.
 
 ### Entry Points
 - **Main App**: `src/main.ts` - Core application entry point
-- **Keys Management**: `src/keys/index.ts` - Separate key management system (accessed via `/keys.html`)
 
 ### Build & Deploy
 ```bash
@@ -275,18 +274,6 @@ The Node Chat Editor is a collaborative AI editing interface that allows real-ti
 - **`src/overview-board/types/GraphTypes.ts`** - Graph type definitions
 - **`src/overview-board/types/OverviewTypes.ts`** - Overview type definitions
 
-## 🔑 Key Management System
-
-**Separate application for API key generation (accessible via `/keys.html`)**
-
-### Core Components
-- **`src/keys/keys-ui.ts`** - Key management interface
-- **`src/keys/KeyManager.ts`** - Key generation and validation
-- **`src/keys/KeyStorage.ts`** - Key persistence
-- **`src/keys/AppKeyService.ts`** - Application key validation
-- **`src/keys/AppKeyStorage.ts`** - Application key storage
-- **`src/keys/KeyCrypto.ts`** - Key encryption utilities
-
 ## 🔧 Service Architecture
 
 ### Modal Services
@@ -461,7 +448,7 @@ addProject(newProject);
 
 ### Code Quality
 - **TSR (TypeScript Remove)**: Automatic dead code elimination
-  - Recognizes both `src/main.ts` and `src/keys/index.ts` entry points
+  - Recognizes the `src/main.ts` entry point
   - Use `npm run deadcode:check` to verify no unused code
 - **ESLint**: Code linting with `npm run lint`
 

@@ -84,7 +84,7 @@ npm run fix-all
 
 ### What It Does
 - Finds unused exports, functions, and variables
-- Traces from entry points (`main.ts`, `keys/index.ts`)
+- Traces from the `main.ts` entry point
 - Helps remove unnecessary code that increases complexity
 
 ### Commands
