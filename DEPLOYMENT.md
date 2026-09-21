@@ -27,6 +27,22 @@ Notes:
 
 The older DomainFactory/FTP path below still works and is unchanged.
 
+### Output directories — one mode, one directory
+
+`dist/` is the **live** deploy: `~/apps/expert` is a symlink to it, so anything that
+writes `dist/` publishes. Only `build:apps` writes `dist/`. Every other mode writes
+its own non-live directory (see `OUT_DIRS` in `vite.config.ts`):
+
+| Mode | Command | Output directory |
+|------|---------|------------------|
+| `apps` | `npm run build:apps` | `dist/` — **LIVE, symlinked** |
+| `domainfactory` | `npm run build:domainfactory` | `dist-domainfactory/` |
+| `github` | `npm run build:github` | `dist-github/` |
+| `production` (also plain `npm run build`) | `npm run build:production` | `dist-production/` |
+
+Because each mode has its own directory, a stray non-apps build can no longer
+overwrite the live base-`/expert/` bundle and silently blank the site.
+
 ## 📋 Prerequisites
 
 - Node.js installed locally
@@ -48,7 +64,7 @@ The older DomainFactory/FTP path below still works and is unchanged.
    ```
 
 2. **Upload files:**
-   - All files from the `dist/` folder need to be uploaded to your domain's root directory
+   - All files from the `dist-production/` folder need to be uploaded to your domain's root directory
    - Usually this is the `html/` or `public_html/` folder in your DomainFactory hosting
 
 ### Manual Deployment Steps
@@ -63,7 +79,7 @@ The older DomainFactory/FTP path below still works and is unchanged.
    - Navigate to File Manager or use FTP/SFTP
 
 3. **Upload files:**
-   - Upload **ALL** files from the `dist/` folder to your domain's root directory
+   - Upload **ALL** files from the `dist-production/` folder to your domain's root directory
    - Ensure `index.html` is in the root of your web directory
    - Maintain the folder structure (especially the `assets/` folder)
 
@@ -135,7 +151,7 @@ your-domain.de/
    - Check that your hosting supports URL rewriting
 
 2. **Assets not loading:**
-   - Verify all files in `dist/assets/` are uploaded
+   - Verify all files in the mode's output dir (e.g. `dist-production/assets/`) are uploaded
    - Check file permissions (should be readable)
 
 3. **Application not starting:**
@@ -171,6 +187,6 @@ To update your deployed application:
 1. Make your changes locally
 2. Test thoroughly
 3. Run the deployment script again
-4. Upload the new `dist/` folder contents
+4. Upload the new output folder's contents (e.g. `dist-production/` for DomainFactory; the FTP script uses `dist-domainfactory/`)
 
 **Note:** You can overwrite existing files - the build process creates fresh files with new hashes for cache busting. 
