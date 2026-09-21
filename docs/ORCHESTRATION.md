@@ -115,8 +115,34 @@ Nobody has run the Windows build since. The owner builds and deploys on Windows.
 
 Two dead artifacts were already found and removed by hand this session
 (`src/keys/keys-ui.ts.broken`, `public/keys.html.backup`), which suggests more exist.
-`npx tsr "src/main\.ts$"` (the `deadcode:check` script) is the probe. Run the probe
-BEFORE briefing a writer, so the brief is sized from evidence rather than a guess.
+
+**PROBE ALREADY RUN (2026-09-21) — evidence, not a guess:**
+
+`npm run deadcode:check` does NOT work: `tsr` is not in `node_modules` and `npx`
+refuses to install it non-interactively, so that script fails in a clean checkout.
+(Part of W4: install `tsr` as a devDependency, or delete the three `deadcode:*`
+scripts.) The probe was therefore done with a read-only import-graph walk from the
+`src/main.ts` entry, cross-checked by grepping every basename as a string.
+
+**6 files (~1,370 lines) are unreachable from the app entry point and referenced
+nowhere in `src/`:**
+
+| File | Lines |
+|---|---|
+| `src/ui/rpg/RPGMockView.ts` | 765 |
+| `src/rpg/ui/RPGSnapshotManager.ts` | 228 |
+| `src/ui/utils/DOMUtils.ts` | 162 |
+| `src/ui/components/text-editor-utils.ts` | 102 |
+| `src/ui/components/TextTransformUtils.ts` | 95 |
+| `src/types/ContextRatingTypes.ts` | 18 |
+
+Confidence: HIGH but not absolute. All dynamic `import()` sites were checked and
+resolve to reachable modules; no dynamic import names any of the six. The caveat is
+that this is static analysis plus string search, so a file reached only by a
+runtime-constructed specifier or retained deliberately as scaffolding would be
+misreported. **Deleting scaffolding is a human call, so this goes to the owner before
+any writer acts.** Note that `RPGMockView.ts` carried one of the 82 lint errors fixed
+in `d00e75a` — a "fix" that was wasted effort if the file is in fact dead.
 
 ### W5 — duplication gate has no teeth (READY, low priority)
 
@@ -136,6 +162,10 @@ threshold is 5%.
   build. Recorded as W1.
 - **2026-09-21** — pnpm vs npm TypeScript skew (5.9.x vs 5.8.3) caused a CI failure
   after a locally-green lint sweep. Recorded above as a host fact.
+- **2026-09-21** — `deadcode:check` is broken in a clean checkout: `tsr` is not a
+  declared dependency. Recorded under W4.
+- **2026-09-21** — W4 probe: 6 unreachable files, ~1,370 lines. Owner decision before
+  deletion. Recorded under W4.
 
 ## Recovery pointers
 
