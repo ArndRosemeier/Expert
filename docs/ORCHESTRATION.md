@@ -75,16 +75,42 @@ Always `npm ci` (lockfile-exact) before trusting a local gate run.
 
 ---
 
+## Owner decisions (standing — do not re-litigate)
+
+- **2026-09-21 — Cleanup is pre-approved.** Unused/unreachable code may be deleted;
+  git is the safety net.
+- **2026-09-21 — TESTS: only for NEW work.** This app is mature. Do **not** retrofit
+  tests onto existing behaviour. When adding new features or fixing new bugs, a test is
+  expected. Recorded because it changes what "done" means for future briefs.
+- **2026-09-21 — Windows is a FALLBACK, not a supported primary path.** The owner's main
+  environment is now this Linux host + `apps.futuremagic.de`. The FTP/PowerShell path
+  stays working but is not worth verification effort; do not spend writer time on it.
+
 ## Board
 
 | ID | Item | State | Owner |
 |----|------|-------|-------|
-| W1 | `npm run build*` scripts clobbered the live `dist/` symlink target | **DONE** — `264ed7e` via `wt-w1`, merged `e84397d`, pushed | — |
-| W2 | No test runner and no `test` script anywhere; gate is static-only | **BLOCKED (owner decision)** | — |
-| W3 | Windows build/deploy after the `lightningcss` dependency removal is unverified | **BLOCKED (owner-only)** | — |
-| W4 | Dead-code backlog: 6 unreachable files, ~1,370 lines | **BLOCKED (owner decision)** | — |
-| W5 | `.jscpd.json` runs `continue-on-error: true`, so duplication never fails CI | **READY, low priority** | — |
-| W6 | `npm run deadcode:*` scripts fail: `tsr` is not a declared dependency | **READY, low priority** | — |
+| W1 | Builds clobbered the live `dist/` symlink target | **DONE** — `264ed7e` via `wt-w1`, merged `e84397d`, pushed | — |
+| W4 | Dead code: 6 unreachable files, 1,370 lines | **DONE** — `fba05df`, pushed; app render-verified after | — |
+| W6 | `npm run deadcode:*` scripts failed (`tsr` undeclared) | **DONE** — scripts and all doc references removed | — |
+| W2 | No test runner / no `test` script | **POLICY SET** — tests for new work only (above); no framework added | — |
+| W3 | Windows build unverified after the dependency change | **DEMOTED** — fallback path, not worth verification effort | — |
+| W5 | Duplication gate runs `continue-on-error`, never fails CI | **BLOCKED (owner decision)** — see the margin finding below | — |
+
+### W5 — why this was NOT flipped to enforcing
+
+`.github/workflows/code-quality.yml` runs `npm run duplication:check` with
+`continue-on-error: true`, so duplication cannot fail CI. Removing that flag is a
+one-word change — but it was measured first, and **the gate would be enforcing at
+4.92% duplicated lines against a 5% threshold in `.jscpd.json`.** That is 274 clones
+with roughly 0.08 percentage points of headroom: any normal commit could turn CI red
+for a pre-existing condition, which is exactly the failure mode that made CI
+distrusted in the first place. Enforcing a threshold the codebase already sits on top
+of converts a useful signal into noise.
+
+Options for the owner: (a) raise the threshold to give real headroom (e.g. 7–8%) and
+then enforce; (b) enforce at 5% and accept a red gate until duplication is actually
+reduced; (c) leave it advisory. **Recommended: (a).** Not decided.
 
 ### W1 — make the build scripts safe (DONE)
 

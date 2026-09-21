@@ -12,7 +12,6 @@ npm run quality:all
 npm run duplication:report    # Generate visual duplication report
 npm run typecheck             # Type safety check
 npm run lint                  # ESLint analysis
-npm run deadcode:check        # Find unused code
 ```
 
 ## 🔍 Duplication Detection (JSCPD)
@@ -80,22 +79,12 @@ npm run check-all
 npm run fix-all
 ```
 
-## 🧹 Dead Code Detection (TSR)
+## 🧹 Dead Code Detection
 
-### What It Does
-- Finds unused exports, functions, and variables
-- Traces from the `main.ts` entry point
-- Helps remove unnecessary code that increases complexity
-
-### Commands
-
-```bash
-# Check for dead code
-npm run deadcode:check
-
-# Remove dead code (use with caution!)
-npm run deadcode:remove
-```
+The `deadcode:*` scripts were removed: `tsr` was never a declared dependency, so
+`npm run deadcode:check` failed with "npx canceled due to missing packages" in any
+clean checkout - it had been broken for some time. A one-off unreachable-file sweep
+was done by import-graph analysis instead (see `docs/ORCHESTRATION.md`, W4/W6).
 
 ## 🤖 Automation Options
 

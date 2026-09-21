@@ -12,8 +12,6 @@ Essential technical documentation for the Expert application architecture.
 npm run dev              # Development server
 npm run build            # Production build
 npm run deploy:domainfactory  # Deploy to production
-npm run deadcode:check   # Check for unused code
-npm run deadcode:remove  # Remove unused code automatically
 ```
 
 ## 🏗️ Core Architecture
@@ -447,9 +445,6 @@ addProject(newProject);
 ## 🔧 Development Utilities
 
 ### Code Quality
-- **TSR (TypeScript Remove)**: Automatic dead code elimination
-  - Recognizes the `src/main.ts` entry point
-  - Use `npm run deadcode:check` to verify no unused code
 - **ESLint**: Code linting with `npm run lint`
 
 ### Key Events
@@ -500,7 +495,7 @@ addProject(newProject);
 
 8. **XML Story Elements**: Use proper event emission for story element changes
 
-9. **Dead Code**: Run `npm run deadcode:check` before commits to prevent accumulation
+9. **Dead Code**: an unreachable-file sweep is not currently wired into any script (see `docs/ORCHESTRATION.md`)
 
 10. **Text Preservation**: Any HTML ↔ Text conversion must preserve all characters exactly
 
