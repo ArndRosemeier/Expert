@@ -166,8 +166,8 @@ Always `npm ci` (lockfile-exact) before trusting a local gate run.
 | W3 | Windows build unverified after the dependency change | **DEMOTED** — fallback path, not worth verification effort | — |
 | W5 | Duplication gate is advisory; percentage metric is the wrong shape | **CLOSED (decision)** — see §Duplication reality above; do not re-propose enforcing it | — |
 | W7 | `tools/` portable analysis toolbox; duplicate-candidate finder | **DONE** — `ad7e208`+`c0801ec` via `wt-dupcand`, merged `322f464`, pushed | — |
-| W8 | Type-4 audit + deduplication | **IN PROGRESS** — 2 landings (`63e76f8`, `ff27bdc`); escape map recorded; owner call needed for the remaining variants | — |
-| W9 | The app has no test harness (`npm test` runs `tools/` only) | **BLOCKED (owner decision)** — see W9 below | — |
+| W8 | Type-4 audit + deduplication | **IN PROGRESS** — 2 landings (`63e76f8`, `ff27bdc`); escape variants DECIDED to stay; `addLogEntry` + the 258-line block remain | — |
+| W9 | Testing policy for changed vs untouched code | **RESOLVED** — owner rule in `AGENTS.md` | — |
 
 ### W8 — Type-4 audit and deduplication (IN PROGRESS)
 
@@ -207,21 +207,42 @@ Still open from the shortlist: `addLogEntry()` (~0.90, `AILogService` ↔
 `ErrorLogService`), and the 258-line block between `idea-board/ui/TransformModal.ts`
 and `ui/modals/ManualModal.ts`.
 
-### W9 — the app has no test harness (BLOCKED, owner decision)
+### W9 — testing policy (RESOLVED by owner rule, 2026-09-21)
 
-Raising this because the dedup work made it concrete. `npm test` exists but runs
-**only** `tools/**/*.test.mjs`. There is no runner and no test file for `src/`.
+Owner's rule, now recorded in `AGENTS.md`: this app is large and mature and has been
+**"tested by using it a lot"** — a legitimate strategy that **becomes unreliable the
+moment you change the thing being relied on**. Therefore:
 
-Consequence: the tooling folder has real tests, and the app it analyses has none. Any
-refactor in `src/` — exactly what W8 does — is verified only by typecheck, lint, build,
-and a manual headless render. That is a reasonable bar for a byte-identical extraction,
-and a weak bar for behaviour-changing work.
+- do **not** retrofit tests onto existing code (converting this app to a fully tested
+  one is explicitly out of scope);
+- **do** test code you **add**;
+- **do** test code you **change**, because "tested by using it" no longer holds for it;
+- **byte-identical refactors are the documented exception** — gate + render check, with
+  the evidence that the bodies were identical stated explicitly;
+- a behaviour-changing change with nowhere to put a test is a **blocker to raise**.
 
-Options: (a) add a runner for `src/` (`tsx`/`vitest`) and require tests for new app
-code, per the existing "tests for new work" policy; (b) keep manual + gate verification
-and accept the risk; (c) add only a render smoke test committed as a script. **Not
-decided.** Note the existing policy already promises tests for new work — there is
-simply nowhere to put them yet.
+Fact that still stands: `npm test` runs `tools/**/*.test.mjs` only; **`src/` has no test
+runner**. Under the rule that is fine for byte-identical work and a blocker for
+behaviour-changing work in `src/` until a runner is added. Anyone taking on such a
+change must surface that rather than skip it.
+
+### W8 (continued) — escape variants decision: LEAVE THEM
+
+Owner asked whether the remaining escape variants matter, "probably not". Evidence
+gathered and it agrees:
+
+- The two `&apos;` variants are **`escapeXml`, and they feed XML/XHTML** —
+  `WorkingEpubGenerator.ts` emits `<?xml version="1.0"?>` for the EPUB container and
+  OPF; `&apos;` is the correct entity there. `RPGContextBuilder.ts` feeds RPG
+  context markup. **Merging these into the HTML helper would be a real regression.**
+- The `&<>"` and `&<>` variants are existing, working behaviour in
+  `NodeStatisticsModal`, `WorldRpgView`, `WorldRpgTextRenderer`, `XMLStoryModal`,
+  `GuidedReviewModal`.
+
+**Decision: the remaining 19 definitions stay as they are.** Unifying them is
+behaviour-changing work across call-site-heavy files, with EPUB/XML regression risk and
+little benefit, and this app is verified by use. Recorded in `AGENTS.md` too, so nobody
+re-litigates it.
 
 ### W5 — why this was NOT flipped to enforcing
 
