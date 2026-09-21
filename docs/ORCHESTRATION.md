@@ -166,20 +166,28 @@ Always `npm ci` (lockfile-exact) before trusting a local gate run.
 | W3 | Windows build unverified after the dependency change | **DEMOTED** — fallback path, not worth verification effort | — |
 | W5 | Duplication gate is advisory; percentage metric is the wrong shape | **CLOSED (decision)** — see §Duplication reality above; do not re-propose enforcing it | — |
 | W7 | `tools/` portable analysis toolbox; duplicate-candidate finder | **DONE** — `ad7e208`+`c0801ec` via `wt-dupcand`, merged `322f464`, pushed | — |
-| W8 | Type-4 audit + deduplication | **IN PROGRESS** — 2 landings (`63e76f8`, `ff27bdc`); escape variants DECIDED to stay; `addLogEntry` + the 258-line block remain | — |
+| W8 | Type-4 audit + deduplication | **IN PROGRESS** — 3 landings (`63e76f8`, `ff27bdc`, `8518de2`); escape variants DECIDED to stay; the 258-line block remains | — |
 | W9 | Testing policy for changed vs untouched code | **RESOLVED** — owner rule in `AGENTS.md` | — |
 
 ### W8 — Type-4 audit and deduplication (IN PROGRESS)
 
-`npm run dup:candidates` produces the shortlist. **Two landings done 2026-09-21:**
+`npm run dup:candidates` produces the shortlist. **Three landings done 2026-09-21:**
 
-| Landing | What | Commit |
-|---|---|---|
-| regex escaping | `PromptExpansionService.escapeRegex` removed; 6 call sites use the shared `escapeRegExp` from `quality/metrics/textUtils.ts`. Bodies were byte-identical. | `63e76f8` |
-| DOM `escapeHtml` | **9** byte-identical private copies removed; 50 call sites now import the canonical `escapeHtml` from `ui/modals/core/modal-utils.ts` (which already exported it and was used by nobody). | `ff27bdc` |
+| Landing | Pattern | What | Commit |
+|---|---|---|---|
+| regex escaping | literal copy | `PromptExpansionService.escapeRegex` removed; 6 call sites use shared `escapeRegExp` | `63e76f8` |
+| DOM `escapeHtml` | literal copy | **9** byte-identical private copies removed; 50 call sites import `modal-utils` | `ff27bdc` |
+| `addLogEntry` | **parameterized** | one shared helper for both log services; `initInsideTry` + `logEntryOnFailure` reproduce each service's semantics exactly | `8518de2` |
 
-Verified: gate exit 0 on both, plus a headless-Chrome render after the 9-file
-consolidation (127,986 DOM bytes, identical to the pre-refactor render).
+`src/logPersistence.ts` is the shared helper and ships with **10 app tests** (the first
+tests for `src/`). The test earned its keep immediately: the first version only
+initialized inside the try branch, silently dropping initialization for the AI path —
+the test failed and caught it before commit. A green gate would not have.
+
+**Test harness for `src/` now exists**: `tools/app-tests/load-ts.mjs` transpiles a `.ts`
+file in memory with the esbuild Vite already installs, so **no new dependency**.
+`npm test` runs `tools/**` and `src/**` test files. App tests remain only where the
+owner rule requires them — this is not a push toward full coverage.
 
 #### ⚠ THE ESCAPE MAP — read this before merging any escape helper
 
@@ -203,9 +211,10 @@ is a real difference in older HTML parsers. **Deciding the canonical form is an 
 policy call, not a mechanical extraction.** The obvious direction — one `escapeHtml`
 and one `escapeHtmlAttribute` in `modal-utils.ts` — has to be chosen deliberately.
 
-Still open from the shortlist: `addLogEntry()` (~0.90, `AILogService` ↔
-`ErrorLogService`), and the 258-line block between `idea-board/ui/TransformModal.ts`
-and `ui/modals/ManualModal.ts`.
+Still open from the shortlist: the 258-line block between
+`idea-board/ui/TransformModal.ts` and `ui/modals/ManualModal.ts` (found by `jscpd`, not
+by name) — the next candidate, and large enough that the parameterize rule is the
+right tool if it proves to be an almost-duplicate rather than a literal one.
 
 ### W9 — testing policy (RESOLVED by owner rule, 2026-09-21)
 
