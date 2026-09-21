@@ -1,0 +1,149 @@
+# Expert — Orchestration Board
+
+**This file is the state of record.** It is true before any report reaches the owner.
+A successor session must be able to act within minutes from this file plus
+`git -C ~/projects/Expert log --oneline -10` and `git worktree list`.
+
+Last reconciled: 2026-09-21 (by the chief-of-staff session that created this file).
+
+---
+
+## The contract
+
+- **One writer per file.** At most TWO writers in flight, each in its OWN worktree,
+  each briefed with ABSOLUTE paths. A shared file means SERIALIZE.
+- **The dispatcher does not implement while a writer can.** The dispatcher verifies.
+- **Every landing is verified by the dispatcher**, not by the writer's report: the
+  commit on the remote, the dispatcher's OWN gate run, raw output kept.
+- **A discovery lands on this board before it is reported.**
+- **A worker's partial work is COMMITTED on its branch**, never left uncommitted.
+- **A silent worker is salvage-checked** (branch log + worktree status) before any
+  deletion. Its worktree AND branch are retired together.
+- **A red gate is fixed forward immediately**, before any other change lands.
+
+## The gate
+
+ONE command. Run it; do not invent another.
+
+```bash
+bash scripts/gate.sh          # full: typecheck + lint + build (staging)
+bash scripts/gate.sh --cheap  # typed+lint only
+```
+
+Exit codes — quote them exactly, never inflate them:
+
+| Code | Meaning |
+|-----|---------|
+| `0` | fully verified — the requested tier ran and passed |
+| `1` | failed — the tier ran and FAILED (read the raw log) |
+| `2` | cheap tier only — typecheck+lint passed, the expensive tier did **not** run |
+| `3` | refused, **VOID** — another expensive check holds the lock; not a failure, not evidence |
+
+The gate takes an atomic `mkdir` lock at `/tmp/expert-gate.lock`. A refusal is the
+lock **working**. Logs: `/tmp/expert-gate-logs/`.
+
+The gate builds to a **staging directory**, never to `dist/`, because `dist/` is the
+live symlink target. **The gate must not deploy.**
+
+**Never pipe the gate through `tail`/`head`** — the pipeline's exit status becomes the
+last command's, so a failure reads as success.
+
+---
+
+## Host facts a successor needs immediately
+
+| Fact | Value |
+|---|---|
+| Repo | `/home/administrator/projects/Expert` (own `.git`, not the `~/projects` marker repo) |
+| Branch | `master`; remote `origin` = `https://github.com/ArndRosemeier/Expert.git` |
+| **Package manager** | **npm** (`package-lock.json`). pnpm misresolves this project. |
+| **TypeScript in the lockfile** | **5.8.3** — verify against THIS, not the ambient install |
+| Live URL (default) | `https://apps.futuremagic.de/expert/` |
+| Live artifact | symlink `~/apps/expert` → `/home/administrator/projects/Expert/dist` |
+| Old deploy | `deploy-clean.ps1` (PowerShell + FTP → `futuremagic.de/Expert/`), Windows-only, still valid |
+| CI | `.github/workflows/ci.yml`, `code-quality.yml` — green as of `2a51071` |
+
+**THE TRAP:** `dist/` is the live deploy (symlinked). Any `npm run build` or
+`build:domainfactory` overwrites it with a base-`/Expert/` bundle and **takes the live
+site down** — silently, with no error, just a blank page. After any such build, run
+`npm run build:apps` to restore. Work item W1 fixes this properly.
+
+**THE OTHER TRAP:** this project's `node_modules` resolves TypeScript **5.9.x** if you
+install with pnpm, but CI and the lockfile use **5.8.3**. `Element.textContent` is
+`string | null` in 5.8 but not in 5.9, so a change can pass locally and fail in CI.
+Always `npm ci` (lockfile-exact) before trusting a local gate run.
+
+---
+
+## Board
+
+| ID | Item | State | Owner |
+|----|------|-------|-------|
+| W1 | `npm run build*` scripts clobber the live `dist/` symlink target | **READY** — brief written | — |
+| W2 | No test runner and no `test` script anywhere; gate is static-only | **BLOCKED (owner decision)** | — |
+| W3 | Windows build/deploy after the `lightningcss` dependency removal is unverified | **BLOCKED (owner-only)** | — |
+| W4 | Dead-code backlog: unused files/exports (two were found by hand) | **READY (cheap probe first)** | — |
+| W5 | `.jscpd.json` runs `continue-on-error: true`, so duplication never fails CI | **READY, low priority** | — |
+
+### W1 — make the build scripts safe (READY)
+
+**Intent:** a plain `npm run build` must not be able to take the live site down.
+**The one seam:** `package.json` scripts + the `dist`/staging convention.
+**Options:** (a) point the non-`apps` build modes at their own `outDir`
+(`dist-domainfactory`, `dist-github`); (b) leave `outDir` alone and make deployment an
+explicit `copy from dist-<mode>` step. (a) is smaller; the `apps` mode keeps `dist`.
+**Gate:** `bash scripts/gate.sh` → exit 0. Plus: prove the live app still resolves after
+a `build:domainfactory` run.
+**Worktree:** `/home/administrator/projects/Expert-wt-w1`, branch `wt-w1`.
+
+### W2 — no behavioural safety net (BLOCKED, owner decision)
+
+There is **no test runner** and **no `test` script**; no vitest/jest/playwright in
+`devDependencies`. Every green gate so far proves types, style and that a bundle is
+produced — **nothing proves the app behaves**. The headless-Chrome render check used
+earlier in this project is a manual technique, not a committed test. Adding a framework
+is a real decision (deps, conventions, CI time), so it goes to the owner.
+
+### W3 — unverified Windows build (BLOCKED, owner-only)
+
+`2a51071` removed `lightningcss` and `lightningcss-win32-x64-msvc` from root
+`dependencies` to unbreak Linux/macOS/CI installs. That fix was verified on Linux only.
+Nobody has run the Windows build since. The owner builds and deploys on Windows.
+**The dispatcher cannot verify this from this host** — do not claim it is fine.
+
+### W4 — dead-code backlog (READY, cheap probe first)
+
+Two dead artifacts were already found and removed by hand this session
+(`src/keys/keys-ui.ts.broken`, `public/keys.html.backup`), which suggests more exist.
+`npx tsr "src/main\.ts$"` (the `deadcode:check` script) is the probe. Run the probe
+BEFORE briefing a writer, so the brief is sized from evidence rather than a guess.
+
+### W5 — duplication gate has no teeth (READY, low priority)
+
+`.github/workflows/code-quality.yml` runs `npm run duplication:check` with
+`continue-on-error: true`, so a duplication regression cannot fail CI. The `.jscpd.json`
+threshold is 5%.
+
+---
+
+## Discovery log
+
+- **2026-09-21** — Gate machinery (`scripts/gate.sh`) created and verified: cheap tier
+  → exit 2, held lock → exit 3, full tier → exit 0 in ~30s. It stages the build; it does
+  not deploy.
+- **2026-09-21** — Component: **no test runner exists**. Recorded as W2.
+- **2026-09-21** — `dist/` is the live symlink target and is clobbered by every non-apps
+  build. Recorded as W1.
+- **2026-09-21** — pnpm vs npm TypeScript skew (5.9.x vs 5.8.3) caused a CI failure
+  after a locally-green lint sweep. Recorded above as a host fact.
+
+## Recovery pointers
+
+- Built and verified this session, all pushed and on `origin/master`: `19a6356`
+  (repo cleanup), `98109ed` (Linux install fix + apps deploy mode + CI action bumps),
+  `d00e75a` (82 lint errors), `32a4135` (restore null guards for TS 5.8.3),
+  `2a51071` (remove the access-key mechanism).
+- To redeploy after ANY rebuild: `npm run build:apps` (base `/expert/`), then verify
+  `curl -s -o /dev/null -w '%{http_code}' https://apps.futuremagic.de/expert/` → 200.
+- A stronger check than HTTP 200: headless Chrome `--dump-dom` and confirm the app UI
+  mounted (a wrong base path returns 200 with a blank page).
