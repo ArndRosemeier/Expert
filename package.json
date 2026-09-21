@@ -70,6 +70,8 @@
     "build:production": "npm run typecheck && vite build --mode production",
     "build:apps": "npm run typecheck && vite build --mode apps",
     "preview": "vite preview",
+    "test": "node --test \"tools/**/*.test.mjs\"",
+    "dup:candidates": "node tools/duplicate-candidates/find-duplicate-candidates.mjs",
     "predeploy": "npm run build:github",
     "deploy": "gh-pages -d dist-github",
     "deploy:domainfactory": "powershell -ExecutionPolicy Bypass -File deploy-clean.ps1",
