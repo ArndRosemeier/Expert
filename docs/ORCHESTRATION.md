@@ -410,6 +410,29 @@ threshold is 5%.
 
 ---
 
+## Startup performance (measured, not guessed)
+
+**Rule: startup must never wait on the network.** Metadata (the ~760 KB `/models`
+catalog and per-model `/endpoints`) is large and, on the owner's connection, slow. Any
+`await` on it before the app comes up freezes the whole UI.
+
+Regression check: `npm run verify:startup` (tool: `tools/dev/startup-probe.mjs`). It
+drives the real built app in headless Chrome with OpenRouter faked at 3 s latency and a
+realistic profile, then FAILS if startup exceeds 3 s or if models never appear. Run it
+after touching startup or model-metadata code.
+
+Measured 2026-09-30 (catalog latency -> time to "Expert application started"):
+
+| catalog | before `901cb4e` | after |
+|---|---|---|
+| 0.2 s | 300 ms | ~100 ms |
+| 20 s | **20,132 ms** | **131 ms** |
+| 60 s | **never (>25 s)** | **96 ms** |
+
+Models still appear in Settings once the slow catalog lands (verified by opening the
+modal and watching for the model id, not by counting `<option>`s - the page has other
+dropdowns that would give a false pass).
+
 ## Discovery log
 
 - **2026-09-21** — Gate machinery (`scripts/gate.sh`) created and verified: cheap tier
