@@ -151,6 +151,7 @@ import { AIInteractionsService } from './AIInteractionsService';
 
 import { GenerationErrorService } from './ui/modals';
 import * as state from './state';
+import { memoizeAsync } from './utils/memoizeAsync';
 
 export interface StreamingCallbacks {
   onStart: () => void;
@@ -387,6 +388,20 @@ export class OpenRouterClient {
   
   // Operation-scoped abort controllers to handle concurrent operations safely
   private activeOperations = new Map<string, AbortController>();
+
+  /**
+   * OpenRouter model metadata changes rarely but is large (~760 KB for /models).
+   * It used to be downloaded several times per chat request (image support,
+   * web-search detection, max-token key, provider mapping), with no timeout, and
+   * BEFORE the request was abortable. Cache it; the model selector's explicit
+   * refresh passes `{ force: true }`.
+   */
+  private static readonly MODEL_METADATA_TTL_MS = 30 * 60 * 1000;
+  private static readonly MODEL_METADATA_TIMEOUT_MS = 30_000;
+  private readonly modelsCache = memoizeAsync<string, OpenRouterModel[]>(
+    async () => this.fetchModelsUncached(), OpenRouterClient.MODEL_METADATA_TTL_MS);
+  private readonly endpointsCache = memoizeAsync<string, OpenRouterModelEndpoint[]>(
+    async (modelId) => this.fetchModelEndpointsUncached(modelId), OpenRouterClient.MODEL_METADATA_TTL_MS);
 
   private constructor() {
     this.aiLogService = AILogService.getInstance();
@@ -978,7 +993,18 @@ export class OpenRouterClient {
     }
   }
 
-  async fetchModels(): Promise<OpenRouterModel[]> {
+  /** Model list, cached (see modelsCache). Pass `{ force: true }` to refresh. */
+  async fetchModels(options?: { force?: boolean }): Promise<OpenRouterModel[]> {
+    return this.modelsCache.get('all', options);
+  }
+
+  /** Drop cached model metadata (e.g. after the API key changes). */
+  clearModelMetadataCache(): void {
+    this.modelsCache.clear();
+    this.endpointsCache.clear();
+  }
+
+  private async fetchModelsUncached(): Promise<OpenRouterModel[]> {
     const apiKey = await this.getApiKeyFromStorage();
     if (!apiKey) {
       throw new Error('OpenRouter API key not configured. Please set it in the settings.');
@@ -989,6 +1015,7 @@ export class OpenRouterClient {
         headers: {
           'Authorization': `Bearer ${apiKey}`,
         },
+        signal: AbortSignal.timeout(OpenRouterClient.MODEL_METADATA_TIMEOUT_MS),
       });
       if (!response.ok) {
         const { errorBody, errorText } = await readHttpErrorBody(response);
@@ -1038,7 +1065,12 @@ export class OpenRouterClient {
   /**
    * Fetch detailed provider information for a specific model
    */
-  async fetchModelEndpoints(modelId: string): Promise<OpenRouterModelEndpoint[]> {
+  /** Provider endpoints for a model, cached. Pass `{ force: true }` to refresh. */
+  async fetchModelEndpoints(modelId: string, options?: { force?: boolean }): Promise<OpenRouterModelEndpoint[]> {
+    return this.endpointsCache.get(modelId, options);
+  }
+
+  private async fetchModelEndpointsUncached(modelId: string): Promise<OpenRouterModelEndpoint[]> {
     const apiKey = await this.getApiKeyFromStorage();
     if (!apiKey) {
       throw new Error('OpenRouter API key not configured. Please set it in the settings.');
@@ -1057,6 +1089,7 @@ export class OpenRouterClient {
         headers: {
           'Authorization': `Bearer ${apiKey}`,
         },
+        signal: AbortSignal.timeout(OpenRouterClient.MODEL_METADATA_TIMEOUT_MS),
       });
       
       if (!response.ok) {
@@ -1140,11 +1173,17 @@ export class OpenRouterClient {
     const abortController = new AbortController();
     this.activeOperations.set(opId, abortController);
 
-    // Listen to external abort signal if provided
+    // Listen to external abort signal if provided. An 'abort' listener never fires
+    // for a signal that is ALREADY aborted, so honour that case explicitly - the
+    // caller may have been stopped while it was still preparing the request.
     if (externalAbortSignal) {
-      externalAbortSignal.addEventListener('abort', () => {
-        this.abortOperation(opId);
-      });
+      if (externalAbortSignal.aborted) {
+        abortController.abort();
+      } else {
+        externalAbortSignal.addEventListener('abort', () => {
+          this.abortOperation(opId);
+        }, { once: true });
+      }
     }
 
     // CRITICAL FIX: Ensure UI selection matches loaded profile

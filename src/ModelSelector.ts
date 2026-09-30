@@ -1336,7 +1336,8 @@ export class ModelSelector {
     
     try {
       const client = OpenRouterClient.getInstance();
-      this.models = await client.fetchModels();
+      // Explicit fetch (button / API-key change): always bypass the metadata cache.
+      this.models = await client.fetchModels({ force: true });
       
       // Models fetched successfully from OpenRouter
       
@@ -1596,6 +1597,7 @@ export class ModelSelector {
     this.apiKey = key;
     const storage = await this.storageService;
     await storage.set(STORAGE_KEY_API_KEY, this.apiKey);
+    OpenRouterClient.getInstance().clearModelMetadataCache();
     if (isApiKeyFormatValid(this.apiKey)) {
       await this.fetchModels();
     } else {

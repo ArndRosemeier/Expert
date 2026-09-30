@@ -10,6 +10,7 @@ import * as state from '../../state';
 import { UniversalTextEditor } from '../../ui/components/UniversalTextEditor';
 import { splitSvgSegments, contentHasSvg, svgToDataUrl } from './svg-content';
 import { RPGLiteTransferModal } from './RPGLiteTransferModal';
+import { StreamRunTracker } from '../services/StreamRun';
 import {
   RPGLiteActionButton,
   RPGLiteChatMessage,
@@ -235,6 +236,8 @@ export class RPGLiteView {
   private actionButtons: RPGLiteActionButton[] = [];
 
   private isStreaming = false;
+  /** Owns the active narrator run; abortable from the moment it starts (see StreamRun.ts). */
+  private readonly runs = new StreamRunTracker();
   private currentStreamingOperationId: string | null = null;
   private currentStreamingAbortRequested = false;
   private streamingMessageId: string | null = null;
@@ -415,7 +418,20 @@ export class RPGLiteView {
     if (!this.currentStreamingOperationId) throw new Error('Streaming is active but no operation id is set.');
 
     this.currentStreamingAbortRequested = true;
+    // Aborting the run's signal also tears down an operation that streamingChat has
+    // NOT registered yet (Stop pressed during setup) - see StreamRun.ts.
+    this.runs.stop();
     this.openRouterClient.abortOperation(this.currentStreamingOperationId);
+    // The stopped run's own onError now returns early (it is no longer current), so
+    // clear its "thinking" state here instead of leaving the dots stuck.
+    const stoppedMessageId = this.streamingMessageId;
+    if (stoppedMessageId) {
+      const stoppedEl = queryHTMLElement(this.container, `[data-message-id="${stoppedMessageId}"]`);
+      if (stoppedEl) {
+        stoppedEl.classList.remove('rpg-lite-message-streaming');
+        this.removeWaitingIndicator(stoppedEl);
+      }
+    }
     this.currentStreamingOperationId = null;
     this.streamingMessageId = null;
     this.isStreaming = false;
@@ -3396,6 +3412,7 @@ export class RPGLiteView {
     this.streamingMessageId = assistantMsg.id;
     this.currentStreamingAbortRequested = false;
     this.currentStreamingOperationId = newId('rpg_lite_op');
+    const run = this.runs.start(this.currentStreamingOperationId);
     this.setComposerButtonsGenerating();
 
     const opId = this.currentStreamingOperationId;
@@ -3417,7 +3434,7 @@ export class RPGLiteView {
       const shake = await this.generateOpeningDirection(session, opId);
       // If this run was superseded while brainstorming (another Retry started, or it
       // was aborted), stop here and let the newer run own the message/DOM.
-      if (this.currentStreamingOperationId !== opId) return;
+      if (!run.isCurrent()) return;
       if (shake) {
         assistantMsg.openingShake = shake;
         await this.saveSession();
@@ -3467,12 +3484,15 @@ export class RPGLiteView {
     };
 
     const streamOpts = await this.buildStreamingOptions(session);
+    // Stopped or superseded while setting up: do not start the request at all.
+    if (!run.isCurrent()) return;
     
     await this.openRouterClient.streamingChat(session.narratorPurpose, openRouterMessages, {
       onStart: () => {
         if (DEBUG_RPG_LITE_STREAMING) console.log('🎬 [RPG Lite Opening] Streaming started');
       },
       onChunk: (chunk: string) => {
+        if (!run.isCurrent()) return;
         chunkCount++;
         assistantMsg.content += chunk;
 
@@ -3496,6 +3516,7 @@ export class RPGLiteView {
         }
       },
       onImages: (imageUrls: string[]) => {
+        if (!run.isCurrent()) return;
         imageCount++;
         // Remove waiting indicator on first image if no text arrived yet
         if (imageCount === 1 && chunkCount === 0) {
@@ -3509,6 +3530,10 @@ export class RPGLiteView {
         meta = mapCompletionMetaToGenerationMeta(session.narratorPurpose, m);
       },
       onComplete: () => {
+        // A stale run (stopped, or replaced by a Retry) must not render its reply or
+        // reset the NEW run's streaming state.
+        if (!run.isCurrent()) return;
+        this.runs.finish(run);
         void (async () => {
         if (rafHandle !== null) {
           cancelAnimationFrame(rafHandle);
@@ -3556,6 +3581,9 @@ export class RPGLiteView {
           rafHandle = null;
         }
         rafPending = false;
+        // A stale run's error (typically its own abort) must not touch the new run.
+        if (!run.isCurrent()) return;
+        this.runs.finish(run);
         const wasAbort = this.currentStreamingAbortRequested && error.message.toLowerCase().includes('aborted');
         this.isStreaming = false;
         this.streamingMessageId = null;
@@ -3569,7 +3597,7 @@ export class RPGLiteView {
         console.error('RPG Lite narrator error:', error);
         alert(`Narrator error: ${error.message}`);
       }
-    }, opId, undefined, streamOpts);
+    }, opId, run.signal, streamOpts);
   }
 
   private async generateAssistantReply(existingMessage?: RPGLiteChatMessage): Promise<void> {
@@ -3616,6 +3644,7 @@ export class RPGLiteView {
     this.streamingMessageId = assistantMsg.id;
     this.currentStreamingAbortRequested = false;
     this.currentStreamingOperationId = newId('rpg_lite_op');
+    const run = this.runs.start(this.currentStreamingOperationId);
     this.setComposerButtonsGenerating();
 
     let meta: RPGLiteMessageGenerationMeta | null = null;
@@ -3658,12 +3687,15 @@ export class RPGLiteView {
     };
 
     const streamOpts = await this.buildStreamingOptions(session);
+    // Stopped or superseded while setting up: do not start the request at all.
+    if (!run.isCurrent()) return;
     
     await this.openRouterClient.streamingChat(session.narratorPurpose, openRouterMessages, {
       onStart: () => {
         if (DEBUG_RPG_LITE_STREAMING) console.log('🎬 [RPG Lite Reply] Streaming started');
       },
       onChunk: (chunk: string) => {
+        if (!run.isCurrent()) return;
         chunkCount++;
         assistantMsg.content += chunk;
 
@@ -3687,6 +3719,7 @@ export class RPGLiteView {
         }
       },
       onImages: (imageUrls: string[]) => {
+        if (!run.isCurrent()) return;
         imageCount++;
         // Remove waiting indicator on first image if no text arrived yet
         if (imageCount === 1 && chunkCount === 0) {
@@ -3700,6 +3733,10 @@ export class RPGLiteView {
         meta = mapCompletionMetaToGenerationMeta(session.narratorPurpose, m);
       },
       onComplete: () => {
+        // A stale run (stopped, or replaced by a Retry) must not render its reply or
+        // reset the NEW run's streaming state.
+        if (!run.isCurrent()) return;
+        this.runs.finish(run);
         void (async () => {
         if (rafHandle !== null) {
           cancelAnimationFrame(rafHandle);
@@ -3747,6 +3784,9 @@ export class RPGLiteView {
           rafHandle = null;
         }
         rafPending = false;
+        // A stale run's error (typically its own abort) must not touch the new run.
+        if (!run.isCurrent()) return;
+        this.runs.finish(run);
         const wasAbort = this.currentStreamingAbortRequested && error.message.toLowerCase().includes('aborted');
         this.isStreaming = false;
         this.streamingMessageId = null;
@@ -3760,7 +3800,7 @@ export class RPGLiteView {
         console.error('RPG Lite narrator error:', error);
         alert(`Narrator error: ${error.message}`);
       }
-    }, opId, undefined, streamOpts);
+    }, opId, run.signal, streamOpts);
   }
 }
 
