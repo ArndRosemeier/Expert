@@ -102,10 +102,23 @@ export class ModelSelector {
 
   private async initializeAsync(): Promise<void> {
     await this.loadAPIKeyFromStorage();
+    // Start the model catalog download right away, in parallel with the profile
+    // load. It only needs the API key. Previously it ran strictly AFTER the profile
+    // load, which itself awaited a per-model /endpoints prefetch - so startup paid
+    // for every request in sequence, and the prefetch's diagnostics ran against an
+    // empty catalog ("model ... is not in the fetched models list").
+    const catalog = this.apiKey
+      ? OpenRouterClient.getInstance().fetchModels().catch((e: unknown) => {
+          console.error('Failed to prefetch model catalog during initialization:', e);
+          return null;
+        })
+      : Promise.resolve(null);
     await this.loadFromCurrentProfile();
+    await catalog;
     if (this.apiKey && !this.fetched) {
       try {
-        await this.fetchModels();
+        // Startup uses the (just-populated) cache; the explicit Fetch button forces.
+        await this.fetchModels({ force: false });
         // If models are already selected in the profile, log their params too
         for (const purpose of PURPOSES) {
           const selectedModel = this.selectedModels[purpose.key];
@@ -1328,7 +1341,7 @@ export class ModelSelector {
 
 
 
-  private async fetchModels() {
+  private async fetchModels(options: { force?: boolean } = { force: true }) {
     this.loading = true;
     this.error = null;
     this.fetched = false;
@@ -1336,8 +1349,9 @@ export class ModelSelector {
     
     try {
       const client = OpenRouterClient.getInstance();
-      // Explicit fetch (button / API-key change): always bypass the metadata cache.
-      this.models = await client.fetchModels({ force: true });
+      // Explicit fetch (button / API-key change) bypasses the metadata cache by
+      // default; startup passes force:false to reuse the catalog it prefetched.
+      this.models = await client.fetchModels(options);
       
       // Models fetched successfully from OpenRouter
       
@@ -1703,7 +1717,8 @@ export class ModelSelector {
         this.selectedParams = {};
       }
       
-      // Pre-fetch endpoint information for loaded models
+      // Pre-fetch endpoint information for loaded models (warms the shared cache so
+      // the later catalog step and the first request do not refetch them).
       const fetchPromises: Promise<void>[] = [];
       for (const purpose of PURPOSES) {
         const selectedModel = this.selectedModels[purpose.key];
@@ -1834,6 +1849,9 @@ export class ModelSelector {
 
   // Log model and endpoint supported parameters to help diagnose missing controls like verbosity
   private logModelParameterSupport(modelId: string): void {
+    // Catalog not loaded yet (e.g. endpoint prefetch during profile load): nothing to
+    // diagnose against. Do NOT report the model as missing - it is not.
+    if (this.models.length === 0) return;
     const model = this.models.find(m => m.id === modelId);
     if (!model) {
       // A selected model id can legitimately be missing from the fetched models

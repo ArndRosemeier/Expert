@@ -151,7 +151,7 @@ import { AIInteractionsService } from './AIInteractionsService';
 
 import { GenerationErrorService } from './ui/modals';
 import * as state from './state';
-import { memoizeAsync } from './utils/memoizeAsync';
+import { memoizeAsync, withFallback } from './utils/memoizeAsync';
 
 export interface StreamingCallbacks {
   onStart: () => void;
@@ -397,7 +397,12 @@ export class OpenRouterClient {
    * refresh passes `{ force: true }`.
    */
   private static readonly MODEL_METADATA_TTL_MS = 30 * 60 * 1000;
-  private static readonly MODEL_METADATA_TIMEOUT_MS = 30_000;
+  // Hard ceiling for one metadata download. Generous: some connections take well over
+  // 30 s for the ~760 KB catalog (observed by the owner), and a download that is cut
+  // off is wasted - it is shared and cached, so letting it finish is the cheap option.
+  private static readonly MODEL_METADATA_TIMEOUT_MS = 180_000;
+  // How long a chat request will wait for OPTIONAL metadata before using defaults.
+  private static readonly REQUEST_PATH_METADATA_WAIT_MS = 2_000;
   private readonly modelsCache = memoizeAsync<string, OpenRouterModel[]>(
     async () => this.fetchModelsUncached(), OpenRouterClient.MODEL_METADATA_TTL_MS);
   private readonly endpointsCache = memoizeAsync<string, OpenRouterModelEndpoint[]>(
@@ -541,9 +546,10 @@ export class OpenRouterClient {
         throw new Error(`No model configured for purpose: ${purpose}`);
       }
 
-      // Check if this model has native web search
-      const allModels = await this.fetchModels();
-      const modelInfo = allModels.find(m => m.id === model);
+      // Check if this model has native web search. The catalog is OPTIONAL here:
+      // a slow or failed /models download must never fail the actual chat request.
+      const allModels = await this.fetchModelsOrNull();
+      const modelInfo = allModels?.find(m => m.id === model);
       const hasNativeWebSearch = modelInfo ? OpenRouterClient.hasNativeWebSearch(modelInfo) : false;
       
       const webSearchEnabled = hasNativeWebSearch || ((webSearchPrefs[purpose] ?? false));
@@ -576,8 +582,8 @@ export class OpenRouterClient {
    */
   private async getMaxTokensParameterKey(modelId: string): Promise<'max_output_tokens' | 'max_tokens'> {
     try {
-      const allModels = await this.fetchModels();
-      const modelInfo = allModels.find(m => m.id === modelId);
+      const allModels = await this.fetchModelsOrNull();
+      const modelInfo = allModels?.find(m => m.id === modelId);
       const supported = new Set<string>(modelInfo?.supported_parameters ?? []);
       if (supported.has('max_output_tokens')) return 'max_output_tokens';
       if (supported.has('max_tokens')) return 'max_tokens';
@@ -998,6 +1004,16 @@ export class OpenRouterClient {
     return this.modelsCache.get('all', options);
   }
 
+  /**
+   * Catalog for OPTIONAL per-request decisions (web search, image output, max-tokens
+   * key). Never throws, and waits at most REQUEST_PATH_METADATA_WAIT_MS: on a slow
+   * connection the request proceeds with defaults while the download continues in the
+   * background and fills the cache for the next request.
+   */
+  async fetchModelsOrNull(): Promise<OpenRouterModel[] | null> {
+    return withFallback(this.fetchModels(), OpenRouterClient.REQUEST_PATH_METADATA_WAIT_MS, null);
+  }
+
   /** Drop cached model metadata (e.g. after the API key changes). */
   clearModelMetadataCache(): void {
     this.modelsCache.clear();
@@ -1054,8 +1070,8 @@ export class OpenRouterClient {
    */
   async modelSupportsImageOutput(modelId: string): Promise<boolean> {
     try {
-      const models = await this.fetchModels();
-      const model = models.find(m => m.id === modelId);
+      const models = await this.fetchModelsOrNull();
+      const model = models?.find(m => m.id === modelId);
       return model?.architecture?.output_modalities?.includes('image') ?? false;
     } catch {
       return false;

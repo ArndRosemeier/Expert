@@ -3597,7 +3597,11 @@ export class RPGLiteView {
         console.error('RPG Lite narrator error:', error);
         alert(`Narrator error: ${error.message}`);
       }
-    }, opId, run.signal, streamOpts);
+    }, opId, run.signal, streamOpts).catch(() => {
+      // streamingChat reports every failure through onError above (which shows it to
+      // the user or ignores a deliberate abort) and ALSO rethrows. Swallow the rethrow
+      // so it does not surface a second time as an "Unhandled promise rejection".
+    });
   }
 
   private async generateAssistantReply(existingMessage?: RPGLiteChatMessage): Promise<void> {
@@ -3800,7 +3804,11 @@ export class RPGLiteView {
         console.error('RPG Lite narrator error:', error);
         alert(`Narrator error: ${error.message}`);
       }
-    }, opId, run.signal, streamOpts);
+    }, opId, run.signal, streamOpts).catch(() => {
+      // streamingChat reports every failure through onError above (which shows it to
+      // the user or ignores a deliberate abort) and ALSO rethrows. Swallow the rethrow
+      // so it does not surface a second time as an "Unhandled promise rejection".
+    });
   }
 }
 

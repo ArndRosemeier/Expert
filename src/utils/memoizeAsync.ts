@@ -53,3 +53,20 @@ export function memoizeAsync<K, V>(
         }
     };
 }
+
+/**
+ * Resolve to `promise`'s value, or to `fallback` if it rejects or takes longer than
+ * `waitMs`. Never rejects. The underlying promise keeps running (so a shared,
+ * cached download still completes and fills its cache for the next caller).
+ */
+export async function withFallback<T, F>(promise: Promise<T>, waitMs: number, fallback: F): Promise<T | F> {
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const timeout = new Promise<F>(resolve => {
+        timer = setTimeout(() => { resolve(fallback); }, waitMs);
+    });
+    try {
+        return await Promise.race([promise.catch(() => fallback), timeout]);
+    } finally {
+        clearTimeout(timer);
+    }
+}

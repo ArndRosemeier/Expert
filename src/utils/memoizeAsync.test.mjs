@@ -89,3 +89,30 @@ test('memoizeAsync: a load that started before clear() does not repopulate the c
     assert.equal(await fresh, 'new-key-result');
     assert.equal(n, 2, 'the stale result must not have been served from cache');
 });
+
+const { withFallback } = await importTs(srcPath('utils/memoizeAsync.ts'));
+
+test('withFallback: returns the value when it arrives in time', async () => {
+    assert.equal(await withFallback(Promise.resolve('catalog'), 50, null), 'catalog');
+});
+
+test('withFallback: a slow load yields the fallback instead of blocking the request', async () => {
+    // Owner report: the /models download timed out and took the chat request with it.
+    const slow = new Promise(r => setTimeout(() => r('late'), 300));
+    const t = Date.now();
+    assert.equal(await withFallback(slow, 30, null), null);
+    assert.ok(Date.now() - t < 200, 'must not wait for the slow download');
+});
+
+test('withFallback: a failed load yields the fallback and never rejects', async () => {
+    const failing = Promise.reject(Object.assign(new Error('signal timed out'), { name: 'TimeoutError' }));
+    assert.equal(await withFallback(failing, 50, null), null);
+});
+
+test('withFallback: the slow load still completes (so the shared cache fills)', async () => {
+    let settled = false;
+    const slow = new Promise(r => setTimeout(() => { settled = true; r('late'); }, 60));
+    await withFallback(slow, 10, null);
+    await slow;
+    assert.equal(settled, true);
+});
