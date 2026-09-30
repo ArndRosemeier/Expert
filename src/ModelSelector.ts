@@ -102,37 +102,25 @@ export class ModelSelector {
 
   private async initializeAsync(): Promise<void> {
     await this.loadAPIKeyFromStorage();
-    // Start the model catalog download right away, in parallel with the profile
-    // load. It only needs the API key. Previously it ran strictly AFTER the profile
-    // load, which itself awaited a per-model /endpoints prefetch - so startup paid
-    // for every request in sequence, and the prefetch's diagnostics ran against an
-    // empty catalog ("model ... is not in the fetched models list").
-    const catalog = this.apiKey
-      ? OpenRouterClient.getInstance().fetchModels().catch((e: unknown) => {
-          console.error('Failed to prefetch model catalog during initialization:', e);
-          return null;
-        })
-      : Promise.resolve(null);
-    await this.loadFromCurrentProfile();
-    await catalog;
+
+    // STARTUP MUST NOT WAIT ON THE NETWORK.
+    //
+    // The model catalog is a ~760 KB download, and on a slow connection it takes
+    // minutes. Startup used to `await` it (and the per-model /endpoints prefetch
+    // inside the profile load) before the rest of the app was allowed to come up, so
+    // the whole UI sat there doing nothing until the network answered.
+    //
+    // The catalog is now fetched in the background: startup completes immediately,
+    // and the selector re-renders by itself when the data arrives (fetchModels()
+    // calls this.update() at the end, which no-ops until the selector has a root).
     if (this.apiKey && !this.fetched) {
-      try {
-        await this.fetchModels();
-        // If models are already selected in the profile, log their params too
-        for (const purpose of PURPOSES) {
-          const selectedModel = this.selectedModels[purpose.key];
-          if (selectedModel && this.modelEndpoints[selectedModel]) {
-            try {
-              this.logModelParameterSupport(selectedModel);
-            } catch (logError: unknown) {
-              console.error(`Failed to log parameter support for ${selectedModel}:`, logError);
-            }
-          }
-        }
-      } catch (initError: unknown) {
+      void this.fetchModels().catch((initError: unknown) => {
         console.error('Failed to auto-fetch models during initialization:', initError);
-      }
+      });
     }
+
+    // Local (IndexedDB) profile load only - it no longer awaits network either.
+    await this.loadFromCurrentProfile();
   }
 
   render(root: HTMLElement) {
@@ -1549,14 +1537,15 @@ export class ModelSelector {
       }
     }
     
-    // Wait for all endpoint fetches to complete, then re-render
+    // Warm endpoint data in the BACKGROUND, then re-render. Awaiting here made a
+    // profile switch hang for as long as the network took (one request per model).
     if (fetchPromises.length > 0) {
-      try {
-        await Promise.all(fetchPromises);
-      } catch (error) {
-        console.error('❌ Some endpoint fetches failed during profile switch:', error);
-        // Continue with update even if some fetches failed - the error will be thrown by fetchModelEndpoints
-      }
+      void Promise.all(fetchPromises)
+        .then(() => { this.update(); })
+        .catch((error: unknown) => {
+          console.error('❌ Some endpoint fetches failed during profile switch:', error);
+          this.update();
+        });
     }
     
     this.update();
@@ -1725,12 +1714,15 @@ export class ModelSelector {
         }
       }
       
+      // Warm the per-model endpoint cache in the BACKGROUND. This used to be awaited,
+      // which put another network round-trip (one per selected model) on the startup
+      // path. The selector re-renders when the data lands.
       if (fetchPromises.length > 0) {
-        try {
-          await Promise.all(fetchPromises);
-        } catch (error) {
-          console.error('❌ Some endpoint fetches failed:', error);
-        }
+        void Promise.all(fetchPromises)
+          .then(() => { this.update(); })
+          .catch((error: unknown) => {
+            console.error('❌ Some endpoint fetches failed:', error);
+          });
       }
       
       this.update();

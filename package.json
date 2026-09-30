@@ -88,7 +88,8 @@
     "duplication:check": "jscpd src --min-lines 3 --min-tokens 30 --reporters console",
     "duplication:report": "jscpd src --min-lines 3 --min-tokens 30 --reporters html --output jscpd-report",
     "duplication:detailed": "jscpd src --min-lines 2 --min-tokens 20 --reporters html,console --output jscpd-report",
-    "quality:all": "powershell -ExecutionPolicy Bypass -File scripts/check-code-quality.ps1"
+    "quality:all": "powershell -ExecutionPolicy Bypass -File scripts/check-code-quality.ps1",
+    "verify:startup": "node tools/dev/startup-probe.mjs --models-ms 3000 --endpoints-ms 3000 --max-startup-ms 3000"
   },
   "keywords": [],
   "author": "",
