@@ -7,90 +7,58 @@ const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..'
 const { importTs, srcPath } = await import(
     pathToFileURL(path.join(repoRoot, 'tools', 'app-tests', 'load-ts.mjs')).href
 );
-const { memoizeAsync } = await importTs(srcPath('utils/memoizeAsync.ts'));
+const { loadOnce, withFallback } = await importTs(srcPath('utils/memoizeAsync.ts'));
 
-function counter(result = 'v') {
+test('loadOnce: the catalog is downloaded exactly once per page load', async () => {
     const calls = [];
-    return { calls, loader: async (k) => { calls.push(k); return `${result}:${k}`; } };
-}
-
-test('memoizeAsync: second call within TTL is served from cache', async () => {
-    const c = counter();
-    const m = memoizeAsync(c.loader, 1000);
-    assert.equal(await m.get('a'), 'v:a');
-    assert.equal(await m.get('a'), 'v:a');
-    assert.equal(c.calls.length, 1, 'the ~760 KB /models list must be downloaded once, not per request');
+    const once = loadOnce(async (k) => { calls.push(k); return `v:${k}`; });
+    for (let i = 0; i < 25; i++) assert.equal(await once.get('all'), 'v:all');
+    assert.equal(calls.length, 1, 'owner rule: one download per page load, never more');
 });
 
-test('memoizeAsync: concurrent callers share one in-flight load', async () => {
-    let resolve;
-    const calls = [];
-    const m = memoizeAsync((k) => { calls.push(k); return new Promise(r => { resolve = r; }); }, 1000);
-    const p1 = m.get('a'); const p2 = m.get('a'); const p3 = m.get('a');
+test('loadOnce: concurrent callers share one in-flight download', async () => {
+    let resolve; const calls = [];
+    const once = loadOnce((k) => { calls.push(k); return new Promise(r => { resolve = r; }); });
+    const ps = [once.get('all'), once.get('all'), once.get('all')];
     resolve('x');
-    assert.deepEqual(await Promise.all([p1, p2, p3]), ['x', 'x', 'x']);
+    assert.deepEqual(await Promise.all(ps), ['x', 'x', 'x']);
     assert.equal(calls.length, 1);
 });
 
-test('memoizeAsync: keys are cached independently', async () => {
-    const c = counter();
-    const m = memoizeAsync(c.loader, 1000);
-    await m.get('a'); await m.get('b'); await m.get('a');
-    assert.deepEqual(c.calls, ['a', 'b']);
-});
-
-test('memoizeAsync: entry expires after the TTL', async () => {
-    let t = 0;
-    const c = counter();
-    const m = memoizeAsync(c.loader, 100, () => t);
-    await m.get('a');
-    t = 99; await m.get('a');
-    assert.equal(c.calls.length, 1);
-    t = 100; await m.get('a');
-    assert.equal(c.calls.length, 2);
-});
-
-test('memoizeAsync: a failed load is NOT cached', async () => {
-    let fail = true;
+test('loadOnce: never expires, however much time passes', async () => {
     const calls = [];
-    const m = memoizeAsync(async (k) => { calls.push(k); if (fail) throw new Error('down'); return 'ok'; }, 1000);
-    await assert.rejects(() => m.get('a'), /down/);
+    const once = loadOnce(async (k) => { calls.push(k); return k; });
+    await once.get('all');
+    await new Promise(r => setTimeout(r, 30));
+    await once.get('all');
+    assert.equal(calls.length, 1, 'no TTL - refresh is a hard reload');
+});
+
+test('loadOnce: keys are independent (one download per model for /endpoints)', async () => {
+    const calls = [];
+    const once = loadOnce(async (k) => { calls.push(k); return k; });
+    await once.get('a'); await once.get('b'); await once.get('a'); await once.get('b');
+    assert.deepEqual(calls, ['a', 'b']);
+});
+
+test('loadOnce: a FAILED download is not kept, so the next call retries', async () => {
+    let fail = true; const calls = [];
+    const once = loadOnce(async (k) => { calls.push(k); if (fail) throw new Error('down'); return 'ok'; });
+    await assert.rejects(() => once.get('all'), /down/);
     fail = false;
-    assert.equal(await m.get('a'), 'ok');
-    assert.equal(calls.length, 2);
+    assert.equal(await once.get('all'), 'ok');
+    assert.equal(await once.get('all'), 'ok');
+    assert.equal(calls.length, 2, 'one failed attempt, one success, then kept');
 });
 
-test('memoizeAsync: force bypasses a fresh cache entry', async () => {
-    const c = counter();
-    const m = memoizeAsync(c.loader, 1000);
-    await m.get('a');
-    await m.get('a', { force: true });
-    assert.equal(c.calls.length, 2);
-});
-
-test('memoizeAsync: clear() drops entries', async () => {
-    const c = counter();
-    const m = memoizeAsync(c.loader, 1000);
-    await m.get('a'); m.clear(); await m.get('a');
-    assert.equal(c.calls.length, 2);
-});
-
-test('memoizeAsync: a load that started before clear() does not repopulate the cache', async () => {
-    // e.g. the API key changed while an old-key request was still in flight.
-    let resolve;
+test('loadOnce: a failure seen by concurrent callers triggers only ONE retry later', async () => {
     let n = 0;
-    const m = memoizeAsync(() => { n++; return new Promise(r => { resolve = r; }); }, 1000);
-    const stale = m.get('a');
-    m.clear();
-    resolve('old-key-result');
-    assert.equal(await stale, 'old-key-result');
-    const fresh = m.get('a');
-    resolve('new-key-result');
-    assert.equal(await fresh, 'new-key-result');
-    assert.equal(n, 2, 'the stale result must not have been served from cache');
+    const once = loadOnce(async () => { n++; if (n === 1) throw new Error('down'); return 'ok'; });
+    await Promise.allSettled([once.get('all'), once.get('all'), once.get('all')]);
+    await Promise.all([once.get('all'), once.get('all')]);
+    assert.equal(n, 2);
 });
 
-const { withFallback } = await importTs(srcPath('utils/memoizeAsync.ts'));
 
 test('withFallback: returns the value when it arrives in time', async () => {
     assert.equal(await withFallback(Promise.resolve('catalog'), 50, null), 'catalog');

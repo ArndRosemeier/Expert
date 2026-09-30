@@ -117,8 +117,7 @@ export class ModelSelector {
     await catalog;
     if (this.apiKey && !this.fetched) {
       try {
-        // Startup uses the (just-populated) cache; the explicit Fetch button forces.
-        await this.fetchModels({ force: false });
+        await this.fetchModels();
         // If models are already selected in the profile, log their params too
         for (const purpose of PURPOSES) {
           const selectedModel = this.selectedModels[purpose.key];
@@ -481,7 +480,8 @@ export class ModelSelector {
       transition: background 0.2s;
       flex: 1;
     `;
-    this.fetchButton.addEventListener('click', () => void this.fetchModels());
+    // The model list is a per-page-load singleton; refreshing it means a hard reload.
+    this.fetchButton.addEventListener('click', () => { window.location.reload(); });
     this.fetchButton.addEventListener('mouseenter', () => {
       if (this.fetchButton && !this.fetchButton.disabled) {
         this.fetchButton.style.background = 'linear-gradient(90deg, #2563eb 0%, #0ea5e9 100%)';
@@ -1341,7 +1341,7 @@ export class ModelSelector {
 
 
 
-  private async fetchModels(options: { force?: boolean } = { force: true }) {
+  private async fetchModels() {
     this.loading = true;
     this.error = null;
     this.fetched = false;
@@ -1349,9 +1349,8 @@ export class ModelSelector {
     
     try {
       const client = OpenRouterClient.getInstance();
-      // Explicit fetch (button / API-key change) bypasses the metadata cache by
-      // default; startup passes force:false to reuse the catalog it prefetched.
-      this.models = await client.fetchModels(options);
+      // The catalog is a per-page-load singleton (see OpenRouterClient.modelsCache).
+      this.models = await client.fetchModels();
       
       // Models fetched successfully from OpenRouter
       
@@ -1611,7 +1610,6 @@ export class ModelSelector {
     this.apiKey = key;
     const storage = await this.storageService;
     await storage.set(STORAGE_KEY_API_KEY, this.apiKey);
-    OpenRouterClient.getInstance().clearModelMetadataCache();
     if (isApiKeyFormatValid(this.apiKey)) {
       await this.fetchModels();
     } else {

@@ -151,7 +151,7 @@ import { AIInteractionsService } from './AIInteractionsService';
 
 import { GenerationErrorService } from './ui/modals';
 import * as state from './state';
-import { memoizeAsync, withFallback } from './utils/memoizeAsync';
+import { loadOnce, withFallback } from './utils/memoizeAsync';
 
 export interface StreamingCallbacks {
   onStart: () => void;
@@ -393,20 +393,21 @@ export class OpenRouterClient {
    * OpenRouter model metadata changes rarely but is large (~760 KB for /models).
    * It used to be downloaded several times per chat request (image support,
    * web-search detection, max-token key, provider mapping), with no timeout, and
-   * BEFORE the request was abortable. Cache it; the model selector's explicit
-   * refresh passes `{ force: true }`.
+   * BEFORE the request was abortable.
+   *
+   * Owner rule: a TRUE singleton - fetched once per page load and kept. Refresh is a
+   * hard reload of the page. No TTL, no force, no invalidation.
    */
-  private static readonly MODEL_METADATA_TTL_MS = 30 * 60 * 1000;
   // Hard ceiling for one metadata download. Generous: some connections take well over
   // 30 s for the ~760 KB catalog (observed by the owner), and a download that is cut
   // off is wasted - it is shared and cached, so letting it finish is the cheap option.
   private static readonly MODEL_METADATA_TIMEOUT_MS = 180_000;
   // How long a chat request will wait for OPTIONAL metadata before using defaults.
   private static readonly REQUEST_PATH_METADATA_WAIT_MS = 2_000;
-  private readonly modelsCache = memoizeAsync<string, OpenRouterModel[]>(
-    async () => this.fetchModelsUncached(), OpenRouterClient.MODEL_METADATA_TTL_MS);
-  private readonly endpointsCache = memoizeAsync<string, OpenRouterModelEndpoint[]>(
-    async (modelId) => this.fetchModelEndpointsUncached(modelId), OpenRouterClient.MODEL_METADATA_TTL_MS);
+  private readonly modelsCache = loadOnce<string, OpenRouterModel[]>(
+    async () => this.fetchModelsUncached());
+  private readonly endpointsCache = loadOnce<string, OpenRouterModelEndpoint[]>(
+    async (modelId) => this.fetchModelEndpointsUncached(modelId));
 
   private constructor() {
     this.aiLogService = AILogService.getInstance();
@@ -999,9 +1000,9 @@ export class OpenRouterClient {
     }
   }
 
-  /** Model list, cached (see modelsCache). Pass `{ force: true }` to refresh. */
-  async fetchModels(options?: { force?: boolean }): Promise<OpenRouterModel[]> {
-    return this.modelsCache.get('all', options);
+  /** Model list: downloaded once per page load and shared (see modelsCache). */
+  async fetchModels(): Promise<OpenRouterModel[]> {
+    return this.modelsCache.get('all');
   }
 
   /**
@@ -1014,11 +1015,6 @@ export class OpenRouterClient {
     return withFallback(this.fetchModels(), OpenRouterClient.REQUEST_PATH_METADATA_WAIT_MS, null);
   }
 
-  /** Drop cached model metadata (e.g. after the API key changes). */
-  clearModelMetadataCache(): void {
-    this.modelsCache.clear();
-    this.endpointsCache.clear();
-  }
 
   private async fetchModelsUncached(): Promise<OpenRouterModel[]> {
     const apiKey = await this.getApiKeyFromStorage();
@@ -1081,9 +1077,9 @@ export class OpenRouterClient {
   /**
    * Fetch detailed provider information for a specific model
    */
-  /** Provider endpoints for a model, cached. Pass `{ force: true }` to refresh. */
-  async fetchModelEndpoints(modelId: string, options?: { force?: boolean }): Promise<OpenRouterModelEndpoint[]> {
-    return this.endpointsCache.get(modelId, options);
+  /** Provider endpoints for a model: downloaded once per page load per model. */
+  async fetchModelEndpoints(modelId: string): Promise<OpenRouterModelEndpoint[]> {
+    return this.endpointsCache.get(modelId);
   }
 
   private async fetchModelEndpointsUncached(modelId: string): Promise<OpenRouterModelEndpoint[]> {
